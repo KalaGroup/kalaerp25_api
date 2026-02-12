@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32616.157
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KalaGenset.ERP.API", "KalaGenset.ERP.API.csproj", "{96394946-654B-463C-98E9-882612D8F856}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KalaGenset.ERP.Data", "..\KalaGenset.ERP.Data\KalaGenset.ERP.Data.csproj", "{655BDA46-3760-4D88-AA12-88733812FF49}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KalaGenset.ERP.Core", "..\KalaGenset.ERP.Core\KalaGenset.ERP.Core.csproj", "{20B5B6D6-202B-45D8-856E-0A5DB646D924}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KalaGenset.ERP.Infra", "..\KalaGenset.ERP.Infra\KalaGenset.ERP.Infra.csproj", "{C5432C6A-1C71-48E4-ADF6-C593E58AF6CD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{96394946-654B-463C-98E9-882612D8F856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96394946-654B-463C-98E9-882612D8F856}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96394946-654B-463C-98E9-882612D8F856}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96394946-654B-463C-98E9-882612D8F856}.Release|Any CPU.Build.0 = Release|Any CPU
+		{655BDA46-3760-4D88-AA12-88733812FF49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{655BDA46-3760-4D88-AA12-88733812FF49}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{655BDA46-3760-4D88-AA12-88733812FF49}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{655BDA46-3760-4D88-AA12-88733812FF49}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20B5B6D6-202B-45D8-856E-0A5DB646D924}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20B5B6D6-202B-45D8-856E-0A5DB646D924}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20B5B6D6-202B-45D8-856E-0A5DB646D924}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20B5B6D6-202B-45D8-856E-0A5DB646D924}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5432C6A-1C71-48E4-ADF6-C593E58AF6CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5432C6A-1C71-48E4-ADF6-C593E58AF6CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5432C6A-1C71-48E4-ADF6-C593E58AF6CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5432C6A-1C71-48E4-ADF6-C593E58AF6CD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {602B2516-FBB0-45D5-A529-65590B23D153}
+	EndGlobalSection
+EndGlobal

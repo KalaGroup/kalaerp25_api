@@ -1,0 +1,37 @@
+## .NET / Visual Studio
+
+# Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# NuGet
+**/packages/*
+!**/packages/build/
+*.nupkg
+
+# User-specific files
+*.rsuser
+*.userprefs
+
+# Publish profiles
+**/Properties/PublishProfiles/
+
+# Uploads (media files)
+**/wwwroot/uploads/
+
+# Windows
+Thumbs.db
+.DS_Store
