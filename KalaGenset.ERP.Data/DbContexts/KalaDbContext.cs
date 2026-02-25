@@ -28,9 +28,13 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<Company> Companies { get; set; }
 
+    public virtual DbSet<DepartmentMst> DepartmentMsts { get; set; }
+
     public virtual DbSet<DispatchInstruction> DispatchInstructions { get; set; }
 
     public virtual DbSet<DispatchInstructionDetail> DispatchInstructionDetails { get; set; }
+
+    public virtual DbSet<Division> Divisions { get; set; }
 
     public virtual DbSet<Employee> Employees { get; set; }
 
@@ -49,6 +53,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<JobCardDetailsSub> JobCardDetailsSubs { get; set; }
 
     public virtual DbSet<Jobcard2DetailsSub> Jobcard2DetailsSubs { get; set; }
+
+    public virtual DbSet<KaizenSheetMaster> KaizenSheetMasters { get; set; }
 
     public virtual DbSet<LoginMst> LoginMsts { get; set; }
 
@@ -108,13 +114,15 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<Video> Videos { get; set; }
 
+    public virtual DbSet<WorkStation> WorkStations { get; set; }
+
     public virtual DbSet<YearEnd> YearEnds { get; set; }
 
     public virtual DbSet<_6m> _6ms { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=13.71.50.58;Database=ERP_NEW_System;Uid=sa;Pwd=3HMungiIMR;Encrypt=false;MultipleActiveResultSets=True;");
+//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+//        => optionsBuilder.UseSqlServer("Server=13.71.50.58;Database=ERP_NEW_System;Uid=sa;Pwd=3HMungiIMR;Encrypt=false;MultipleActiveResultSets=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -734,6 +742,34 @@ public partial class KalaDbContext : DbContext
                 .HasColumnName("WAdd");
         });
 
+        modelBuilder.Entity<DepartmentMst>(entity =>
+        {
+            entity.HasKey(e => e.Dcode);
+
+            entity.ToTable("DepartmentMst");
+
+            entity.Property(e => e.Dcode).HasColumnName("DCode");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.AliaseDname)
+                .HasMaxLength(250)
+                .IsUnicode(false)
+                .HasColumnName("Aliase_DName");
+            entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.DivisionId).HasColumnName("DivisionID");
+            entity.Property(e => e.Dname)
+                .HasMaxLength(250)
+                .IsUnicode(false)
+                .HasColumnName("DName");
+            entity.Property(e => e.Dt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.Remark)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasDefaultValue("NIL");
+        });
+
         modelBuilder.Entity<DispatchInstruction>(entity =>
         {
             entity.HasKey(e => e.Dino);
@@ -935,6 +971,23 @@ public partial class KalaDbContext : DbContext
                 .IsFixedLength()
                 .HasColumnName("PSLDStatus");
             entity.Property(e => e.Rdgqty).HasColumnName("RDGQty");
+        });
+
+        modelBuilder.Entity<Division>(entity =>
+        {
+            entity.ToTable("Division");
+
+            entity.Property(e => e.Division1)
+                .HasMaxLength(50)
+                .HasColumnName("Division");
+            entity.Property(e => e.DivisionCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.DivisionMailId).HasMaxLength(50);
+            entity.Property(e => e.DivisionShortName)
+                .HasMaxLength(50)
+                .HasDefaultValue("Nil");
+            entity.Property(e => e.Remark).HasMaxLength(50);
         });
 
         modelBuilder.Entity<Employee>(entity =>
@@ -1640,6 +1693,69 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValue("P")
                 .IsFixedLength()
                 .HasColumnName("TRStatus");
+        });
+
+        modelBuilder.Entity<KaizenSheetMaster>(entity =>
+        {
+            entity.ToTable("KaizenSheetMaster");
+
+            entity.HasIndex(e => e.KaizenSheetNo, "UQ_KaizenSheetNo").IsUnique();
+
+            entity.Property(e => e.AfterPhotoName).HasMaxLength(255);
+            entity.Property(e => e.AfterPhotoPath).HasMaxLength(500);
+            entity.Property(e => e.BeforePhotoName).HasMaxLength(255);
+            entity.Property(e => e.BeforePhotoPath).HasMaxLength(500);
+            entity.Property(e => e.Benefit)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.CountermeasureRemark).HasMaxLength(2000);
+            entity.Property(e => e.DataSubmittedBy).HasMaxLength(200);
+            entity.Property(e => e.DepartmentCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.DepartmentName).HasMaxLength(200);
+            entity.Property(e => e.DivisionName).HasMaxLength(200);
+            entity.Property(e => e.HorizontalDeployment).HasMaxLength(1000);
+            entity.Property(e => e.Idea)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.IdeaRemark).HasMaxLength(2000);
+            entity.Property(e => e.ImpactGraphName).HasMaxLength(255);
+            entity.Property(e => e.ImpactGraphPath).HasMaxLength(500);
+            entity.Property(e => e.Improvement)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.InvestmentArea).HasMaxLength(1000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.KaizenSheetNo)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.KaizenTheme)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.ProblemHow).HasMaxLength(1000);
+            entity.Property(e => e.ProblemHowMuch).HasMaxLength(1000);
+            entity.Property(e => e.ProblemWhat).HasMaxLength(1000);
+            entity.Property(e => e.ProblemWhen).HasMaxLength(1000);
+            entity.Property(e => e.ProblemWhere).HasMaxLength(1000);
+            entity.Property(e => e.ProblemWho).HasMaxLength(1000);
+            entity.Property(e => e.ProblemWhy).HasMaxLength(1000);
+            entity.Property(e => e.RcaWhy1).HasMaxLength(1000);
+            entity.Property(e => e.RcaWhy2).HasMaxLength(1000);
+            entity.Property(e => e.RcaWhy3).HasMaxLength(1000);
+            entity.Property(e => e.RcaWhy4).HasMaxLength(1000);
+            entity.Property(e => e.RcaWhy5).HasMaxLength(1000);
+            entity.Property(e => e.Result)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.SavingArea).HasMaxLength(1000);
+            entity.Property(e => e.SustenanceFrequency).HasMaxLength(1000);
+            entity.Property(e => e.SustenanceHowToDo).HasMaxLength(2000);
+            entity.Property(e => e.SustenanceWhatToDo).HasMaxLength(2000);
+            entity.Property(e => e.WorkstationCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.WorkstationName).HasMaxLength(200);
         });
 
         modelBuilder.Entity<LoginMst>(entity =>
@@ -3646,6 +3762,23 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(200)
                 .IsUnicode(false)
                 .HasColumnName("video_path");
+        });
+
+        modelBuilder.Entity<WorkStation>(entity =>
+        {
+            entity.HasKey(e => e.Wkcode);
+
+            entity.ToTable("WorkStation");
+
+            entity.Property(e => e.Wkcode)
+                .HasMaxLength(50)
+                .HasColumnName("WKCode");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.DeptCode).HasMaxLength(50);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.Remark).HasMaxLength(500);
+            entity.Property(e => e.WorkStationName).HasMaxLength(50);
+            entity.Property(e => e.Yr).HasMaxLength(50);
         });
 
         modelBuilder.Entity<YearEnd>(entity =>

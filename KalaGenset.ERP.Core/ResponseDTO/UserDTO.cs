@@ -8,6 +8,7 @@ namespace KalaGenset.ERP.Core.DTO
 {
     public class UserDto
     {
+        public string LoginType { get; set; }
         public int EmpId { get; set; }
         public string EmpCode { get; set; }
         public string Ename { get; set; }
