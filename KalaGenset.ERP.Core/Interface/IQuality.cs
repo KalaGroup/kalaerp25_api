@@ -28,5 +28,6 @@ namespace KalaGenset.ERP.Core.Interface
         Task<List<KaizenSheetFullResponse>> GetAllKaizenSheetsFull();
         Task<bool> DeleteKaizenSheet(int id);
         Task<string> UpdateKaizenSheet(int id, CreateKaizenSheetRequest request);
+        public Task<bool> AuthorizeKaizenSheet(int id);
     }
 }

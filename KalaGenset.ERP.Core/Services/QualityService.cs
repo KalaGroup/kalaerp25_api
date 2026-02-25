@@ -4,6 +4,7 @@ using KalaGenset.ERP.Core.Request;
 using KalaGenset.ERP.Core.ResponseDTO;
 using KalaGenset.ERP.Data.DbContexts;
 using KalaGenset.ERP.Data.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace KalaGenset.ERP.Core.Services
@@ -469,6 +470,19 @@ namespace KalaGenset.ERP.Core.Services
 
             return "Kaizen sheet updated successfully";
         }
+
+        public async Task<bool> AuthorizeKaizenSheet(int id)
+        {
+            var entity = await _context.KaizenSheetMasters
+                .FirstOrDefaultAsync(k => k.Id == id && k.IsActive && !k.IsDiscard && !k.IsAuth);
+
+            if (entity == null) return false;
+
+            entity.IsAuth = true;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
     }
 }
  
