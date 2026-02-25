@@ -10,6 +10,7 @@ namespace KalaGenset.ERP.Core.Response
     {
         public bool success { get; set; }
         public string token { get; set; }
+        public string loginType { get; set; }
         public int userId { get; set; }
         public string companyId { get; set; }
         public string companyName { get; set; }
