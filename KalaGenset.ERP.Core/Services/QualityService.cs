@@ -69,68 +69,73 @@ namespace KalaGenset.ERP.Core.Services
 
         public async Task<bool> SaveCalibrationMasterAsync(CalibrationMasterRequest request)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                if (request.Designation == "checker")
-                {
-                    // Update existing records
-                    foreach (var entry in request.Entries)
-                    {
-                        var existing = await _context.CalibrationMsts
-                            .FirstOrDefaultAsync(x => x.InstrumentId == entry.InstrumentId);
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-                        if (existing != null)
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    if (request.Designation == "checker")
+                    {
+                        // Update existing records
+                        foreach (var entry in request.Entries)
                         {
-                            existing.PartCode = entry.partCode;
-                            existing.Type = entry.Type;
-                            existing.IdNo = entry.IdNo;
-                            existing.SrNo = entry.SrNo;
-                            existing.Make = entry.Make;
-                            existing.Range = entry.Range;
-                            existing.Unit = entry.Unit;
-                            existing.Lc = entry.LC;
-                            existing.Location = entry.Location;
-                            existing.CalDate = entry.CalDate;
-                            existing.DueDate = entry.DueDate;
-                            existing.CheckerRemark = request.CheckerRemark;
-                            existing.Auth = true;
+                            var existing = await _context.CalibrationMsts
+                                .FirstOrDefaultAsync(x => x.InstrumentId == entry.InstrumentId);
+
+                            if (existing != null)
+                            {
+                                existing.PartCode = entry.partCode;
+                                existing.Type = entry.Type;
+                                existing.IdNo = entry.IdNo;
+                                existing.SrNo = entry.SrNo;
+                                existing.Make = entry.Make;
+                                existing.Range = entry.Range;
+                                existing.Unit = entry.Unit;
+                                existing.Lc = entry.LC;
+                                existing.Location = entry.Location;
+                                existing.CalDate = entry.CalDate;
+                                existing.DueDate = entry.DueDate;
+                                existing.CheckerRemark = request.CheckerRemark;
+                                existing.Auth = true;
+                            }
                         }
                     }
-                }
-                else
-                {
-                    // Insert new records (Maker)
-                    var calibrationEntries = request.Entries.Select(entry => new CalibrationMst
+                    else
                     {
-                        CompanyId = request.CompanyId,
-                        PartCode = entry.partCode,
-                        Type = entry.Type,
-                        IdNo = entry.IdNo,
-                        SrNo = entry.SrNo,
-                        Make = entry.Make,
-                        Range = entry.Range,
-                        Unit = entry.Unit,
-                        Lc = entry.LC,
-                        Location = entry.Location,
-                        CalDate = entry.CalDate,
-                        DueDate = entry.DueDate,
-                        MakerRemark = request.MakerRemark,
-                        IsActive = true,
-                    }).ToList();
+                        // Insert new records (Maker)
+                        var calibrationEntries = request.Entries.Select(entry => new CalibrationMst
+                        {
+                            CompanyId = request.CompanyId,
+                            PartCode = entry.partCode,
+                            Type = entry.Type,
+                            IdNo = entry.IdNo,
+                            SrNo = entry.SrNo,
+                            Make = entry.Make,
+                            Range = entry.Range,
+                            Unit = entry.Unit,
+                            Lc = entry.LC,
+                            Location = entry.Location,
+                            CalDate = entry.CalDate,
+                            DueDate = entry.DueDate,
+                            MakerRemark = request.MakerRemark,
+                            IsActive = true,
+                        }).ToList();
 
-                    await _context.CalibrationMsts.AddRangeAsync(calibrationEntries);
+                        await _context.CalibrationMsts.AddRangeAsync(calibrationEntries);
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();                   
                 }
-
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+            return true;
         }
 
         public async Task<List<DivisionCodeAnd_NameDTO>> GetDivisonCOdeAndNameFromDB()
@@ -482,7 +487,6 @@ namespace KalaGenset.ERP.Core.Services
             await _context.SaveChangesAsync();
             return true;
         }
-
     }
 }
  

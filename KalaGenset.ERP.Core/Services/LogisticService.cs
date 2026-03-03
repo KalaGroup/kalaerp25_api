@@ -97,81 +97,85 @@ namespace KalaGenset.ERP.Core.Services
 
         public async Task<string> SubmitMTFScanDetailsAsync(MTFScanSubmitRequest mtfScanSubmitRequest)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                foreach (var item in mtfScanSubmitRequest.MTFSerialNoDts)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                try
                 {
-                    var updateMTFDetailsSub = await _context.MtfdetailsSubs.FirstOrDefaultAsync(m => m.Mtfcode == mtfScanSubmitRequest.MtfCode && m.PartCode == item.Partcode && m.SerialNo == item.SerialNo);
-                    if (updateMTFDetailsSub != null)
+                    foreach (var item in mtfScanSubmitRequest.MTFSerialNoDts)
                     {
-                        updateMTFDetailsSub.Trfstatus = "M";
-                    }
-
-                    var updateJobcardDetailsSub = await _context.JobCardDetailsSubs.FirstOrDefaultAsync(j => j.TransferCode == mtfScanSubmitRequest.MtfCode && j.SrNoPartCode == item.Partcode && j.SerialNo == item.SerialNo);
-                    if (updateJobcardDetailsSub != null)
-                    {
-                        updateJobcardDetailsSub.TransferStatus = "D";
-                    }
-                    await _context.SaveChangesAsync();
-                }
-
-                var updateMemoExiseMfg = await _context.MemoExciseMfgs.FirstOrDefaultAsync(me => me.Mmtfcode == mtfScanSubmitRequest.MtfCode);
-                if (updateMemoExiseMfg != null)
-                {
-                    updateMemoExiseMfg.MtfscanStatus = "D";
-                }
-
-                var decodedMTF = Uri.UnescapeDataString(mtfScanSubmitRequest.MtfCode);
-
-                var mtfCodeParam = new SqlParameter("@MTFCode", decodedMTF);
-
-                List<GetMTFDetailsResponseDTO> dsDetailsSub = new List<GetMTFDetailsResponseDTO>();
-
-                dsDetailsSub = await _context.Database
-                .SqlQueryRaw<GetMTFDetailsResponseDTO>("EXEC GetMTFDts @MTFCode", mtfCodeParam)
-                .ToListAsync();
-
-                if (dsDetailsSub != null)
-                {
-                    foreach (var detail in dsDetailsSub)
-                    {
-                        string? alreadySave = await _context.Stockwips.Where(x =>
-                                             x.FromProfitCenterCode == detail.FPCCode &&
-                                             x.PartCode == detail.Partcode &&
-                                             x.ReceivedCode == mtfScanSubmitRequest.MtfCode.Trim() &&
-                                             x.ReceivedQty > 0 &&
-                                             x.ToProfitCenterCode == detail.TPCCode)
-                                             .Select(x => x.ReceivedCode)
-                                             .FirstOrDefaultAsync() ?? "";
-
-                        if (alreadySave != null)
+                        var updateMTFDetailsSub = await _context.MtfdetailsSubs.FirstOrDefaultAsync(m => m.Mtfcode == mtfScanSubmitRequest.MtfCode && m.PartCode == item.Partcode && m.SerialNo == item.SerialNo);
+                        if (updateMTFDetailsSub != null)
                         {
-                            if (detail.Partcode.Substring(0, 3) == "001" || detail.Partcode.Substring(0, 3) == "002")
-                            {
+                            updateMTFDetailsSub.Trfstatus = "M";
+                        }
 
-                            }
-                            else if (detail.Partcode.Substring(0, 3) == "010")
-                            {
+                        var updateJobcardDetailsSub = await _context.JobCardDetailsSubs.FirstOrDefaultAsync(j => j.TransferCode == mtfScanSubmitRequest.MtfCode && j.SrNoPartCode == item.Partcode && j.SerialNo == item.SerialNo);
+                        if (updateJobcardDetailsSub != null)
+                        {
+                            updateJobcardDetailsSub.TransferStatus = "D";
+                        }
+                        await _context.SaveChangesAsync();
+                    }
 
-                            }
-                            else
-                            {
+                    var updateMemoExiseMfg = await _context.MemoExciseMfgs.FirstOrDefaultAsync(me => me.Mmtfcode == mtfScanSubmitRequest.MtfCode);
+                    if (updateMemoExiseMfg != null)
+                    {
+                        updateMemoExiseMfg.MtfscanStatus = "D";
+                    }
 
+                    var decodedMTF = Uri.UnescapeDataString(mtfScanSubmitRequest.MtfCode);
+
+                    var mtfCodeParam = new SqlParameter("@MTFCode", decodedMTF);
+
+                    List<GetMTFDetailsResponseDTO> dsDetailsSub = new List<GetMTFDetailsResponseDTO>();
+
+                    dsDetailsSub = await _context.Database
+                    .SqlQueryRaw<GetMTFDetailsResponseDTO>("EXEC GetMTFDts @MTFCode", mtfCodeParam)
+                    .ToListAsync();
+
+                    if (dsDetailsSub != null)
+                    {
+                        foreach (var detail in dsDetailsSub)
+                        {
+                            string? alreadySave = await _context.Stockwips.Where(x =>
+                                                 x.FromProfitCenterCode == detail.FPCCode &&
+                                                 x.PartCode == detail.Partcode &&
+                                                 x.ReceivedCode == mtfScanSubmitRequest.MtfCode.Trim() &&
+                                                 x.ReceivedQty > 0 &&
+                                                 x.ToProfitCenterCode == detail.TPCCode)
+                                                 .Select(x => x.ReceivedCode)
+                                                 .FirstOrDefaultAsync() ?? "";
+
+                            if (alreadySave != null)
+                            {
+                                if (detail.Partcode.Substring(0, 3) == "001" || detail.Partcode.Substring(0, 3) == "002")
+                                {
+
+                                }
+                                else if (detail.Partcode.Substring(0, 3) == "010")
+                                {
+
+                                }
+                                else
+                                {
+
+                                }
                             }
                         }
                     }
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
                 }
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return mtfScanSubmitRequest.MtfCode;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Error submitting MTF Scan details", ex);
-            }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw new Exception("Error submitting MTF Scan details", ex);
+                }
+            });
+            return mtfScanSubmitRequest.MtfCode;
         }
-
     }
 }

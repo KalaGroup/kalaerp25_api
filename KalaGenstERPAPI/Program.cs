@@ -16,14 +16,6 @@ builder.Configuration
     .AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowSpecificOrigin",
-        builder => builder.WithOrigins("http://localhost:4200")
-                         .AllowAnyMethod()
-                         .AllowAnyHeader());
-});
-
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -67,6 +59,16 @@ builder.Services.AddAuthentication(options =>
           IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]))
       };
   });
+
+//builder.Services.AddCors(options =>
+//{
+//    options.AddPolicy("AllowSpecificOrigin",
+//        builder =>
+//         builder.WithOrigins("http://localhost:4200")
+//                         .AllowAnyMethod()
+//                         .AllowAnyHeader());
+
+//});
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -132,9 +134,32 @@ builder.Services.AddScoped<IDgStageChecker, DgStageCheckerService>();
 
 builder.Services.AddScoped<IQuality, QualityService>();
 
+builder.Services.AddScoped<ICanopy, CanopyService>();
+
+var jsonBuilder = new ConfigurationBuilder()
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true);
+
+IConfiguration config = jsonBuilder.Build();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins",
+        builder =>
+        {
+            builder
+                .WithOrigins(config["CORSOrigin"])//for local- need to improve
+                                                  //.WithOrigins("http://4.240.123.216:5050")//for deployment
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
+//comment out this part while publishing
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -148,7 +173,7 @@ else
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseCors("AllowSpecificOrigin");
+app.UseCors("AllowAllOrigins");
 app.UseAuthentication();
 app.UseAuthorization();
 
