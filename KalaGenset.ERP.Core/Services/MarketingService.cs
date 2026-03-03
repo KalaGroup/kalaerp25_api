@@ -65,10 +65,15 @@ namespace KalaGenset.ERP.Core.Services
 
             // normalize SaveType
             var saveType = (req.SaveType ?? string.Empty).Trim();
+            string result = "Invalid SaveType"; // default value
 
-            // Use a transaction to match original behavior
-            await using (var transaction = await _context.Database.BeginTransactionAsync())
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
             {
+                // Use a transaction to match original behavior
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+            
                 try
                 {
                     if (string.Equals(saveType, "Auth", StringComparison.OrdinalIgnoreCase))
@@ -85,7 +90,7 @@ namespace KalaGenset.ERP.Core.Services
                         if (mof == null)
                         {
                             // nothing to update
-                            return "MOF not found or already processed";
+                            result = "MOF not found or already processed";
                         }
 
                         // Update fields
@@ -113,7 +118,7 @@ namespace KalaGenset.ERP.Core.Services
                         // commit
                         await transaction.CommitAsync();
 
-                        return "Success";
+                        result = "Success";
                     }
                     else if (string.Equals(saveType, "Hold", StringComparison.OrdinalIgnoreCase))
                     {
@@ -127,7 +132,7 @@ namespace KalaGenset.ERP.Core.Services
 
                         if (mof == null)
                         {
-                            return "MOF not found or not in Auth2='1' state";
+                            result = "MOF not found or not in Auth2='1' state";
                         }
 
                         // Update fields
@@ -154,11 +159,11 @@ namespace KalaGenset.ERP.Core.Services
                         // commit
                         await transaction.CommitAsync();
 
-                        return "Success";
+                        result = "Success";
                     }
                     else
                     {
-                        return "Invalid SaveType";
+                        result = "Invalid SaveType";
                     }
                 }
                 catch (Exception ex)
@@ -168,7 +173,8 @@ namespace KalaGenset.ERP.Core.Services
 
                     throw ex;
                 }
-            }
+            });
+            return result;
         }
 
     }

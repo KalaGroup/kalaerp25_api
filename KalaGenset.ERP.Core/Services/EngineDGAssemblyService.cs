@@ -755,8 +755,11 @@ namespace KalaGenset.ERP.Core.Services
 
         public async Task SubmitDGAssemblyDetails(DGAssemblySubmitRequest dgStageScanReq)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+               try
             {
                 string _getKVA = await GetKVAFromPartTable(dgStageScanReq.ProductCode);
 
@@ -1558,222 +1561,227 @@ namespace KalaGenset.ERP.Core.Services
                 await transaction.RollbackAsync();
                 throw;
             }
-
+            });
         }
 
         public async Task<string> SubmitDGAssemblyStage4Details(DGAssemblySubmitRequest  dgStageScanReq)
         {
             string? StrBOMCode = "", GetMaxValue = "", PrcNo = "", StrDGRate = "0", StrCPRate = "0", StrCP2Rate = "0", StrCRRate = "", StrHRRate = "0", DGCFM = "", DGNo = "";
-            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            if (dgStageScanReq.Remark == "Start")
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
             {
-                string strkVA = "";
-                string? CladdingRate = "0";
-                string[] CPType = Regex.Split(dgStageScanReq.CPType.Trim(), "-->");
 
-                var partDetails = _context.Parts
-                   .Where(p => p.PartCode == dgStageScanReq.ProductCode.Trim())
-                   .Select(p => new { p.Kva, p.Model })
-                   .FirstOrDefault();
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                if (partDetails != null)
+                if (dgStageScanReq.Remark == "Start")
                 {
-                    CladdingRate = _context.SilCladdingRates
-                        .Where(s => s.Kva == partDetails.Kva.ToString().Trim() &&
-                                    s.Model == partDetails.Model &&
-                                    s.CompanyCode == dgStageScanReq.PCCode.Trim().Substring(0, 2) &&
-                                    s.Active == true &&
-                                    s.Discard == true &&
-                                    s.Auth == true)
-                        .Select(s => s.Rate.ToString())
-                        .FirstOrDefault();
+                    string strkVA = "";
+                    string? CladdingRate = "0";
+                    string[] CPType = Regex.Split(dgStageScanReq.CPType.Trim(), "-->");
 
-                    strkVA = partDetails.Kva.ToString().Trim();
-                }
-
-                DGCFM = _context.Parts
-                  .Where(p => p.PartCode == dgStageScanReq.ProductCode.Trim() &&
-                               p.Active == true)
-                  .Select(p => p.Cfm)
-                  .FirstOrDefault();
-
-
-                #region validation for serial Numbers
-
-                string engSrNo = dgStageScanReq.EngSrNo.Trim();
-                string altSrNo = dgStageScanReq.AltSrno.Trim();
-                string cpySrNo = dgStageScanReq.CpySrno.Trim();
-
-                bool IsInvalidSerial(string serial) => string.IsNullOrEmpty(serial) || serial == "0";
-
-                if (IsInvalidSerial(engSrNo)) return "Please Scan Engine SerialNo";
-                if (IsInvalidSerial(altSrNo)) return "Please Scan Alternator SerialNo";
-                if (IsInvalidSerial(cpySrNo)) return "Please Scan Canopy SerialNo";
-
-
-                if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                {
-                    if (dgStageScanReq.CPSrno.Trim() == "0" || dgStageScanReq.CPSrno.Trim() == "")
-                    {
-                        PrcNo = "Please Scan Control Panel(1) SerialNo";
-                        return PrcNo;
-                    }
-                }
-                if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
-                {
-                    if (dgStageScanReq.CPSrno.Trim() == "0" || dgStageScanReq.CPSrno.Trim() == "")
-                    {
-                        PrcNo = "Please Scan Control Panel(1) SerialNo";
-                        return PrcNo;
-                    }
-                }
-                if (double.Parse(strkVA.Trim()) >= 180)
-                {
-                    if (dgStageScanReq.BatSrno.Trim() == "0" || dgStageScanReq.BatSrno.Trim() == "")
-                    {
-                        PrcNo = "Please Scan Battery(1) SerialNo";
-                        return PrcNo;
-                    }
-                }
-                
-                foreach (var item in dgStageScanReq.DGKitDetails)
-                {
-                    if (double.Parse(item.StockQty) < 0)
-                    {
-                        PrcNo = $"Insufficient Stock For Part= {item.PartCode.Trim()}";
-                        return PrcNo;
-                    }
-                }
-                #endregion
-
-                StrBOMCode = _context.Boms
-                        .Where(b => b.PartCode == dgStageScanReq.ProductCode.Trim() &&
-                        b.Active == true &&
-                        b.Discard == true)
-                       .Select(b => $"{b.Bomcode}-->{b.Wgt}-->{b.Sqft}-->{b.WgtHr}-->{b.WgtCr}")
+                    var partDetails = _context.Parts
+                       .Where(p => p.PartCode == dgStageScanReq.ProductCode.Trim())
+                       .Select(p => new { p.Kva, p.Model })
                        .FirstOrDefault();
 
-                string[] ProdDts = StrBOMCode.Trim().Split(new[] { "-->" }, StringSplitOptions.None);
-                StrDGRate = _context.ProfitCenterPldetails
-                           .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
-                           p.PartCode == dgStageScanReq.ProductCode.Trim())
-                           .Select(p => p.Rate)
-                           .FirstOrDefault() // Retrieves the first matching record or null
-                           .ToString() ?? "0";
-
-                if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                {
-                    if (dgStageScanReq.CPSrno.Trim() != "0")
+                    if (partDetails != null)
                     {
-                        StrCPRate = _context.ProfitCenterPldetails
-                           .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
-                           p.PartCode == dgStageScanReq.CPPartcode.Trim())
-                           .Select(p => p.Rate)
-                           .FirstOrDefault()
-                           .ToString();
+                        CladdingRate = _context.SilCladdingRates
+                            .Where(s => s.Kva == partDetails.Kva.ToString().Trim() &&
+                                        s.Model == partDetails.Model &&
+                                        s.CompanyCode == dgStageScanReq.PCCode.Trim().Substring(0, 2) &&
+                                        s.Active == true &&
+                                        s.Discard == true &&
+                                        s.Auth == true)
+                            .Select(s => s.Rate.ToString())
+                            .FirstOrDefault();
+
+                        strkVA = partDetails.Kva.ToString().Trim();
                     }
-                    if (dgStageScanReq.CP2Srno.Trim() != "0")
+
+                    DGCFM = _context.Parts
+                      .Where(p => p.PartCode == dgStageScanReq.ProductCode.Trim() &&
+                                   p.Active == true)
+                      .Select(p => p.Cfm)
+                      .FirstOrDefault();
+
+
+                    #region validation for serial Numbers
+
+                    string engSrNo = dgStageScanReq.EngSrNo.Trim();
+                    string altSrNo = dgStageScanReq.AltSrno.Trim();
+                    string cpySrNo = dgStageScanReq.CpySrno.Trim();
+
+                    bool IsInvalidSerial(string serial) => string.IsNullOrEmpty(serial) || serial == "0";
+
+                    if (IsInvalidSerial(engSrNo)) { PrcNo = "Please Scan Engine SerialNo"; return; }
+                    if (IsInvalidSerial(altSrNo)) { PrcNo = "Please Scan Alternator SerialNo"; return; }
+                    if (IsInvalidSerial(cpySrNo)) { PrcNo = "Please Scan Canopy SerialNo"; return; }
+
+                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
                     {
-                        StrCP2Rate = _context.ProfitCenterPldetails
-                           .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
-                           p.PartCode == dgStageScanReq.CP2Partcode.Trim())
-                           .Select(p => p.Rate)
-                           .FirstOrDefault()
-                           .ToString();
-                    }
-                }
-
-                if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
-                {
-                    if (dgStageScanReq.CPSrno.Trim() != "0")
-                    {
-                        StrCPRate = _context.ProfitCenterPldetails
-                           .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
-                           p.PartCode == dgStageScanReq.CPPartcode.Trim())
-                           .Select(p => p.Rate)
-                           .FirstOrDefault()
-                           .ToString();
-                    }
-                }
-
-                StrCRRate = _context.Bomdetails
-                           .Where(b => b.Bomcode == ProdDts[0].Trim() &&
-                          b.Thickness <= 1.5 &&
-                          b.SteelRate > 0)
-                          .Select(b => b.SteelRate)
-                          .FirstOrDefault() // Returns the first matching SteelRate or default value
-                          .ToString();
-
-                StrHRRate = _context.Bomdetails
-                           .Where(b => b.Bomcode == ProdDts[0].Trim() &&
-                          b.Thickness > 1.5 &&
-                          b.SteelRate > 0)
-                          .Select(b => b.SteelRate)
-                          .FirstOrDefault() // Returns the first matching SteelRate or default value
-                          .ToString();
-
-                if (double.Parse(StrDGRate.Trim()) == 0)
-                {
-                    PrcNo = "DG Rate Cannot Be Zero Please Contact CIA/Document Control Dept";
-                    return PrcNo;
-                }
-
-                if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                {
-                    if (double.Parse(StrCPRate.Trim()) == 0)
-                    {
-                        PrcNo = "Control Panel Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
-                        return PrcNo;
-                    }
-                }
-
-                if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
-                {
-                    if (double.Parse(StrCPRate.Trim()) == 0)
-                    {
-                        PrcNo = "Control Panel Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
-                        return PrcNo;
-                    }
-                }
-
-                if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                {
-                    string panelTypePartcode = await ExecuteGetCPPartcodeAsync(CPType[1]);
-
-                    if (panelTypePartcode != null)
-                    {
-                        if (double.Parse(CPType[1].Trim()) != 0)
+                        if (dgStageScanReq.CPSrno.Trim() == "0" || dgStageScanReq.CPSrno.Trim() == "")
                         {
-                            if (dgStageScanReq.CP2Srno.Trim() == "0" || dgStageScanReq.CP2Srno.Trim() == "")
+                            PrcNo = "Please Scan Control Panel(1) SerialNo";
+                            return;
+                        }
+                    }
+                    if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
+                    {
+                        if (dgStageScanReq.CPSrno.Trim() == "0" || dgStageScanReq.CPSrno.Trim() == "")
+                        {
+                            PrcNo = "Please Scan Control Panel(1) SerialNo";
+                            return;
+                        }
+                    }
+                    if (double.Parse(strkVA.Trim()) >= 180)
+                    {
+                        if (dgStageScanReq.BatSrno.Trim() == "0" || dgStageScanReq.BatSrno.Trim() == "")
+                        {
+                            PrcNo = "Please Scan Battery(1) SerialNo";
+                            return;
+                        }
+                    }
+
+                    foreach (var item in dgStageScanReq.DGKitDetails)
+                    {
+                        if (double.Parse(item.StockQty) < 0)
+                        {
+                            PrcNo = $"Insufficient Stock For Part= {item.PartCode.Trim()}";
+                            return;
+                        }
+                    }
+                    #endregion
+
+                    StrBOMCode = _context.Boms
+                            .Where(b => b.PartCode == dgStageScanReq.ProductCode.Trim() &&
+                            b.Active == true &&
+                            b.Discard == true)
+                           .Select(b => $"{b.Bomcode}-->{b.Wgt}-->{b.Sqft}-->{b.WgtHr}-->{b.WgtCr}")
+                           .FirstOrDefault();
+
+                    string[] ProdDts = StrBOMCode.Trim().Split(new[] { "-->" }, StringSplitOptions.None);
+                    StrDGRate = _context.ProfitCenterPldetails
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               p.PartCode == dgStageScanReq.ProductCode.Trim())
+                               .Select(p => p.Rate)
+                               .FirstOrDefault() // Retrieves the first matching record or null
+                               .ToString() ?? "0";
+
+                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
+                    {
+                        if (dgStageScanReq.CPSrno.Trim() != "0")
+                        {
+                            StrCPRate = _context.ProfitCenterPldetails
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               p.PartCode == dgStageScanReq.CPPartcode.Trim())
+                               .Select(p => p.Rate)
+                               .FirstOrDefault()
+                               .ToString();
+                        }
+                        if (dgStageScanReq.CP2Srno.Trim() != "0")
+                        {
+                            StrCP2Rate = _context.ProfitCenterPldetails
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               p.PartCode == dgStageScanReq.CP2Partcode.Trim())
+                               .Select(p => p.Rate)
+                               .FirstOrDefault()
+                               .ToString();
+                        }
+                    }
+
+                    if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
+                    {
+                        if (dgStageScanReq.CPSrno.Trim() != "0")
+                        {
+                            StrCPRate = _context.ProfitCenterPldetails
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               p.PartCode == dgStageScanReq.CPPartcode.Trim())
+                               .Select(p => p.Rate)
+                               .FirstOrDefault()
+                               .ToString();
+                        }
+                    }
+
+                    StrCRRate = _context.Bomdetails
+                               .Where(b => b.Bomcode == ProdDts[0].Trim() &&
+                              b.Thickness <= 1.5 &&
+                              b.SteelRate > 0)
+                              .Select(b => b.SteelRate)
+                              .FirstOrDefault() // Returns the first matching SteelRate or default value
+                              .ToString();
+
+                    StrHRRate = _context.Bomdetails
+                               .Where(b => b.Bomcode == ProdDts[0].Trim() &&
+                              b.Thickness > 1.5 &&
+                              b.SteelRate > 0)
+                              .Select(b => b.SteelRate)
+                              .FirstOrDefault() // Returns the first matching SteelRate or default value
+                              .ToString();
+
+                    if (double.Parse(StrDGRate.Trim()) == 0)
+                    {
+                        PrcNo = "DG Rate Cannot Be Zero Please Contact CIA/Document Control Dept";
+                        return;
+                    }
+
+                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
+                    {
+                        if (double.Parse(StrCPRate.Trim()) == 0)
+                        {
+                            PrcNo = "Control Panel Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
+                            return;
+                        }
+                    }
+
+                    if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
+                    {
+                        if (double.Parse(StrCPRate.Trim()) == 0)
+                        {
+                            PrcNo = "Control Panel Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
+                            return;
+                        }
+                    }
+
+                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
+                    {
+                        string panelTypePartcode = await ExecuteGetCPPartcodeAsync(CPType[1]);
+
+                        if (panelTypePartcode != null)
+                        {
+                            if (double.Parse(CPType[1].Trim()) != 0)
                             {
-                                PrcNo = "Please Scan Control Panel(2) SerialNo";
-                                return PrcNo;
+                                if (dgStageScanReq.CP2Srno.Trim() == "0" || dgStageScanReq.CP2Srno.Trim() == "")
+                                {
+                                    PrcNo = "Please Scan Control Panel(2) SerialNo";
+                                    return;
+                                }
+                            }
+                            if (double.Parse(StrCP2Rate.Trim()) == 0)
+                            {
+                                PrcNo = "Control Panel(2) Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
+                                return;
                             }
                         }
-                        if (double.Parse(StrCP2Rate.Trim()) == 0)
-                        {
-                            PrcNo = "Control Panel(2) Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
-                            return PrcNo;
-                        }
                     }
-                }
 
-                try
-                {
-                    string? yearEnd = _context.YearEnds
-                                     .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
-                                     .FirstOrDefault();
-
-                    DGNo = await GetDGNoAsync(dgStageScanReq.PCCode.Trim().Substring(0, 2), dgStageScanReq.PCCode.Trim(), yearEnd);
-                    if (DGNo == "0")
+                    try
                     {
-                        PrcNo = "DG Serial No Creation Problem";
-                        return PrcNo;
-                    }
-                    PrcNo = await GetMaxPrcAsync(yearEnd, dgStageScanReq.PCCode.Trim().Substring(0, 2));
+                        string? yearEnd = _context.YearEnds
+                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
+                                         .FirstOrDefault();
 
-                    var SqlQuery = @"
+                        DGNo = await GetDGNoAsync(dgStageScanReq.PCCode.Trim().Substring(0, 2), dgStageScanReq.PCCode.Trim(), yearEnd);
+                        if (DGNo == "0")
+                        {
+                            PrcNo = "DG Serial No Creation Problem";
+                            return;
+                        }
+                        PrcNo = await GetMaxPrcAsync(yearEnd, dgStageScanReq.PCCode.Trim().Substring(0, 2));
+
+                        var SqlQuery = @"
                                     INSERT INTO processfeedback (
                                     GroupPFBCode, PFBCode, MaxSrNo, Dt, Yr, MachineCode, SerialNo, ProfitCenterCode, TurretKitCode,
                                     PartCode, PPWCode, MOFCode, VersionCode, ProcessQty, PKitQty, PLength, PWidth, PThickness, 
@@ -1786,8 +1794,8 @@ namespace KalaGenset.ERP.Core.Services
                                     @CRWt, @HRWt, @CRRate, @HRRate, @CompanyCode, 'P', 'P', @PFBType, @PFBRate, @SilCladdingRate, 
                                      @Remark, @PrcBOMCode, 'P')";
 
-                    var Parameters = new[]
-                    {
+                        var Parameters = new[]
+                        {
                           new SqlParameter("@PrcNo", PrcNo.Trim()),
                           new SqlParameter("@MaxSrNo", PrcNo.Substring(10, 8)),
                           new SqlParameter("@Date", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
@@ -1812,26 +1820,26 @@ namespace KalaGenset.ERP.Core.Services
                           new SqlParameter("@PrcBOMCode", ProdDts[0].Trim())
                     };
 
-                    // Conditional parameter for PFBType
-                    if (double.Parse(CPType[1].Trim()) == 0)
-                    {
-                        //Parameters = Parameters.Append(new SqlParameter("@PFBType", DBNull.Value)).ToArray();
-                        Parameters = Parameters.Append(new SqlParameter("@PFBType", "")).ToArray();
-                    }
-                    else
-                    {
-                        Parameters = Parameters.Append(new SqlParameter("@PFBType", CPType[0].Trim())).ToArray();
-                    }
+                        // Conditional parameter for PFBType
+                        if (double.Parse(CPType[1].Trim()) == 0)
+                        {
+                            //Parameters = Parameters.Append(new SqlParameter("@PFBType", DBNull.Value)).ToArray();
+                            Parameters = Parameters.Append(new SqlParameter("@PFBType", "")).ToArray();
+                        }
+                        else
+                        {
+                            Parameters = Parameters.Append(new SqlParameter("@PFBType", CPType[0].Trim())).ToArray();
+                        }
 
-                    await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
+                        await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
 
-                    var sqlQuery = @"INSERT INTO StockWIP 
+                        var sqlQuery = @"INSERT INTO StockWIP 
                                        (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, StageName)
                                        VALUES
                                        (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @StageName)";
 
-                    var parameters = new[]
-                    {
+                        var parameters = new[]
+                        {
                              new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
                              new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
                              new SqlParameter("@IssueCode", PrcNo.Trim()),
@@ -1841,42 +1849,42 @@ namespace KalaGenset.ERP.Core.Services
                              new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int },
                              new SqlParameter("@StageName", "StageIV")
                           };
-                    await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                        await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
 
-                    int SrNo = 0;
-                    foreach (var item in dgStageScanReq.DGKitDetails)
-                    {
-                        SrNo += 1;
-                        string processFeedbackQuery = @"INSERT INTO processfeedbackdetails (
+                        int SrNo = 0;
+                        foreach (var item in dgStageScanReq.DGKitDetails)
+                        {
+                            SrNo += 1;
+                            string processFeedbackQuery = @"INSERT INTO processfeedbackdetails (
                                                         PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
                                                         PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight, 
                                                         PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
                                                         VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)";
 
-                        await _context.Database.ExecuteSqlRawAsync(
-                            processFeedbackQuery,
-                            PrcNo.Trim(), SrNo, item.PartCode,
-                            Convert.ToDouble(item.KITQty.Trim()), Convert.ToDouble(item.TotalQty.Trim()),
-                            Convert.ToDouble(item.StockQty.Trim()), Convert.ToDouble(item.PFBRate.Trim())
-                        );
+                            await _context.Database.ExecuteSqlRawAsync(
+                                processFeedbackQuery,
+                                PrcNo.Trim(), SrNo, item.PartCode,
+                                Convert.ToDouble(item.KITQty.Trim()), Convert.ToDouble(item.TotalQty.Trim()),
+                                Convert.ToDouble(item.StockQty.Trim()), Convert.ToDouble(item.PFBRate.Trim())
+                            );
 
-                        // Insert into StockWIP
-                        string stockWipQuery = @"INSERT INTO StockWIP (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                            // Insert into StockWIP
+                            string stockWipQuery = @"INSERT INTO StockWIP (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
                                                 VALUES ({0}, {1}, {2}, GETDATE(), {3}, {4}, 0)";
 
-                        await _context.Database.ExecuteSqlRawAsync(
-                            stockWipQuery,
-                            dgStageScanReq.PCCode.Trim(), item.PartCode.Trim(), PrcNo.Trim(),
-                            double.Parse(item.TotalQty.Trim()), dgStageScanReq.PCCode.Trim()
-                        );
-                    }
-                    //For Engine
-                    var sqlInsertQueryEngine = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                            await _context.Database.ExecuteSqlRawAsync(
+                                stockWipQuery,
+                                dgStageScanReq.PCCode.Trim(), item.PartCode.Trim(), PrcNo.Trim(),
+                                double.Parse(item.TotalQty.Trim()), dgStageScanReq.PCCode.Trim()
+                            );
+                        }
+                        //For Engine
+                        var sqlInsertQueryEngine = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                  VALUES 
                                 (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                    var parametersEngine = new[]
-                    {
+                        var parametersEngine = new[]
+                        {
                        new SqlParameter("@PFBCode", PrcNo.Trim()) { SqlDbType = SqlDbType.VarChar },
                        new SqlParameter("@SrNo", 1) { SqlDbType = SqlDbType.Int },  // Hardcoded value '1'
                        new SqlParameter("@PartCode", dgStageScanReq.EngPartCode.Trim()) { SqlDbType = SqlDbType.VarChar },
@@ -1888,31 +1896,31 @@ namespace KalaGenset.ERP.Core.Services
                        new SqlParameter("@RWStatus", "OK") { SqlDbType = SqlDbType.VarChar }   // Hardcoded value 'OK'
                     };
 
-                    await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryEngine, parametersEngine);
-                    //For Engine
-                    var jobCardDetailsEnine = await _context.Jobcard2DetailsSubs
-                               .Where(j => j.SerialNo == dgStageScanReq.EngSrNo.Trim() &&
-                                           j.JobCode == dgStageScanReq.JobCardCode &&
-                                           j.SrNoPartCode == dgStageScanReq.EngPartCode &&
-                                           j.PartCode == dgStageScanReq.ProductCode)
-                               .ToListAsync();
-                    if (jobCardDetailsEnine.Any())
-                    {
-                        foreach (var jobcard in jobCardDetailsEnine)
+                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryEngine, parametersEngine);
+                        //For Engine
+                        var jobCardDetailsEnine = await _context.Jobcard2DetailsSubs
+                                   .Where(j => j.SerialNo == dgStageScanReq.EngSrNo.Trim() &&
+                                               j.JobCode == dgStageScanReq.JobCardCode &&
+                                               j.SrNoPartCode == dgStageScanReq.EngPartCode &&
+                                               j.PartCode == dgStageScanReq.ProductCode)
+                                   .ToListAsync();
+                        if (jobCardDetailsEnine.Any())
                         {
-                            jobcard.PrcStatus = "D";
+                            foreach (var jobcard in jobCardDetailsEnine)
+                            {
+                                jobcard.PrcStatus = "D";
+                            }
+
+                            await _context.SaveChangesAsync();
                         }
 
-                        await _context.SaveChangesAsync();
-                    }
-
-                    //For Alternator
-                    var sqlInsertQueryAlternator = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                        //For Alternator
+                        var sqlInsertQueryAlternator = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                          VALUES 
                                          (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                    var sqlParamsAlternator = new object[]
-                    {
+                        var sqlParamsAlternator = new object[]
+                        {
                          new SqlParameter("@PFBCode", PrcNo.Trim()),
                          new SqlParameter("@SrNo", 1),
                          new SqlParameter("@PartCode", dgStageScanReq.AltPartcode.Trim()),
@@ -1922,33 +1930,33 @@ namespace KalaGenset.ERP.Core.Services
                          new SqlParameter("@Status", "P"),
                          new SqlParameter("@QPCStatus", "OK"),
                          new SqlParameter("@RWStatus", "OK")
-                    };
+                        };
 
-                    await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryAlternator, sqlParamsAlternator);
-                    //For Alternator
-                    var jobCardDetailsAlternator = await _context.Jobcard2DetailsSubs
-                              .Where(j => j.SerialNo == dgStageScanReq.AltSrno.Trim() &&
-                                          j.JobCode == dgStageScanReq.JobCardCode &&
-                                          j.SrNoPartCode == dgStageScanReq.AltPartcode &&
-                                          j.PartCode == dgStageScanReq.ProductCode)
-                              .ToListAsync();
-                    if (jobCardDetailsAlternator.Any())
-                    {
-                        foreach (var jobcard in jobCardDetailsAlternator)
+                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryAlternator, sqlParamsAlternator);
+                        //For Alternator
+                        var jobCardDetailsAlternator = await _context.Jobcard2DetailsSubs
+                                  .Where(j => j.SerialNo == dgStageScanReq.AltSrno.Trim() &&
+                                              j.JobCode == dgStageScanReq.JobCardCode &&
+                                              j.SrNoPartCode == dgStageScanReq.AltPartcode &&
+                                              j.PartCode == dgStageScanReq.ProductCode)
+                                  .ToListAsync();
+                        if (jobCardDetailsAlternator.Any())
                         {
-                            jobcard.PrcStatus = "D";
+                            foreach (var jobcard in jobCardDetailsAlternator)
+                            {
+                                jobcard.PrcStatus = "D";
+                            }
+
+                            await _context.SaveChangesAsync();
                         }
 
-                        await _context.SaveChangesAsync();
-                    }
-
-                    //For Canopy
-                    var sqlInsertQueryCanopy = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                        //For Canopy
+                        var sqlInsertQueryCanopy = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                          VALUES 
                                          (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                    var sqlParamsCanopy = new object[]
-                    {
+                        var sqlParamsCanopy = new object[]
+                        {
                          new SqlParameter("@PFBCode", PrcNo.Trim()),
                          new SqlParameter("@SrNo", 1),
                          new SqlParameter("@PartCode", dgStageScanReq.CpyPartcode.Trim()),
@@ -1958,38 +1966,38 @@ namespace KalaGenset.ERP.Core.Services
                          new SqlParameter("@Status", "P"),
                          new SqlParameter("@QPCStatus", "OK"),
                          new SqlParameter("@RWStatus", "OK")
-                    };
+                        };
 
-                    await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryCanopy, sqlParamsCanopy);
+                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQueryCanopy, sqlParamsCanopy);
 
-                    //for canopy
-                    var jobCardDetailsCanopy = await _context.Jobcard2DetailsSubs
-                             .Where(j => j.SerialNo == dgStageScanReq.CpySrno.Trim() &&
-                                         j.JobCode == dgStageScanReq.JobCardCode &&
-                                         j.SrNoPartCode == dgStageScanReq.CpyPartcode &&
-                                         j.PartCode == dgStageScanReq.ProductCode)
-                             .ToListAsync();
-                    if (jobCardDetailsCanopy.Any())
-                    {
-                        foreach (var jobcard in jobCardDetailsCanopy)
+                        //for canopy
+                        var jobCardDetailsCanopy = await _context.Jobcard2DetailsSubs
+                                 .Where(j => j.SerialNo == dgStageScanReq.CpySrno.Trim() &&
+                                             j.JobCode == dgStageScanReq.JobCardCode &&
+                                             j.SrNoPartCode == dgStageScanReq.CpyPartcode &&
+                                             j.PartCode == dgStageScanReq.ProductCode)
+                                 .ToListAsync();
+                        if (jobCardDetailsCanopy.Any())
                         {
-                            jobcard.PrcStatus = "D";
+                            foreach (var jobcard in jobCardDetailsCanopy)
+                            {
+                                jobcard.PrcStatus = "D";
+                            }
+
+                            await _context.SaveChangesAsync();
                         }
 
-                        await _context.SaveChangesAsync();
-                    }
-
-                    //Control Panel Related Operations
-                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                    {
-                        var sqlInsertQuery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                        //Control Panel Related Operations
+                        if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
+                        {
+                            var sqlInsertQuery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
                                               PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
                                               VALUES 
                                               (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                                               @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                        var sqlParams = new object[]
-                        {
+                            var sqlParams = new object[]
+                            {
                           new SqlParameter("@PFBCode", PrcNo.Trim()),
                           new SqlParameter("@SrNo", SrNo),
                           new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
@@ -2008,32 +2016,32 @@ namespace KalaGenset.ERP.Core.Services
                           new SqlParameter("@PWidth2", 0),
                           new SqlParameter("@PLossSqft", 0),
                           new SqlParameter("@PCatagoryCode", 0)
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
 
-                        var sqlInsertQuery1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                            var sqlInsertQuery1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
                                              VALUES 
                                              (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
 
-                        var sqlParams1 = new object[]
-                        {
+                            var sqlParams1 = new object[]
+                            {
                           new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                           new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
                           new SqlParameter("@IssueCode", PrcNo.Trim()),
                           new SqlParameter("@IssueQty", 1),
                           new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                           new SqlParameter("@StockType", 0)
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery1, sqlParams1);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery1, sqlParams1);
 
-                        var sqlInsertQuery2 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                            var sqlInsertQuery2 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                              VALUES 
                                              (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                        var sqlParams2 = new object[]
-                        {
+                            var sqlParams2 = new object[]
+                            {
                            new SqlParameter("@PFBCode", PrcNo.Trim()),
                            new SqlParameter("@SrNo", 1),
                            new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
@@ -2043,37 +2051,37 @@ namespace KalaGenset.ERP.Core.Services
                            new SqlParameter("@Status", "P"),
                            new SqlParameter("@QPCStatus", "OK"),
                            new SqlParameter("@RWStatus", "OK")
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
 
-                        var jobCardDetails = await _context.Jobcard2DetailsSubs
-                            .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
-                                        j.JobCode == dgStageScanReq.JobCardCode &&
-                                        j.SrNoPartCode == dgStageScanReq.CPPartcode &&
-                                        j.PartCode == dgStageScanReq.ProductCode)
-                            .ToListAsync();
-                        if (jobCardDetails.Any())
-                        {
-                            foreach (var jobcard in jobCardDetails)
+                            var jobCardDetails = await _context.Jobcard2DetailsSubs
+                                .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
+                                            j.JobCode == dgStageScanReq.JobCardCode &&
+                                            j.SrNoPartCode == dgStageScanReq.CPPartcode &&
+                                            j.PartCode == dgStageScanReq.ProductCode)
+                                .ToListAsync();
+                            if (jobCardDetails.Any())
                             {
-                                jobcard.PrcStatus = "D";
+                                foreach (var jobcard in jobCardDetails)
+                                {
+                                    jobcard.PrcStatus = "D";
+                                }
+
+                                await _context.SaveChangesAsync();
                             }
-
-                            await _context.SaveChangesAsync(); 
                         }
-                    }
 
-                    if (double.Parse(CPType[1].Trim()) == 0 && DGCFM == "STD")
-                    {
-                        var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                        if (double.Parse(CPType[1].Trim()) == 0 && DGCFM == "STD")
+                        {
+                            var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
                                                   PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
                                                   VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                                                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                        var sqlParameters = new object[]
-                        {
+                            var sqlParameters = new object[]
+                            {
                                   new SqlParameter("@PFBCode", PrcNo.Trim()),
                                   new SqlParameter("@SrNo", SrNo),
                                   new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
@@ -2092,33 +2100,33 @@ namespace KalaGenset.ERP.Core.Services
                                   new SqlParameter("@PWidth2", SqlDbType.Int) { Value = 0 },
                                   new SqlParameter("@PLossSqft", SqlDbType.Int) { Value = 0 },
                                   new SqlParameter("@PCatagoryCode", SqlDbType.Int) { Value = 0 }
-                        };
+                            };
 
 
-                        await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
+                            await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
-                        var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                            var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
                                                   VALUES 
                                                   (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
 
-                        var sqlParameter = new object[]
-                        {
+                            var sqlParameter = new object[]
+                            {
                                 new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
                                 new SqlParameter("@IssueQty", 1),
                                 new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                                 new SqlParameter("@StockType",SqlDbType.Int) { Value = 0 }
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
+                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
 
-                        var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                            var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                                     VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                        var _sqlParams = new object[]
-                        {
+                            var _sqlParams = new object[]
+                            {
                                 new SqlParameter("@PFBCode", PrcNo.Trim()),
                                 new SqlParameter("@SrNo", 1),
                                 new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
@@ -2128,39 +2136,39 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@Status", "P"),
                                 new SqlParameter("@QPCStatus", "OK"),
                                 new SqlParameter("@RWStatus", "OK")
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
 
-                        var _jobCardDetails = await _context.Jobcard2DetailsSubs
-                        .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
-                                    j.JobCode == dgStageScanReq.JobCardCode &&
-                                    j.SrNoPartCode == dgStageScanReq.CPPartcode &&
-                                    j.PartCode == dgStageScanReq.ProductCode)
-                        .ToListAsync();
-                        if (_jobCardDetails.Any())
-                        {
-                            foreach (var jobcard in _jobCardDetails)
+                            var _jobCardDetails = await _context.Jobcard2DetailsSubs
+                            .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
+                                        j.JobCode == dgStageScanReq.JobCardCode &&
+                                        j.SrNoPartCode == dgStageScanReq.CPPartcode &&
+                                        j.PartCode == dgStageScanReq.ProductCode)
+                            .ToListAsync();
+                            if (_jobCardDetails.Any())
                             {
-                                jobcard.PrcStatus = "D";
-                            }
+                                foreach (var jobcard in _jobCardDetails)
+                                {
+                                    jobcard.PrcStatus = "D";
+                                }
 
-                            await _context.SaveChangesAsync();
+                                await _context.SaveChangesAsync();
+                            }
                         }
-                    }
-                    //CP2 Related operations
-                    if (dgStageScanReq.CP2Srno.Trim() != "0")
-                    {
-                        if (double.Parse(CPType[2].Trim()) > 1)
+                        //CP2 Related operations
+                        if (dgStageScanReq.CP2Srno.Trim() != "0")
                         {
-                            var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                            if (double.Parse(CPType[2].Trim()) > 1)
+                            {
+                                var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
                                                   PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
                                                   VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                                                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                            var sqlParameters = new object[]
-                            {
+                                var sqlParameters = new object[]
+                                {
                                   new SqlParameter("@PFBCode", PrcNo.Trim()),
                                   new SqlParameter("@SrNo", SrNo),
                                   new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
@@ -2179,32 +2187,32 @@ namespace KalaGenset.ERP.Core.Services
                                   new SqlParameter("@PWidth2", 0),
                                   new SqlParameter("@PLossSqft", 0),
                                  new SqlParameter("@PCatagoryCode", 0)
-                            };
+                                };
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
+                                await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
-                            var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                                var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
                                                   VALUES 
                                                   (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
 
-                            var sqlParameter = new object[]
-                            {
+                                var sqlParameter = new object[]
+                                {
                                 new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
                                 new SqlParameter("@IssueQty", 1),
                                 new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
                                 new SqlParameter("@StockType", 0)
-                            };
+                                };
 
-                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
+                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
 
-                            var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                                var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                                     VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                            var _sqlParams = new object[]
-                            {
+                                var _sqlParams = new object[]
+                                {
                                 new SqlParameter("@PFBCode", PrcNo.Trim()),
                                 new SqlParameter("@SrNo", 1),
                                 new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
@@ -2214,29 +2222,29 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@Status", "P"),
                                 new SqlParameter("@QPCStatus", "OK"),
                                 new SqlParameter("@RWStatus", "OK")
-                            };
+                                };
 
-                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
+                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
 
-                            var _jobCardDetails = await _context.Jobcard2DetailsSubs
-                           .Where(j => j.SerialNo == dgStageScanReq.CP2Srno.Trim() &&
-                                       j.JobCode == dgStageScanReq.JobCardCode &&
-                                       j.SrNoPartCode == dgStageScanReq.CP2Partcode &&
-                                       j.PartCode == dgStageScanReq.ProductCode)
-                           .ToListAsync();
-                            if (_jobCardDetails.Any())
-                            {
-                                foreach (var jobcard in _jobCardDetails)
+                                var _jobCardDetails = await _context.Jobcard2DetailsSubs
+                               .Where(j => j.SerialNo == dgStageScanReq.CP2Srno.Trim() &&
+                                           j.JobCode == dgStageScanReq.JobCardCode &&
+                                           j.SrNoPartCode == dgStageScanReq.CP2Partcode &&
+                                           j.PartCode == dgStageScanReq.ProductCode)
+                               .ToListAsync();
+                                if (_jobCardDetails.Any())
                                 {
-                                    jobcard.PrcStatus = "D";
-                                }
+                                    foreach (var jobcard in _jobCardDetails)
+                                    {
+                                        jobcard.PrcStatus = "D";
+                                    }
 
-                                await _context.SaveChangesAsync();
+                                    await _context.SaveChangesAsync();
+                                }
                             }
                         }
-                    }
-                    //battery related operations
-                    var batteries = new List<(string? PartCode, string? SrNo)>
+                        //battery related operations
+                        var batteries = new List<(string? PartCode, string? SrNo)>
                     {
                           (dgStageScanReq.BatPartcode, dgStageScanReq.BatSrno),
                           (dgStageScanReq.Bat2Partcode, dgStageScanReq.Bat2Srno),
@@ -2244,60 +2252,60 @@ namespace KalaGenset.ERP.Core.Services
                           (dgStageScanReq.Bat4Partcode, dgStageScanReq.Bat4Srno)
                     };
 
-                    var validBatteries = batteries.Where(b => b.PartCode != null || b.SrNo != null).ToList();
+                        var validBatteries = batteries.Where(b => b.PartCode != null || b.SrNo != null).ToList();
 
-                    int batteryIndex = 0; // Track battery position
+                        int batteryIndex = 0; // Track battery position
 
-                    foreach (var battery in validBatteries)
-                    {
-                        if (!string.IsNullOrWhiteSpace(battery.SrNo) && battery.SrNo.Trim() != "0")
+                        foreach (var battery in validBatteries)
                         {
-                            // Apply the condition only from the second battery onwards
-                            if (batteryIndex > 0 && double.Parse(strkVA) < 160)
+                            if (!string.IsNullOrWhiteSpace(battery.SrNo) && battery.SrNo.Trim() != "0")
                             {
-                                batteryIndex++;
-                                continue; // Skip battery processing if strkVA is < 160 (only for batteries beyond the first)
-                            }
+                                // Apply the condition only from the second battery onwards
+                                if (batteryIndex > 0 && double.Parse(strkVA) < 160)
+                                {
+                                    batteryIndex++;
+                                    continue; // Skip battery processing if strkVA is < 160 (only for batteries beyond the first)
+                                }
 
-                            var insertQuery = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus)
+                                var insertQuery = @"INSERT INTO ProcessFeedbackDetailsSub (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus)
                                               VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})";
 
-                            await _context.Database.ExecuteSqlRawAsync(
-                                insertQuery,
-                                PrcNo.Trim(),
-                                "1",
-                                battery.PartCode?.Trim(),
-                                battery.SrNo?.Trim(),
-                                battery.SrNo?.Trim(),
-                                dgStageScanReq.JobCardCode?.Trim(),
-                                "P",
-                                "OK",
-                                "OK"
-                            );
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    insertQuery,
+                                    PrcNo.Trim(),
+                                    "1",
+                                    battery.PartCode?.Trim(),
+                                    battery.SrNo?.Trim(),
+                                    battery.SrNo?.Trim(),
+                                    dgStageScanReq.JobCardCode?.Trim(),
+                                    "P",
+                                    "OK",
+                                    "OK"
+                                );
 
-                            // Update Query using LINQ
-                            var updateRecords = _context.Jobcard2DetailsSubs
-                                .Where(j => j.SerialNo == battery.SrNo.Trim()
-                                         && j.JobCode == dgStageScanReq.JobCardCode
-                                         && j.SrNoPartCode == battery.PartCode.Trim()
-                                         && j.PartCode == dgStageScanReq.ProductCode);
+                                // Update Query using LINQ
+                                var updateRecords = _context.Jobcard2DetailsSubs
+                                    .Where(j => j.SerialNo == battery.SrNo.Trim()
+                                             && j.JobCode == dgStageScanReq.JobCardCode
+                                             && j.SrNoPartCode == battery.PartCode.Trim()
+                                             && j.PartCode == dgStageScanReq.ProductCode);
 
-                            await updateRecords.ForEachAsync(j => j.PrcStatus = "D");
-                            await _context.SaveChangesAsync();
+                                await updateRecords.ForEachAsync(j => j.PrcStatus = "D");
+                                await _context.SaveChangesAsync();
+                            }
+
+                            batteryIndex++; // Move to next battery
                         }
 
-                        batteryIndex++; // Move to next battery
-                    }
-
-                    //KRM Related Operations
-                    if (dgStageScanReq.KRMSrno.Trim() != "0")
-                    {
-                        var sqlInsertQuery = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                        //KRM Related Operations
+                        if (dgStageScanReq.KRMSrno.Trim() != "0")
+                        {
+                            var sqlInsertQuery = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                              VALUES 
                                              (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                        var sqlParams = new object[]
-                        {
+                            var sqlParams = new object[]
+                            {
                            new SqlParameter("@PFBCode", PrcNo.Trim()),
                            new SqlParameter("@SrNo", 1),
                            new SqlParameter("@PartCode", dgStageScanReq.KRMPartcode.Trim()),
@@ -2307,108 +2315,108 @@ namespace KalaGenset.ERP.Core.Services
                            new SqlParameter("@Status", "P"),
                            new SqlParameter("@QPCStatus", "OK"),
                            new SqlParameter("@RWStatus", "OK")
-                        };
+                            };
 
-                        await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
 
-                        var recordToUpdate = await _context.Jobcard2DetailsSubs
-                                             .FirstOrDefaultAsync(j => j.SerialNo == dgStageScanReq.KRMSrno.Trim()
-                                              && j.JobCode == dgStageScanReq.JobCardCode
-                                              && j.SrNoPartCode == dgStageScanReq.KRMPartcode.Trim()
-                                              && j.PartCode == dgStageScanReq.ProductCode);
+                            var recordToUpdate = await _context.Jobcard2DetailsSubs
+                                                 .FirstOrDefaultAsync(j => j.SerialNo == dgStageScanReq.KRMSrno.Trim()
+                                                  && j.JobCode == dgStageScanReq.JobCardCode
+                                                  && j.SrNoPartCode == dgStageScanReq.KRMPartcode.Trim()
+                                                  && j.PartCode == dgStageScanReq.ProductCode);
 
-                        if (recordToUpdate != null)
-                        {
-                            recordToUpdate.PrcStatus = "D";
-                            await _context.SaveChangesAsync();
+                            if (recordToUpdate != null)
+                            {
+                                recordToUpdate.PrcStatus = "D";
+                                await _context.SaveChangesAsync();
+                            }
+
                         }
 
-                    }
+                        #region Kanban Related Operations
+                        List<InternalTOCResult> dsKanBan = new List<InternalTOCResult>();
 
-                    #region Kanban Related Operations
-                    List<InternalTOCResult> dsKanBan = new List<InternalTOCResult>();
+                        string strKanBan = "";
+                        dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode);
 
-                    string strKanBan = "";
-                    dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode);
-
-                    if (dsKanBan.Count > 0)
-                    {
-                        string query1 = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
+                        if (dsKanBan.Count > 0)
+                        {
+                            string query1 = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
                              WHERE TblName = @TableName AND CompCode = @CompCode 
                              AND Prefix = @Prefix 
                              AND Yr = @YearEnd";
 
-                        GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
-                        strKanBan = GetMaxValue;
-                        string? yearEnds = _context.YearEnds
-                                    .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
-                                    .FirstOrDefault();
-                        string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, ToProfitCenterCode, ClassCode, CompanyCode, ActNo, 
+                            GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
+                            strKanBan = GetMaxValue;
+                            string? yearEnds = _context.YearEnds
+                                        .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
+                                        .FirstOrDefault();
+                            string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, ToProfitCenterCode, ClassCode, CompanyCode, ActNo, 
                                          REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode) 
                                          VALUES (@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, @ClassCode, @CompanyCode, 
                                          @ActNo, @REQStatus, @ReqType, @Remark, @Discard, @Active, @Auth, @SourceCode)";
 
-                        await _context.Database.ExecuteSqlRawAsync(query,
-                            new SqlParameter("@REQCode", strKanBan.Trim()),
-                            new SqlParameter("@MaxSrNo", GetMaxValue.Substring(10, 8)),
-                            new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss tt")),
-                            new SqlParameter("@Yr", yearEnds),
-                            new SqlParameter("@ProfitCenterCode", dgStageScanReq.PCCode.Trim()),
-                            new SqlParameter("@ToProfitCenterCode", "23.001"),
-                            new SqlParameter("@ClassCode", dgStageScanReq.ProductCode),
-                            new SqlParameter("@CompanyCode", dgStageScanReq.PCCode.Substring(0, 2)),
-                            new SqlParameter("@ActNo", "1"),
-                            new SqlParameter("@REQStatus", "P"),
-                            new SqlParameter("@ReqType", "WIP"),
-                            new SqlParameter("@Remark", $"Auto Req For Plan No: {dgStageScanReq.ProductCode} and Prc No: {PrcNo}"),
-                            new SqlParameter("@Discard", "1"),
-                            new SqlParameter("@Active", "1"),
-                            new SqlParameter("@Auth", "1"),
-                            new SqlParameter("@SourceCode", "KanBan")
-                        );
-
-                        int SrNoReq = 0;
-                        foreach (var item in dsKanBan)
-                        {
-                            SrNoReq = SrNoReq + 1;
-                            string _query = "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus";
-
-                            await _context.Database.ExecuteSqlRawAsync(_query,
-                                new SqlParameter("@REQCode", strKanBan),
-                                new SqlParameter("@SrNo", SrNoReq),
-                                new SqlParameter("@PartCode", item.Partcode.ToString().Trim()),
-                                new SqlParameter("@Qty", double.Parse(item.RaiseReqQty.ToString().Trim())),
-                                new SqlParameter("@REQStatus", "P")
+                            await _context.Database.ExecuteSqlRawAsync(query,
+                                new SqlParameter("@REQCode", strKanBan.Trim()),
+                                new SqlParameter("@MaxSrNo", GetMaxValue.Substring(10, 8)),
+                                new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss tt")),
+                                new SqlParameter("@Yr", yearEnds),
+                                new SqlParameter("@ProfitCenterCode", dgStageScanReq.PCCode.Trim()),
+                                new SqlParameter("@ToProfitCenterCode", "23.001"),
+                                new SqlParameter("@ClassCode", dgStageScanReq.ProductCode),
+                                new SqlParameter("@CompanyCode", dgStageScanReq.PCCode.Substring(0, 2)),
+                                new SqlParameter("@ActNo", "1"),
+                                new SqlParameter("@REQStatus", "P"),
+                                new SqlParameter("@ReqType", "WIP"),
+                                new SqlParameter("@Remark", $"Auto Req For Plan No: {dgStageScanReq.ProductCode} and Prc No: {PrcNo}"),
+                                new SqlParameter("@Discard", "1"),
+                                new SqlParameter("@Active", "1"),
+                                new SqlParameter("@Auth", "1"),
+                                new SqlParameter("@SourceCode", "KanBan")
                             );
+
+                            int SrNoReq = 0;
+                            foreach (var item in dsKanBan)
+                            {
+                                SrNoReq = SrNoReq + 1;
+                                string _query = "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus";
+
+                                await _context.Database.ExecuteSqlRawAsync(_query,
+                                    new SqlParameter("@REQCode", strKanBan),
+                                    new SqlParameter("@SrNo", SrNoReq),
+                                    new SqlParameter("@PartCode", item.Partcode.ToString().Trim()),
+                                    new SqlParameter("@Qty", double.Parse(item.RaiseReqQty.ToString().Trim())),
+                                    new SqlParameter("@REQStatus", "P")
+                                );
+                            }
                         }
+                        #endregion
+                        await transaction.CommitAsync();
                     }
-                    #endregion
-                    await transaction.CommitAsync();
-                }
-                catch (Exception)
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-
-                PrcNo = $"Process Started For ProcessCode={PrcNo} and DG SrNo={DGNo.Trim()}";
-            }
-            else if (dgStageScanReq.Remark == "End")
-            {
-                try
-                {
-                    int SrNo = 0;
-                    string _DGStartTime = "";
-                    _DGStartTime = await GetDGStartTimeStage4(dgStageScanReq.PfbCode.Trim());
-
-                    foreach (var item in dgStageScanReq.PrcChkDts)
+                    catch (Exception)
                     {
-                        SrNo += 1;
-                        string query = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+
+                    PrcNo = $"Process Started For ProcessCode={PrcNo} and DG SrNo={DGNo.Trim()}";
+                }
+                else if (dgStageScanReq.Remark == "End")
+                {
+                    try
+                    {
+                        int SrNo = 0;
+                        string _DGStartTime = "";
+                        _DGStartTime = await GetDGStartTimeStage4(dgStageScanReq.PfbCode.Trim());
+
+                        foreach (var item in dgStageScanReq.PrcChkDts)
+                        {
+                            SrNo += 1;
+                            string query = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
                                     VALUES (@TransCode, @Dt, @MainSerialNo, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime, @QA6M)";
 
-                        var parameters = new[]
-                        {
+                            var parameters = new[]
+                            {
                          new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
                          new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
                          new SqlParameter("@MainSerialNo", dgStageScanReq.EngSrNo.Trim()),
@@ -2419,44 +2427,46 @@ namespace KalaGenset.ERP.Core.Services
                          new SqlParameter("@DGStartTime", _DGStartTime),
                          new SqlParameter("@QA6M", dgStageScanReq.QA6M)
                     };
-                        await _context.Database.ExecuteSqlRawAsync(query, parameters);
-                    }
+                            await _context.Database.ExecuteSqlRawAsync(query, parameters);
+                        }
 
-                    var record = await _context.ProcessFeedBacks
-                             .Where(p => p.Pfbcode == dgStageScanReq.JobCardCode)
-                             .FirstOrDefaultAsync();
+                        var record = await _context.ProcessFeedBacks
+                                 .Where(p => p.Pfbcode == dgStageScanReq.JobCardCode)
+                                 .FirstOrDefaultAsync();
 
-                    if (record != null)
-                    {
+                        if (record != null)
+                        {
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                record.Edt = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejected")
+                            {
+                                record.Edt = null;
+                            }
+
+                            await _context.SaveChangesAsync();
+                        }
+
                         if (dgStageScanReq.PrcStatus == "Accepted(OK)")
                         {
-                            record.Edt = DateTime.Now;
+                            PrcNo = $"Process Ended For ProcessCode={dgStageScanReq.JobCardCode}";
                         }
                         else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejected")
                         {
-                            record.Edt = null;
+                            PrcNo = $"Process {dgStageScanReq.PrcStatus} For ProcessCode={dgStageScanReq.JobCardCode}";
                         }
 
-                        await _context.SaveChangesAsync();
+                        await transaction.CommitAsync();
                     }
-
-                    if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                    catch (Exception ex)
                     {
-                        PrcNo = $"Process Ended For ProcessCode={dgStageScanReq.JobCardCode}";
+                        await transaction.RollbackAsync();
+                        throw;
                     }
-                    else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejected")
-                    {
-                        PrcNo = $"Process {dgStageScanReq.PrcStatus} For ProcessCode={dgStageScanReq.JobCardCode}";
-                    }
+                }
+            });
 
-                    await transaction.CommitAsync();
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-            }
             return PrcNo;
         }
 
@@ -2468,9 +2478,13 @@ namespace KalaGenset.ERP.Core.Services
             string TRQAStatus = "";
             string ChkDupTR = "";
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-            try
+           await strategy.ExecuteAsync(async () =>
+           {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+              try
             {
                 if (testReportSubmitDetailsDTO.TRTime == "TRStart")
                 {
@@ -2480,7 +2494,8 @@ namespace KalaGenset.ERP.Core.Services
 
                     if (trCnt > 0)
                     {
-                        return StrTRCode = "TRStart For This Process Already Done";
+                       StrTRCode = "TRStart For This Process Already Done";
+                       return;
                     }
                 }
 
@@ -2710,6 +2725,7 @@ namespace KalaGenset.ERP.Core.Services
                 throw;
             }
 
+           });
             return StrTRCode;
         }
 
@@ -2723,23 +2739,28 @@ namespace KalaGenset.ERP.Core.Services
 
             int SrNo = 0;
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-            try
+            await strategy.ExecuteAsync(async () =>
             {
+
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                try
+                {
                     if (packingSlipSubmitDetailsReq.PSTime == "PSStartTime")
                     {
                         if (!string.IsNullOrEmpty(packingSlipSubmitDetailsReq.PSStartTime))
                         {
                             StrPSLCode = $"PSStart Process Already Completed,Please Continue For PSEnd Process..!";
-                            return StrPSLCode;
+                            return;
                         }
                         foreach (var item in packingSlipSubmitDetailsReq.MOFAddParts)
                         {
                             if (item.Qty - item.WIPStock < 0)
                             {
                                 StrPSLCode = $"Insufficient Stock(Additional Part) For: {item.PartCode}";
-                                return StrPSLCode;
+                                return;
                             }
                         }
 
@@ -2777,7 +2798,7 @@ namespace KalaGenset.ERP.Core.Services
                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
                                         .FirstOrDefault();
 
-                        StrPSLCode = await GetMaxNo("PSL", PC_CompanyCode , query, "Packingslip");
+                        StrPSLCode = await GetMaxNo("PSL", PC_CompanyCode, query, "Packingslip");
 
                         string insertSql = @"INSERT INTO Packingslip(PSCode, Dt, Yr, MaxSrNo, PCCode, SOFCode, PSStartTime, PDICode, SrNo, Remark,
                                            PCCodeStkIssue, BatteryTerminals, BatteryLead, ExhaustPipe, DCBulb, CanopyKey, FuelCapKey, Rate, RubberPad, FunnelPad, PrdManual, CompanyCode)
@@ -3027,10 +3048,10 @@ namespace KalaGenset.ERP.Core.Services
                                                             VALUES(@FromPC, @PartCode, @IssueCode, @IssueDate, @IssueQty, @ToPC, @StockType);";
                                 var parameters = new[]
                                 {
-                                    new SqlParameter("@FromPC", StrPCCodeStkIssue.Trim()),   
+                                    new SqlParameter("@FromPC", StrPCCodeStkIssue.Trim()),
                                     new SqlParameter("@PartCode", item.PartCode.Trim()),
-                                    new SqlParameter("@IssueCode", StrPSLCode.Trim()),  
-                                    new SqlParameter("@IssueDate", DateTime.Now), 
+                                    new SqlParameter("@IssueCode", StrPSLCode.Trim()),
+                                    new SqlParameter("@IssueDate", DateTime.Now),
                                     new SqlParameter("@IssueQty", item.Qty),
                                     new SqlParameter("@ToPC", StrPCCodeStkRecieved.Trim()),
                                     new SqlParameter("@StockType", (object)0 ?? DBNull.Value){ SqlDbType = SqlDbType.Int }
@@ -3054,45 +3075,46 @@ namespace KalaGenset.ERP.Core.Services
 
                         await transaction.CommitAsync();
 
-                       return StrPSLCode = $"PSStart Process Completed Successfully For = {StrPSLCode}";
+                       StrPSLCode = $"PSStart Process Completed Successfully For = {StrPSLCode}";
+                       return;
                     }
-                    else if(packingSlipSubmitDetailsReq.PSTime == "PSEndTime")
+                    else if (packingSlipSubmitDetailsReq.PSTime == "PSEndTime")
                     {
-                    if (packingSlipSubmitDetailsReq.PSCode == null)
-                    {
-                        StrPSLCode = $"Please Complete PSStart Process And Then Continue For PSEnd Process..!";
-                        return StrPSLCode;
-                    }
-                    else if (packingSlipSubmitDetailsReq.PSEndTime != null && packingSlipSubmitDetailsReq.PSEndTime != "")
-                    {
-                        StrPSLCode = $"PSEnd Process Already Complete For Packing Slip SrNo: {packingSlipSubmitDetailsReq.strSrNo}";
-                        return StrPSLCode;
-                    }
+                        if (packingSlipSubmitDetailsReq.PSCode == null)
+                        {
+                            StrPSLCode = $"Please Complete PSStart Process And Then Continue For PSEnd Process..!";
+                            return;
+                        }
+                        else if (packingSlipSubmitDetailsReq.PSEndTime != null && packingSlipSubmitDetailsReq.PSEndTime != "")
+                        {
+                            StrPSLCode = $"PSEnd Process Already Complete For Packing Slip SrNo: {packingSlipSubmitDetailsReq.strSrNo}";
+                            return;
+                        }
                         string PC_CompanyCode = "";
-                      string trcode = packingSlipSubmitDetailsReq.TRCode.Trim();
-                      string StrTPSStatus = _context.TestReports
-                                            .Where(tr => tr.Trcode == trcode && tr.Active == true)
-                                            .Select(tr => tr.Tpsstatus)
-                                            .FirstOrDefault() ?? "0";
+                        string trcode = packingSlipSubmitDetailsReq.TRCode.Trim();
+                        string StrTPSStatus = _context.TestReports
+                                              .Where(tr => tr.Trcode == trcode && tr.Active == true)
+                                              .Select(tr => tr.Tpsstatus)
+                                              .FirstOrDefault() ?? "0";
 
-                      if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "01" && StrTPSStatus.Trim() == "P")
-                      {
-                        PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
-                      }
-                      else if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "28" && StrTPSStatus.Trim() == "P")
-                      {       
-                        PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
-                      }
-                      else
-                      {
-                        PC_CompanyCode = "03";
-                      }
+                        if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "01" && StrTPSStatus.Trim() == "P")
+                        {
+                            PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
+                        }
+                        else if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "28" && StrTPSStatus.Trim() == "P")
+                        {
+                            PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
+                        }
+                        else
+                        {
+                            PC_CompanyCode = "03";
+                        }
 
-                       string query = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
+                        string query = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
                                       WHERE TblName = @TableName AND CompCode = @CompCode 
                                       AND Prefix = @Prefix 
                                       AND Yr = @YearEnd";
-                       StrPSLCode = await GetMaxNo("PSL", PC_CompanyCode, query, "Packingslip");
+                        StrPSLCode = await GetMaxNo("PSL", PC_CompanyCode, query, "Packingslip");
 
                         var psCode = packingSlipSubmitDetailsReq.PSCode.Trim();
                         var columnName = packingSlipSubmitDetailsReq.PSTime.Trim();
@@ -3100,19 +3122,22 @@ namespace KalaGenset.ERP.Core.Services
                         string updateSqlQuery = $"UPDATE PackingSlip SET {columnName} = @p0 WHERE PSCode = @p1";
                         await _context.Database.ExecuteSqlRawAsync(updateSqlQuery, dateTimeNow, psCode);
 
-                      await transaction.CommitAsync();
+                        await transaction.CommitAsync();
 
-                      return StrPSLCode = $"PSEnd Process Completed Successfully For = {StrPSLCode}";
+                        StrPSLCode = $"PSEnd Process Completed Successfully For = {StrPSLCode}";
+                        return;
                     }
 
-                 // await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                  await transaction.RollbackAsync();
-                  throw;
-            }
-            return StrPSLCode;        
+                    // await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+
+             return StrPSLCode;        
         }
 
         public async Task<string> SubmitJobCard2Details(Jobcard2SubmitDetails jobcard2SubmitDetailsReq)
@@ -3169,24 +3194,27 @@ namespace KalaGenset.ERP.Core.Services
             }
             #endregion
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            //Check Srno Availability
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                string? yearEnd = _context.YearEnds
-                                     .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
-                                     .FirstOrDefault();
-                string query = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                //Check Srno Availability
+                try
+                {
+                    string? yearEnd = _context.YearEnds
+                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
+                                         .FirstOrDefault();
+                    string query = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
                                       WHERE TblName = @TableName AND CompCode = @CompCode 
                                       AND Prefix = @Prefix 
                                       AND Yr = @YearEnd";
 
-                JobCardNo = await GetMaxNo("JCP", jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2), query, "JobCard2");
+                    JobCardNo = await GetMaxNo("JCP", jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2), query, "JobCard2");
 
-                string sqlJobCard2 = @"INSERT INTO JobCard2 (JobCode, Dt, Yr, MaxSrNo, PCCode, Remark, CompanyCode, Active, Auth) 
+                    string sqlJobCard2 = @"INSERT INTO JobCard2 (JobCode, Dt, Yr, MaxSrNo, PCCode, Remark, CompanyCode, Active, Auth) 
                                      VALUES (@JobCode, GETDATE(), @Yr, @MaxSrNo, @PCCode, @Remark, @CompanyCode, @Active, @Auth)";
-                var parameters = new[]
-                {
+                    var parameters = new[]
+                    {
                         new SqlParameter("@JobCode", JobCardNo.Trim()),
                         new SqlParameter("@Yr", yearEnd),
                         new SqlParameter("@MaxSrNo", JobCardNo.Substring(10, 8)),
@@ -3196,63 +3224,63 @@ namespace KalaGenset.ERP.Core.Services
                         new SqlParameter("@Active", 1),
                         new SqlParameter("@Auth", 1),
                 };
-                await _context.Database.ExecuteSqlRawAsync(sqlJobCard2, parameters);
+                    await _context.Database.ExecuteSqlRawAsync(sqlJobCard2, parameters);
 
-                int SrNo = 0;
-                string? strModel = "", strPhase = "";
+                    int SrNo = 0;
+                    string? strModel = "", strPhase = "";
 
-                foreach (var item in jobcard2SubmitDetailsReq.JobCard2Dts)
-                {
-                    SrNo += 1;
-                    panelTypeId = "0";
-                    if (item.DGPanel == "SPL")
+                    foreach (var item in jobcard2SubmitDetailsReq.JobCard2Dts)
                     {
-                        panelTypeId = "150";
-                    }
-                    else
-                    {
-                        strModel = ""; strPhase = "";
-                        strModel = await _context.Parts
-                                  .Where(p => p.PartCode == item.PartCode)
-                                  .Select(p => p.Model.Substring(0, 5))
-                                  .FirstOrDefaultAsync();
+                        SrNo += 1;
+                        panelTypeId = "0";
+                        if (item.DGPanel == "SPL")
+                        {
+                            panelTypeId = "150";
+                        }
+                        else
+                        {
+                            strModel = ""; strPhase = "";
+                            strModel = await _context.Parts
+                                      .Where(p => p.PartCode == item.PartCode)
+                                      .Select(p => p.Model.Substring(0, 5))
+                                      .FirstOrDefaultAsync();
 
-                        strPhase = await _context.Parts
-                                  .Where(p => p.PartCode == item.PartCode)
-                                  .Select(p => p.Phase)
-                                  .FirstOrDefaultAsync();
+                            strPhase = await _context.Parts
+                                      .Where(p => p.PartCode == item.PartCode)
+                                      .Select(p => p.Phase)
+                                      .FirstOrDefaultAsync();
 
-                        var dgType = await _context.Parts
-                                     .Where(p => p.PartCode == item.PartCode)
-                                     .Select(p => p.Model != null && p.Model.Length >= 6
-                                      ? p.Model.Substring(p.Model.Length - 6, 6): null)
-                                     .FirstOrDefaultAsync();
-
-                        var partDetails = await _context.Parts
-                                         .Where(p => p.PartCode == item.PartCode.Trim())
-                                         .Select(p => new { p.Kva, p.Phase })
+                            var dgType = await _context.Parts
+                                         .Where(p => p.PartCode == item.PartCode)
+                                         .Select(p => p.Model != null && p.Model.Length >= 6
+                                          ? p.Model.Substring(p.Model.Length - 6, 6) : null)
                                          .FirstOrDefaultAsync();
 
-                        if (partDetails != null)
-                        {
-                            string targetType = dgType == "iGreen" ? "iGreen" : "KG";
+                            var partDetails = await _context.Parts
+                                             .Where(p => p.PartCode == item.PartCode.Trim())
+                                             .Select(p => new { p.Kva, p.Phase })
+                                             .FirstOrDefaultAsync();
 
-                            int? tempPanelTypeId = await _context.PanelTypeKits
-                                .Where(pt => pt.PanelTypeName == item.DGPanel.Trim()
-                                    && pt.DgkVa == partDetails.Kva
-                                    && pt.Dgphase == Convert.ToInt32(partDetails.Phase)
-                                    && pt.Dgtype == targetType)
-                                .Select(pt => (int?)pt.PanelTypeId)
-                                .FirstOrDefaultAsync();
+                            if (partDetails != null)
+                            {
+                                string targetType = dgType == "iGreen" ? "iGreen" : "KG";
 
-                            panelTypeId = tempPanelTypeId?.ToString();
+                                int? tempPanelTypeId = await _context.PanelTypeKits
+                                    .Where(pt => pt.PanelTypeName == item.DGPanel.Trim()
+                                        && pt.DgkVa == partDetails.Kva
+                                        && pt.Dgphase == Convert.ToInt32(partDetails.Phase)
+                                        && pt.Dgtype == targetType)
+                                    .Select(pt => (int?)pt.PanelTypeId)
+                                    .FirstOrDefaultAsync();
+
+                                panelTypeId = tempPanelTypeId?.ToString();
+                            }
                         }
-                    }
 
-                       string insertJobcard2 = @"INSERT INTO JobCard2Details (JobCode, SrNo, BOMCode, PartCode, Qty, PanelType)
+                        string insertJobcard2 = @"INSERT INTO JobCard2Details (JobCode, SrNo, BOMCode, PartCode, Qty, PanelType)
                                                VALUES (@JobCode, @SrNo, @BOMCode, @PartCode, @Qty, @PanelType)";
-                       var paraJobcard2 = new[]
-                       {
+                        var paraJobcard2 = new[]
+                        {
                               new SqlParameter("@JobCode", JobCardNo.Trim()),
                               new SqlParameter("@SrNo", SrNo),
                               new SqlParameter("@BOMCode", item.BOMCode.Trim()),
@@ -3261,63 +3289,63 @@ namespace KalaGenset.ERP.Core.Services
                               new SqlParameter("@PanelType", string.IsNullOrEmpty(panelTypeId) ? (object)DBNull.Value : panelTypeId)
                        };
 
-                     await _context.Database.ExecuteSqlRawAsync(insertJobcard2, paraJobcard2);
+                        await _context.Database.ExecuteSqlRawAsync(insertJobcard2, paraJobcard2);
 
-                    var paramdsDetailsSub = new[]
-                       {
+                        var paramdsDetailsSub = new[]
+                           {
                           new SqlParameter("@JobCodeType", "DGWIP"),
                           new SqlParameter("@Partcode", item.PartCode),
                           new SqlParameter("@Qty", item.Jobcard2Qty),
                           new SqlParameter("@CompCode",jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2))
                     };
-                    dsDetailsSub = await _context.Database
-                              .SqlQueryRaw<GetJobCardSrNo>("EXEC GetJobCardSrNo @JobCodeType, @Partcode, @Qty, @CompCode", paramdsDetailsSub)
-                              .ToListAsync();
+                        dsDetailsSub = await _context.Database
+                                  .SqlQueryRaw<GetJobCardSrNo>("EXEC GetJobCardSrNo @JobCodeType, @Partcode, @Qty, @CompCode", paramdsDetailsSub)
+                                  .ToListAsync();
 
-                    if (dsDetailsSub.Count > 0)
-                    {
-                        strEngQty = 0; strAltQty = 0; strCpyQty = 0; strBatQty = 0;
-                        int SrNok = 0;
-
-                        foreach (var dsdetail in dsDetailsSub)
+                        if (dsDetailsSub.Count > 0)
                         {
-                            string? jobCard1;
-                            string? j2Priority;
-                            if (dsdetail.SrNoPartcode.ToString().Trim().StartsWith("00002"))
+                            strEngQty = 0; strAltQty = 0; strCpyQty = 0; strBatQty = 0;
+                            int SrNok = 0;
+
+                            foreach (var dsdetail in dsDetailsSub)
                             {
-                                // Fetch JobCard1
-                                jobCard1 = await _context.JobCardDetailsSubs
-                                            .Where(j => _context.GiirdetailsSubs
-                                                          .Where(g => g.Krmno == dsdetail.SerialNo.Trim())
-                                                          .Select(g => g.SerialNo)
-                                                          .Contains(j.SerialNo))
-                                            .Select(j => j.JobCode)
-                                            .FirstOrDefaultAsync();
+                                string? jobCard1;
+                                string? j2Priority;
+                                if (dsdetail.SrNoPartcode.ToString().Trim().StartsWith("00002"))
+                                {
+                                    // Fetch JobCard1
+                                    jobCard1 = await _context.JobCardDetailsSubs
+                                                .Where(j => _context.GiirdetailsSubs
+                                                              .Where(g => g.Krmno == dsdetail.SerialNo.Trim())
+                                                              .Select(g => g.SerialNo)
+                                                              .Contains(j.SerialNo))
+                                                .Select(j => j.JobCode)
+                                                .FirstOrDefaultAsync();
 
-                                // Fetch J2Priority
-                                j2Priority = await _context.JobCardDetailsSubs
-                                            .Where(j => _context.GiirdetailsSubs
-                                                          .Where(g => g.Krmno == dsdetail.SerialNo.Trim())
-                                                          .Select(g => g.SerialNo)
-                                                          .Contains(j.SerialNo))
-                                            .Select(j => j.Jpriority.ToString())
-                                            .FirstOrDefaultAsync();
-                            }
-                            else
-                            {
-                                jobCard1 = dsdetail.JobCode.Trim();
-                                j2Priority = dsdetail.JPriority.ToString();
-                            }
+                                    // Fetch J2Priority
+                                    j2Priority = await _context.JobCardDetailsSubs
+                                                .Where(j => _context.GiirdetailsSubs
+                                                              .Where(g => g.Krmno == dsdetail.SerialNo.Trim())
+                                                              .Select(g => g.SerialNo)
+                                                              .Contains(j.SerialNo))
+                                                .Select(j => j.Jpriority.ToString())
+                                                .FirstOrDefaultAsync();
+                                }
+                                else
+                                {
+                                    jobCard1 = dsdetail.JobCode.Trim();
+                                    j2Priority = dsdetail.JPriority.ToString();
+                                }
 
-                            jobCard1 ??= "";
-                            j2Priority ??= "";
+                                jobCard1 ??= "";
+                                j2Priority ??= "";
 
-                            string insertJob2DetailsSub = @"INSERT INTO JobCard2DetailsSub(JobCode, SrNo, PartCode, PanelType, TransCode, SrNoPartCode, SerialNo, Stage3Status, JobCard1, J2Priority)
+                                string insertJob2DetailsSub = @"INSERT INTO JobCard2DetailsSub(JobCode, SrNo, PartCode, PanelType, TransCode, SrNoPartCode, SerialNo, Stage3Status, JobCard1, J2Priority)
                                                           VALUES
                                                           (@JobCode, @SrNo, @PartCode, @PanelType, @TransCode, @SrNoPartCode, @SerialNo, @Stage3Status, @JobCard1, @J2Priority)";
 
-                            var paramjob2details = new[]
-                            {
+                                var paramjob2details = new[]
+                                {
                                  new SqlParameter("@JobCode", JobCardNo.Trim()),
                                  new SqlParameter("@SrNo", SrNok),
                                  new SqlParameter("@PartCode", item.PartCode.Trim()),
@@ -3330,124 +3358,124 @@ namespace KalaGenset.ERP.Core.Services
                                  new SqlParameter("@J2Priority", j2Priority)
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(insertJob2DetailsSub, paramjob2details);
+                                await _context.Database.ExecuteSqlRawAsync(insertJob2DetailsSub, paramjob2details);
 
-                            //Updating Jobcard status to J from JobCardDetailsSub
-                            await _context.JobCardDetailsSubs
-                                  .Where(j => j.SerialNo == dsdetail.SerialNo.Trim()
-                                  && j.JobCode == dsdetail.JobCode.Trim()
-                                  && j.SrNoPartCode == dsdetail.SrNoPartcode.Trim())
-                                  .ExecuteUpdateAsync(update => update.SetProperty(j => j.JobCard2Status, "J"));
+                                //Updating Jobcard status to J from JobCardDetailsSub
+                                await _context.JobCardDetailsSubs
+                                      .Where(j => j.SerialNo == dsdetail.SerialNo.Trim()
+                                      && j.JobCode == dsdetail.JobCode.Trim()
+                                      && j.SrNoPartCode == dsdetail.SrNoPartcode.Trim())
+                                      .ExecuteUpdateAsync(update => update.SetProperty(j => j.JobCard2Status, "J"));
 
-                            //Updating jobcard2Qty value
-                            if (dsdetail.SrNoPartcode.Trim().StartsWith("001"))
-                            {
-                                await _context.JobCardDetails
-                                    .Where(j => j.JobCode == dsdetail.JobCode.Trim()
-                                             && j.PartCode == item.PartCode.Trim())
-                                    .ExecuteUpdateAsync(update => update.SetProperty(j => j.JobCard2Qty, j => j.JobCard2Qty + 1));
-                            }
-
-                            //Cheked SrNo To JobCardQty
-                            string srNoPartcodePrefix = dsdetail.SrNoPartcode.ToString().Trim();
-                            if (srNoPartcodePrefix.StartsWith("001"))
-                                strEngQty++;
-                            else if (srNoPartcodePrefix.StartsWith("002"))
-                                strAltQty++;
-                            else if (srNoPartcodePrefix.StartsWith("010"))
-                                strBatQty++;
-                            else if (srNoPartcodePrefix.StartsWith("40"))
-                                strCpyQty++;
-                        }
-                        //Verified SrNo To JobCardQty
-                        string partDesc = await _context.Parts
-                                         .Where(p => p.PartCode == item.PartCode.Trim())
-                                         .Select(p => p.PartDesc)
-                                         .FirstOrDefaultAsync() ?? "Unknown Part";
-
-                        int requiredQty = int.TryParse(item.Jobcard2Qty?.Trim(), out var parsedQty) ? parsedQty : 0;
-                        if (requiredQty > strEngQty)
-                            return $"Engine SrNo Not available For DG {partDesc}";
-
-                        if (requiredQty > strAltQty)
-                            return $"Alternator SrNo Not available For DG {partDesc}";
-
-                        if (requiredQty > strBatQty)
-                            if (await CheckTranBOMForBat(item.PartCode.Trim()))
-                                return $"Battery SrNo Not available For DG {partDesc}";
-
-                        if (requiredQty > strCpyQty)
-                            return $"Canopy SrNo Not available For DG {partDesc}";
-                    }
-
-                    //For Job Priority
-                    if (double.Parse(panelTypeId) != 150)
-                    {
-                        var dsDetailsSubP = await _context.Jobcard2DetailsSubs
-                                          .Where(j => j.JobCode == JobCardNo.Trim() && j.SrNoPartCode.StartsWith("001"))
-                                          .Select(j => new
-                                          {
-                                                   j.J2priority,
-                                                   j.JobCard1
-                                          })
-                                         .ToListAsync();
-                        if (dsDetailsSubP.Count > 0)
-                        {
-                            foreach (var dsdetail in dsDetailsSubP)
-                            {
-                                List<PanelTypePartcodeDto> dsDetailsCP = new List<PanelTypePartcodeDto>();
-                                if (double.Parse(panelTypeId) != 150)
+                                //Updating jobcard2Qty value
+                                if (dsdetail.SrNoPartcode.Trim().StartsWith("001"))
                                 {
-                                    if (jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2) == "28")
-                                    {
-                                        if (double.Parse(panelTypeId) == 0)
-                                        {
-                                            dsDetailsCP = await GetCPPartcodeBangaloreAsync(panelTypeId, item.PartCode.Trim(), transaction);
-                                        }
-                                        else
-                                        {
-                                            dsDetailsCP = await GetCPPartcodeBangaloreAsync(panelTypeId, "0", transaction);
-                                        }
-                                    }
-                                    else 
-                                    {
-                                        if (double.Parse(panelTypeId) == 0)
-                                        {
-                                            dsDetailsCP = await GetCPPartcodeAsync(panelTypeId, item.PartCode.Trim(), transaction);
-                                        }
-                                        else
-                                        {
-                                            dsDetailsCP = await GetCPPartcodeAsync(panelTypeId, "0", transaction);
-                                        }
-                                    }
+                                    await _context.JobCardDetails
+                                        .Where(j => j.JobCode == dsdetail.JobCode.Trim()
+                                                 && j.PartCode == item.PartCode.Trim())
+                                        .ExecuteUpdateAsync(update => update.SetProperty(j => j.JobCard2Qty, j => j.JobCard2Qty + 1));
                                 }
 
-                                if (dsDetailsCP.Count > 0)
+                                //Cheked SrNo To JobCardQty
+                                string srNoPartcodePrefix = dsdetail.SrNoPartcode.ToString().Trim();
+                                if (srNoPartcodePrefix.StartsWith("001"))
+                                    strEngQty++;
+                                else if (srNoPartcodePrefix.StartsWith("002"))
+                                    strAltQty++;
+                                else if (srNoPartcodePrefix.StartsWith("010"))
+                                    strBatQty++;
+                                else if (srNoPartcodePrefix.StartsWith("40"))
+                                    strCpyQty++;
+                            }
+                            //Verified SrNo To JobCardQty
+                            string partDesc = await _context.Parts
+                                             .Where(p => p.PartCode == item.PartCode.Trim())
+                                             .Select(p => p.PartDesc)
+                                             .FirstOrDefaultAsync() ?? "Unknown Part";
+
+                            int requiredQty = int.TryParse(item.Jobcard2Qty?.Trim(), out var parsedQty) ? parsedQty : 0;
+                            if (requiredQty > strEngQty)
+                            { JobCardNo = $"Engine SrNo Not available For DG {partDesc}"; return; }  
+
+                            if (requiredQty > strAltQty)
+                            { JobCardNo = $"Alternator SrNo Not available For DG {partDesc}"; return; }
+
+                            if (requiredQty > strBatQty)
+                                if (await CheckTranBOMForBat(item.PartCode.Trim()))
+                                { JobCardNo = $"Battery SrNo Not available For DG {partDesc}"; return; }
+
+                            if (requiredQty > strCpyQty)
+                            { JobCardNo = $"Canopy SrNo Not available For DG {partDesc}"; return; }
+                        }
+
+                        //For Job Priority
+                        if (double.Parse(panelTypeId) != 150)
+                        {
+                            var dsDetailsSubP = await _context.Jobcard2DetailsSubs
+                                              .Where(j => j.JobCode == JobCardNo.Trim() && j.SrNoPartCode.StartsWith("001"))
+                                              .Select(j => new
+                                              {
+                                                  j.J2priority,
+                                                  j.JobCard1
+                                              })
+                                             .ToListAsync();
+                            if (dsDetailsSubP.Count > 0)
+                            {
+                                foreach (var dsdetail in dsDetailsSubP)
                                 {
-                                    strCPQty = 0;
-                                    List<PanelTypePartcodeDto> dsDetailsCPSRNo = new List<PanelTypePartcodeDto>();
-                                    foreach (var sdDetail in dsDetailsCP)
+                                    List<PanelTypePartcodeDto> dsDetailsCP = new List<PanelTypePartcodeDto>();
+                                    if (double.Parse(panelTypeId) != 150)
                                     {
                                         if (jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2) == "28")
                                         {
-                                            dsDetailsCPSRNo = await GetCPPartcodeBangaloreAsync("1", sdDetail.PanelTypePartcode.Trim(), transaction);
-                                        }
-                                        else 
-                                        {
-                                            dsDetailsCPSRNo = await GetCPPartcodeAsync("1", sdDetail.PanelTypePartcode.Trim(), transaction);
-                                        }
-                                        if (dsDetailsCPSRNo != null && dsDetailsCPSRNo.Count > 0)
-                                        {
-                                            int SrNoP = 0;
-
-                                            foreach (var cpSrNo in dsDetailsCPSRNo)
+                                            if (double.Parse(panelTypeId) == 0)
                                             {
-                                                SrNoP += 1;
-                                                string sql1 = @"INSERT INTO JobCard2DetailsSub(JobCode, SrNo, PartCode, PanelType, JobCard1, J2Priority, TransCode, Stage3Status, SrNoPartCode, SerialNo)
+                                                dsDetailsCP = await GetCPPartcodeBangaloreAsync(panelTypeId, item.PartCode.Trim(), transaction);
+                                            }
+                                            else
+                                            {
+                                                dsDetailsCP = await GetCPPartcodeBangaloreAsync(panelTypeId, "0", transaction);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (double.Parse(panelTypeId) == 0)
+                                            {
+                                                dsDetailsCP = await GetCPPartcodeAsync(panelTypeId, item.PartCode.Trim(), transaction);
+                                            }
+                                            else
+                                            {
+                                                dsDetailsCP = await GetCPPartcodeAsync(panelTypeId, "0", transaction);
+                                            }
+                                        }
+                                    }
+
+                                    if (dsDetailsCP.Count > 0)
+                                    {
+                                        strCPQty = 0;
+                                        List<PanelTypePartcodeDto> dsDetailsCPSRNo = new List<PanelTypePartcodeDto>();
+                                        foreach (var sdDetail in dsDetailsCP)
+                                        {
+                                            if (jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2) == "28")
+                                            {
+                                                dsDetailsCPSRNo = await GetCPPartcodeBangaloreAsync("1", sdDetail.PanelTypePartcode.Trim(), transaction);
+                                            }
+                                            else
+                                            {
+                                                dsDetailsCPSRNo = await GetCPPartcodeAsync("1", sdDetail.PanelTypePartcode.Trim(), transaction);
+                                            }
+                                            if (dsDetailsCPSRNo != null && dsDetailsCPSRNo.Count > 0)
+                                            {
+                                                int SrNoP = 0;
+
+                                                foreach (var cpSrNo in dsDetailsCPSRNo)
+                                                {
+                                                    SrNoP += 1;
+                                                    string sql1 = @"INSERT INTO JobCard2DetailsSub(JobCode, SrNo, PartCode, PanelType, JobCard1, J2Priority, TransCode, Stage3Status, SrNoPartCode, SerialNo)
                                                                VALUES 
                                                              (@JobCode, @SrNo, @PartCode, @PanelType, @JobCard1, @J2Priority, @TransCode, @Stage3Status, @SrNoPartCode, @SerialNo)";
-                                                var param1 = new[]
-                                                {
+                                                    var param1 = new[]
+                                                    {
                                                     new SqlParameter("@JobCode", JobCardNo.Trim()),
                                                     new SqlParameter("@SrNo", SrNoP),
                                                     new SqlParameter("@PartCode", item.PartCode.Trim()),
@@ -3461,98 +3489,99 @@ namespace KalaGenset.ERP.Core.Services
 
                                                 }; await _context.Database.ExecuteSqlRawAsync(sql1, param1);
 
-                                                if (cpSrNo.GCode.Trim().Substring(0, 3) == "PSH")
-                                                {
-                                                    var pfDetails = await _context.ProcessFeedbackDetailsSubs
-                                                                   .Where(pf => pf.Pfbcode == cpSrNo.GCode.Trim()
-                                                                   && pf.SerialNo == cpSrNo.SerialNo.Trim()
-                                                                   && pf.PartCode == cpSrNo.PartCode.Trim())
-                                                                   .ToListAsync();
-
-                                                    foreach (var detail in pfDetails)
+                                                    if (cpSrNo.GCode.Trim().Substring(0, 3) == "PSH")
                                                     {
-                                                        detail.JobCardStatus = "J";
+                                                        var pfDetails = await _context.ProcessFeedbackDetailsSubs
+                                                                       .Where(pf => pf.Pfbcode == cpSrNo.GCode.Trim()
+                                                                       && pf.SerialNo == cpSrNo.SerialNo.Trim()
+                                                                       && pf.PartCode == cpSrNo.PartCode.Trim())
+                                                                       .ToListAsync();
+
+                                                        foreach (var detail in pfDetails)
+                                                        {
+                                                            detail.JobCardStatus = "J";
+                                                        }
+
+                                                        await _context.SaveChangesAsync();
+
                                                     }
-
-                                                    await _context.SaveChangesAsync();
-
-                                                }
-                                                else if (cpSrNo.GCode.Trim().Substring(0, 3) == "MTF")
-                                                {
-                                                    var mtfDetails = await _context.MtfdetailsSubs
-                                                                     .Where(mtf => mtf.Mtfcode == cpSrNo.GCode.Trim()
-                                                                      && mtf.SerialNo == cpSrNo.SerialNo.Trim()
-                                                                      && mtf.PartCode == cpSrNo.PartCode.Trim())
-                                                                     .ToListAsync();
-
-                                                    foreach (var detail in mtfDetails)
+                                                    else if (cpSrNo.GCode.Trim().Substring(0, 3) == "MTF")
                                                     {
-                                                        detail.JobCardStatus = "J";
+                                                        var mtfDetails = await _context.MtfdetailsSubs
+                                                                         .Where(mtf => mtf.Mtfcode == cpSrNo.GCode.Trim()
+                                                                          && mtf.SerialNo == cpSrNo.SerialNo.Trim()
+                                                                          && mtf.PartCode == cpSrNo.PartCode.Trim())
+                                                                         .ToListAsync();
+
+                                                        foreach (var detail in mtfDetails)
+                                                        {
+                                                            detail.JobCardStatus = "J";
+                                                        }
+
+                                                        await _context.SaveChangesAsync();
+
                                                     }
-
-                                                    await _context.SaveChangesAsync();
-
-                                                }
-                                                else if (cpSrNo.GCode.Trim().Substring(0, 3) == "GIR")
-                                                {
-                                                    var giirDetails = await _context.GiirdetailsSubs
-                                                                     .Where(g => g.Giircode == cpSrNo.GCode.Trim()
-                                                                      && g.SerialNo == cpSrNo.SerialNo.Trim()
-                                                                      && g.PartCode == cpSrNo.PartCode.Trim())
-                                                                     .ToListAsync();
-
-                                                    foreach (var detail in giirDetails)
+                                                    else if (cpSrNo.GCode.Trim().Substring(0, 3) == "GIR")
                                                     {
-                                                        detail.JobCardStatus = "J";
-                                                        detail.Trfstatus = "D";
+                                                        var giirDetails = await _context.GiirdetailsSubs
+                                                                         .Where(g => g.Giircode == cpSrNo.GCode.Trim()
+                                                                          && g.SerialNo == cpSrNo.SerialNo.Trim()
+                                                                          && g.PartCode == cpSrNo.PartCode.Trim())
+                                                                         .ToListAsync();
+
+                                                        foreach (var detail in giirDetails)
+                                                        {
+                                                            detail.JobCardStatus = "J";
+                                                            detail.Trfstatus = "D";
+                                                        }
+
+                                                        await _context.SaveChangesAsync();
+
                                                     }
-
-                                                    await _context.SaveChangesAsync();
-
-                                                }
-                                                else if (cpSrNo.GCode.Trim().Substring(0, 3) == "GRI")
-                                                {
-                                                    var gateReceiptDetails = await _context.GatereceiptInternalDetailsSubs
-                                                                             .Where(g => g.Gricode == cpSrNo.GCode.Trim()
-                                                                             && g.SerialNo == cpSrNo.SerialNo.Trim()
-                                                                             && g.PartCode == cpSrNo.PartCode.Trim())
-                                                                             .ToListAsync();
-
-                                                    foreach (var detail in gateReceiptDetails)
+                                                    else if (cpSrNo.GCode.Trim().Substring(0, 3) == "GRI")
                                                     {
-                                                        detail.JobcardStatus = "J";
-                                                        detail.Trfstatus = "D";
-                                                    }
+                                                        var gateReceiptDetails = await _context.GatereceiptInternalDetailsSubs
+                                                                                 .Where(g => g.Gricode == cpSrNo.GCode.Trim()
+                                                                                 && g.SerialNo == cpSrNo.SerialNo.Trim()
+                                                                                 && g.PartCode == cpSrNo.PartCode.Trim())
+                                                                                 .ToListAsync();
 
-                                                    await _context.SaveChangesAsync();
+                                                        foreach (var detail in gateReceiptDetails)
+                                                        {
+                                                            detail.JobcardStatus = "J";
+                                                            detail.Trfstatus = "D";
+                                                        }
+
+                                                        await _context.SaveChangesAsync();
+                                                    }
+                                                    strCPQty = strCPQty + 1;
                                                 }
-                                                strCPQty = strCPQty + 1;
                                             }
-                                        }
-                                        else 
-                                        {
-                                            var partDesc = await _context.Parts
-                                                           .Where(p => p.PartCode == item.PartCode)
-                                                           .Select(p => p.PartDesc)
-                                                           .FirstOrDefaultAsync();
-                                            JobCardNo = $"CP SrNo Not available For DG {partDesc} and CP Type {item.PanelType}";
+                                            else
+                                            {
+                                                var partDesc = await _context.Parts
+                                                               .Where(p => p.PartCode == item.PartCode)
+                                                               .Select(p => p.PartDesc)
+                                                               .FirstOrDefaultAsync();
+                                                JobCardNo = $"CP SrNo Not available For DG {partDesc} and CP Type {item.PanelType}";
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+
+                    await transaction.CommitAsync();
                 }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
 
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-
-            return JobCardNo;
+             return JobCardNo;
         }
 
         private async Task<List<PanelTypePartcodeDto>> GetCPPartcodeBangaloreAsync(string panelTypeId, string partCode, IDbContextTransaction transaction)

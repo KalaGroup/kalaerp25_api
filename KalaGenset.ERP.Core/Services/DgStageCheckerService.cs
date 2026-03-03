@@ -620,73 +620,76 @@ namespace KalaGenset.ERP.Core.Services
             string maxNo = "0";
             string reqMessg = "";
 
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            await strategy.ExecuteAsync(async () =>
             {
-                // 🔹 1. Save MASTER record
-                var master = new QualityProcessCheckerDg
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    JobCode = request.QProcessCheckerData.JobCode,
-                    PartCode = request.QProcessCheckerData.partCode,
-                    Jpriority = request.QProcessCheckerData.priority,
-                    QualityStatus = request.QProcessCheckerData.qualityStatus,
-                    StageName = request.QProcessCheckerData.stageName,
-                    IsActive = true,
-                    IsDiscard = false
-                };
-                _context.QualityProcessCheckerDgs.Add(master);
-                await _context.SaveChangesAsync();
-
-                int qualityProcessCheckerDgId = master.QualityProcessCheckerDgid;
-
-                // 🔹 2. Save DETAIL records
-                foreach (var item in request.CheckpointsDetails)
-                {
-                    await _context.Database.ExecuteSqlRawAsync(
-                        @"INSERT INTO QualityProcessCheckerDetailsDG(QualityProcessCheckerDGId, StageWiseQCId, SrNo, CheckerRemark, OK_NOK) 
-                        VALUES ({0}, {1}, {2}, {3}, {4})",
-                        qualityProcessCheckerDgId,
-                        item.StageWiseQcId,
-                        item.SrNo,
-                        item.Remark ?? "",
-                        item.Ok ?? ""
-                    );
-                }
-
-                // 🔹 3. Update QA Status (only for Accept)
-                if (request.QProcessCheckerData.qualityStatus == "Accept")
-                {
-                    var stageName = request.QProcessCheckerData.stageName;
-
-                    // ============================================
-                    // STAGE 1 & STAGE 2: Update JobCardDetailsSub
-                    // ============================================
-                    if (stageName == "Stage1" || stageName == "Stage2")
+                    // 🔹 1. Save MASTER record
+                    var master = new QualityProcessCheckerDg
                     {
-                        var jobCode = request.QProcessCheckerData.JobCode;
-                        var pcCode = request.QProcessCheckerData.pccode;
-                        var partCode = request.QProcessCheckerData.partCode;
+                        JobCode = request.QProcessCheckerData.JobCode,
+                        PartCode = request.QProcessCheckerData.partCode,
+                        Jpriority = request.QProcessCheckerData.priority,
+                        QualityStatus = request.QProcessCheckerData.qualityStatus,
+                        StageName = request.QProcessCheckerData.stageName,
+                        IsActive = true,
+                        IsDiscard = false
+                    };
+                    _context.QualityProcessCheckerDgs.Add(master);
+                    await _context.SaveChangesAsync();
 
-                        // Build list of valid serial numbers
-                        var serialNumbers = new List<string>();
+                    int qualityProcessCheckerDgId = master.QualityProcessCheckerDgid;
 
-                        // Common for Stage 1 & 2
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.EngSrNo))
-                            serialNumbers.Add(request.QProcessCheckerData.EngSrNo);
+                    // 🔹 2. Save DETAIL records
+                    foreach (var item in request.CheckpointsDetails)
+                    {
+                        await _context.Database.ExecuteSqlRawAsync(
+                            @"INSERT INTO QualityProcessCheckerDetailsDG(QualityProcessCheckerDGId, StageWiseQCId, SrNo, CheckerRemark, OK_NOK) 
+                        VALUES ({0}, {1}, {2}, {3}, {4})",
+                            qualityProcessCheckerDgId,
+                            item.StageWiseQcId,
+                            item.SrNo,
+                            item.Remark ?? "",
+                            item.Ok ?? ""
+                        );
+                    }
 
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.AltSrNo))
-                            serialNumbers.Add(request.QProcessCheckerData.AltSrNo);
+                    // 🔹 3. Update QA Status (only for Accept)
+                    if (request.QProcessCheckerData.qualityStatus == "Accept")
+                    {
+                        var stageName = request.QProcessCheckerData.stageName;
 
-                        if (stageName == "Stage1")
+                        // ============================================
+                        // STAGE 1 & STAGE 2: Update JobCardDetailsSub
+                        // ============================================
+                        if (stageName == "Stage1" || stageName == "Stage2")
                         {
-                            var sqlQuery = @"INSERT INTO StockWIP 
+                            var jobCode = request.QProcessCheckerData.JobCode;
+                            var pcCode = request.QProcessCheckerData.pccode;
+                            var partCode = request.QProcessCheckerData.partCode;
+
+                            // Build list of valid serial numbers
+                            var serialNumbers = new List<string>();
+
+                            // Common for Stage 1 & 2
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.EngSrNo))
+                                serialNumbers.Add(request.QProcessCheckerData.EngSrNo);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.AltSrNo))
+                                serialNumbers.Add(request.QProcessCheckerData.AltSrNo);
+
+                            if (stageName == "Stage1")
+                            {
+                                var sqlQuery = @"INSERT INTO StockWIP 
                                (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
                               VALUES
                               (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
 
-                            var parameters = new[]
-                            {
+                                var parameters = new[]
+                                {
                                 new SqlParameter("@PCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
                                 new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
                                 new SqlParameter("@ReceivedCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
@@ -697,41 +700,41 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                                 new SqlParameter("@StageName", "StageIII")
                             };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
-                        }
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                            }
 
-                        // Additional for Stage 2
-                        if (stageName == "Stage2")
-                        {
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.CpySrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.CpySrNo);
+                            // Additional for Stage 2
+                            if (stageName == "Stage2")
+                            {
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.CpySrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.CpySrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.BatSrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.BatSrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.BatSrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.BatSrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat2SrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.Bat2SrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat2SrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.Bat2SrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat3SrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.Bat3SrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat3SrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.Bat3SrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat4SrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.Bat4SrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat4SrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.Bat4SrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat5SrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.Bat5SrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat5SrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.Bat5SrNo);
 
-                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat6SrNo))
-                                serialNumbers.Add(request.QProcessCheckerData.Bat6SrNo);
+                                if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat6SrNo))
+                                    serialNumbers.Add(request.QProcessCheckerData.Bat6SrNo);
 
-                            var sqlQuery1 = "";
-                            sqlQuery1 = @"INSERT INTO StockWIP 
+                                var sqlQuery1 = "";
+                                sqlQuery1 = @"INSERT INTO StockWIP 
                                (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
                               VALUES
                               (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
 
-                            var parameters1 = new[]
-                           {
+                                var parameters1 = new[]
+                               {
                                 new SqlParameter("@PCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
                                 new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
                                 new SqlParameter("@ReceivedCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
@@ -742,190 +745,190 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                                 new SqlParameter("@StageName", "StageIV")
                             };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
-                        }
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                            }
 
-                        // Fetch and update records
-                        if (serialNumbers.Any())
-                        {
-                            // Build comma-separated list for IN clause
-                            var serialNumbersParam = string.Join("','", serialNumbers);
+                            // Fetch and update records
+                            if (serialNumbers.Any())
+                            {
+                                // Build comma-separated list for IN clause
+                                var serialNumbersParam = string.Join("','", serialNumbers);
 
-                            var records = await _context.JobCardDetailsSubs
-                                .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds INNER JOIN JobCard j ON j.JobCode = jds.JobCode
+                                var records = await _context.JobCardDetailsSubs
+                                    .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds INNER JOIN JobCard j ON j.JobCode = jds.JobCode
                                               WHERE j.JobCode = {{0}}
                                               AND j.PCCode = {{1}}
                                               AND jds.PartCode = {{2}}
                                               AND jds.SerialNo IN ('{serialNumbersParam}')",
-                                             jobCode, pcCode, partCode)
-                                .ToListAsync();
+                                                 jobCode, pcCode, partCode)
+                                    .ToListAsync();
 
-                            foreach (var record in records)
-                            {
-                                if (stageName == "Stage1")
+                                foreach (var record in records)
                                 {
-                                    record.Stage1Qastatus = "D";
+                                    if (stageName == "Stage1")
+                                    {
+                                        record.Stage1Qastatus = "D";
+                                    }
+                                    else if (stageName == "Stage2")
+                                    {
+                                        record.Stage3Qastatus = "D";
+                                    }
                                 }
-                                else if (stageName == "Stage2")
-                                {
-                                    record.Stage3Qastatus = "D";
-                                }
+
+                                await _context.SaveChangesAsync();
                             }
-
-                            await _context.SaveChangesAsync();
                         }
-                    }
 
-                    // ============================================
-                    // STAGE 3: Update ProcessFeedbackDetailsSub
-                    // ============================================
-                    else if (stageName == "Stage3")
-                    {
-                        var pfbCode = request.QProcessCheckerData.PFBCode;
-                        var pcCode = request.QProcessCheckerData.pccode;
-                        var partCode = request.QProcessCheckerData.partCode;
-
-                        // Build list of valid serial numbers for Stage 3
-                        var serialNumbers = new List<string>();
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Engine))
-                            serialNumbers.Add(request.QProcessCheckerData.Engine);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Alternator))
-                            serialNumbers.Add(request.QProcessCheckerData.Alternator);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Canopy))
-                            serialNumbers.Add(request.QProcessCheckerData.Canopy);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.ControlPanel1))
-                            serialNumbers.Add(request.QProcessCheckerData.ControlPanel1);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.ControlPanel2))
-                            serialNumbers.Add(request.QProcessCheckerData.ControlPanel2);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery1))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery1);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery2))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery2);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery3))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery3);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery4))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery4);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery5))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery5);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery6))
-                            serialNumbers.Add(request.QProcessCheckerData.Battery6);
-
-                        if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Krm))
-                            serialNumbers.Add(request.QProcessCheckerData.Krm);
-
-                        // Update ProcessFeedBack status
-                        if (serialNumbers.Any())
+                        // ============================================
+                        // STAGE 3: Update ProcessFeedbackDetailsSub
+                        // ============================================
+                        else if (stageName == "Stage3")
                         {
-                            // Build comma-separated list for IN clause
-                            var serialNumbersParam = string.Join("','", serialNumbers);
+                            var pfbCode = request.QProcessCheckerData.PFBCode;
+                            var pcCode = request.QProcessCheckerData.pccode;
+                            var partCode = request.QProcessCheckerData.partCode;
 
-                            var processFeedback = await _context.ProcessFeedbackDetailsSubs
-                                                .FromSqlRaw($@"SELECT pfds.* FROM ProcessFeedbackDetailsSub pfds INNER JOIN ProcessFeedBack pf ON pf.Pfbcode = pfds.Pfbcode
+                            // Build list of valid serial numbers for Stage 3
+                            var serialNumbers = new List<string>();
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Engine))
+                                serialNumbers.Add(request.QProcessCheckerData.Engine);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Alternator))
+                                serialNumbers.Add(request.QProcessCheckerData.Alternator);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Canopy))
+                                serialNumbers.Add(request.QProcessCheckerData.Canopy);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.ControlPanel1))
+                                serialNumbers.Add(request.QProcessCheckerData.ControlPanel1);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.ControlPanel2))
+                                serialNumbers.Add(request.QProcessCheckerData.ControlPanel2);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery1))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery1);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery2))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery2);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery3))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery3);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery4))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery4);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery5))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery5);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Battery6))
+                                serialNumbers.Add(request.QProcessCheckerData.Battery6);
+
+                            if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Krm))
+                                serialNumbers.Add(request.QProcessCheckerData.Krm);
+
+                            // Update ProcessFeedBack status
+                            if (serialNumbers.Any())
+                            {
+                                // Build comma-separated list for IN clause
+                                var serialNumbersParam = string.Join("','", serialNumbers);
+
+                                var processFeedback = await _context.ProcessFeedbackDetailsSubs
+                                                    .FromSqlRaw($@"SELECT pfds.* FROM ProcessFeedbackDetailsSub pfds INNER JOIN ProcessFeedBack pf ON pf.Pfbcode = pfds.Pfbcode
                                                  WHERE pf.Pfbcode = {{0}}
                                                  AND pf.ProfitCenterCode = {{1}}
                                                  AND pf.PartCode = {{2}}
                                                  AND pfds.SerialNo IN ('{serialNumbersParam}')",
-                                                 pfbCode, pcCode, partCode).ToListAsync();
+                                                     pfbCode, pcCode, partCode).ToListAsync();
 
-                            if (processFeedback != null)
-                            {
-                                foreach (var record in processFeedback)
+                                if (processFeedback != null)
                                 {
-                                    record.Qpcstatus = "OK";
+                                    foreach (var record in processFeedback)
+                                    {
+                                        record.Qpcstatus = "OK";
+                                    }
+                                    await _context.SaveChangesAsync();
                                 }
                                 await _context.SaveChangesAsync();
                             }
-                            await _context.SaveChangesAsync();
                         }
                     }
-                }
-                else if (request.QProcessCheckerData.qualityStatus == "Rework" || request.QProcessCheckerData.qualityStatus == "Reject")
-                {
-                    // Save Defect Records
-                    if (request.DefectDetails?.Any() == true)
+                    else if (request.QProcessCheckerData.qualityStatus == "Rework" || request.QProcessCheckerData.qualityStatus == "Reject")
                     {
-                        foreach (var defectItem in request.DefectDetails)
+                        // Save Defect Records
+                        if (request.DefectDetails?.Any() == true)
                         {
-                            await _context.Database.ExecuteSqlRawAsync( @"INSERT INTO QualityProcessCheckDefectDG 
+                            foreach (var defectItem in request.DefectDetails)
+                            {
+                                await _context.Database.ExecuteSqlRawAsync(@"INSERT INTO QualityProcessCheckDefectDG 
                              (QualityProcessCheckerDGId, QDCCode, ActualValue, Tolerance, Instrument, Rate, FromRange, ToRange) 
                               VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})",
-                                qualityProcessCheckerDgId,
-                                defectItem.QdcCode ?? "",
-                                defectItem.ActualValue,
-                                defectItem.Tolerance,
-                                defectItem.Instrument ?? "",
-                                defectItem.Rate,
-                                defectItem.FromRange,
-                                defectItem.ToRange
-                            );
-                        }
-                    }
-
-                    string? YearEnd = await _context.YearEnds
-                        .Select(y => $"{y.StartDate:yy}-{y.EndDate:yy}")
-                        .FirstOrDefaultAsync();
-
-                    if (!string.Equals(request.QProcessCheckerData?.qualityStatus, "Reject", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // For Raise ESP request
-                        foreach (var item in request.CheckpointsDetails.Where(i => i.sixM != null))
-                        {
-                            var recordGetMaxCodes = await _context.GetMaxCodes
-                                .FirstOrDefaultAsync(x => x.Prefix == "COR" &&
-                                                          x.TblName == "CorporateRequisition" &&
-                                                          x.CompCode == request.QProcessCheckerData.cid &&
-                                                          x.Yr == YearEnd);
-
-                            int intmax = 0;
-
-                            if (recordGetMaxCodes != null)
-                            {
-                                await _context.Database.ExecuteSqlRawAsync(
-                                    @"UPDATE GetMaxCode SET MaxValue = MaxValue + 1 WHERE Prefix = @Prefix 
-                                AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
-                                    new SqlParameter("@Prefix", "COR"),
-                                    new SqlParameter("@TblName", "CorporateRequisition"),
-                                    new SqlParameter("@CompCode", request.QProcessCheckerData.cid),
-                                    new SqlParameter("@Yr", YearEnd)
+                                    qualityProcessCheckerDgId,
+                                    defectItem.QdcCode ?? "",
+                                    defectItem.ActualValue,
+                                    defectItem.Tolerance,
+                                    defectItem.Instrument ?? "",
+                                    defectItem.Rate,
+                                    defectItem.FromRange,
+                                    defectItem.ToRange
                                 );
-                                intmax = recordGetMaxCodes.MaxValue + 1;
                             }
+                        }
 
-                            // ✅ SIMPLIFIED: Replace multiple if-else with PadLeft
-                            GetMaxValue = (intmax == 0 ? 1 : intmax).ToString().PadLeft(6, '0');
+                        string? YearEnd = await _context.YearEnds
+                            .Select(y => $"{y.StartDate:yy}-{y.EndDate:yy}")
+                            .FirstOrDefaultAsync();
 
-                            maxNo = request.QProcessCheckerData.cid + GetMaxValue;
-                            MaxSrNo = $"COR/{YearEnd?.Trim()}/{maxNo}";
-
-                            var data = request.QProcessCheckerData;
-                            string toPCCode = _context.Employees
-                                .Where(e => e.Ecode == item.RaiseEsp)
-                                .Select(e => e.ProfitCenterAct)
-                                .FirstOrDefault() ?? "";
-
-                            // ✅ SIMPLIFIED: Use Dictionary + LINQ instead of multiple if statements
-                            var stageName = data.stageName;
-
-                            if (stageName == "Stage1")
+                        if (!string.Equals(request.QProcessCheckerData?.qualityStatus, "Reject", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // For Raise ESP request
+                            foreach (var item in request.CheckpointsDetails.Where(i => i.sixM != null))
                             {
-                                reqMessg = $"DG Quality Process Check, Jobcode: {data.JobCode}, KVA: {data.Kva}, Model: {data.model}, Eng Sr.No: {data.EngSrNo}, Alt Sr.No: {data.AltSrNo}, Sub-Assembly Part: {item.subAssemblyPart}, 6M Type: {item.sixM}, Remark: {item.Remark}";
-                            }
-                            else if (stageName == "Stage2")
-                            {
-                                // ✅ Use Dictionary for optional fields
-                                var stage2Fields = new (string Label, string? Value)[]
+                                var recordGetMaxCodes = await _context.GetMaxCodes
+                                    .FirstOrDefaultAsync(x => x.Prefix == "COR" &&
+                                                              x.TblName == "CorporateRequisition" &&
+                                                              x.CompCode == request.QProcessCheckerData.cid &&
+                                                              x.Yr == YearEnd);
+
+                                int intmax = 0;
+
+                                if (recordGetMaxCodes != null)
                                 {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        @"UPDATE GetMaxCode SET MaxValue = MaxValue + 1 WHERE Prefix = @Prefix 
+                                AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
+                                        new SqlParameter("@Prefix", "COR"),
+                                        new SqlParameter("@TblName", "CorporateRequisition"),
+                                        new SqlParameter("@CompCode", request.QProcessCheckerData.cid),
+                                        new SqlParameter("@Yr", YearEnd)
+                                    );
+                                    intmax = recordGetMaxCodes.MaxValue + 1;
+                                }
+
+                                // ✅ SIMPLIFIED: Replace multiple if-else with PadLeft
+                                GetMaxValue = (intmax == 0 ? 1 : intmax).ToString().PadLeft(6, '0');
+
+                                maxNo = request.QProcessCheckerData.cid + GetMaxValue;
+                                MaxSrNo = $"COR/{YearEnd?.Trim()}/{maxNo}";
+
+                                var data = request.QProcessCheckerData;
+                                string toPCCode = _context.Employees
+                                    .Where(e => e.Ecode == item.RaiseEsp)
+                                    .Select(e => e.ProfitCenterAct)
+                                    .FirstOrDefault() ?? "";
+
+                                // ✅ SIMPLIFIED: Use Dictionary + LINQ instead of multiple if statements
+                                var stageName = data.stageName;
+
+                                if (stageName == "Stage1")
+                                {
+                                    reqMessg = $"DG Quality Process Check, Jobcode: {data.JobCode}, KVA: {data.Kva}, Model: {data.model}, Eng Sr.No: {data.EngSrNo}, Alt Sr.No: {data.AltSrNo}, Sub-Assembly Part: {item.subAssemblyPart}, 6M Type: {item.sixM}, Remark: {item.Remark}";
+                                }
+                                else if (stageName == "Stage2")
+                                {
+                                    // ✅ Use Dictionary for optional fields
+                                    var stage2Fields = new (string Label, string? Value)[]
+                                    {
                               ("Cpy Sr.No:", data.CpySrNo),
                               ("Bat Sr.No:", data.BatSrNo),
                               ("Bat2 Sr.No:", data.Bat2SrNo),
@@ -936,26 +939,26 @@ namespace KalaGenset.ERP.Core.Services
                               ("Sub-Assembly Part:", item.subAssemblyPart),
                               ("Remark:", item.Remark),
                               ("6M Type", item.sixM),
-                                };
+                                    };
 
-                                // Invalid values to exclude
-                                var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                    // Invalid values to exclude
+                                    var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                                 {
                                  "", "NA", "N/A", "NULL", "0", "-"
                             };
 
 
-                                reqMessg = $"DG Quality Process Check, Jobcode: {data.JobCode}, KVA: {data.Kva}, Model: {data.model}, Eng Sr.No: {data.EngSrNo}, Alt Sr.No: {data.AltSrNo}";
+                                    reqMessg = $"DG Quality Process Check, Jobcode: {data.JobCode}, KVA: {data.Kva}, Model: {data.model}, Eng Sr.No: {data.EngSrNo}, Alt Sr.No: {data.AltSrNo}";
 
-                                reqMessg += string.Concat(stage2Fields
-                                    .Where(f => !string.IsNullOrEmpty(f.Value) && !invalidValues.Contains(f.Value.Trim()))
-                                    .Select(f => $", {f.Label}: {f.Value}"));
-                            }
-                            else // Stage3
-                            {
-                                // ✅ Use Dictionary for all Stage3 fields
-                                var stage3Fields = new (string Label, string? Value)[]
+                                    reqMessg += string.Concat(stage2Fields
+                                        .Where(f => !string.IsNullOrEmpty(f.Value) && !invalidValues.Contains(f.Value.Trim()))
+                                        .Select(f => $", {f.Label}: {f.Value}"));
+                                }
+                                else // Stage3
                                 {
+                                    // ✅ Use Dictionary for all Stage3 fields
+                                    var stage3Fields = new (string Label, string? Value)[]
+                                    {
 
                                 ("PFBCode:",data.PFBCode),
                                 ("Engine:", data.Engine),
@@ -973,192 +976,193 @@ namespace KalaGenset.ERP.Core.Services
                                 ("Sub-Assembly Part:", item.subAssemblyPart),
                                 ("Remark:", item.Remark),
                                 ("6M Type", item.sixM),
-                                };
+                                    };
 
-                                // Invalid values to exclude
-                                var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                    // Invalid values to exclude
+                                    var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                             {
                                  "", "NA", "N/A", "NULL", "0", "-"
                             };
 
-                                reqMessg = "DG Quality Process Check, " + string.Join(", ", stage3Fields
-                                          .Where(f => !string.IsNullOrEmpty(f.Value) && !invalidValues.Contains(f.Value.Trim()))
-                                          .Select(f => $"{f.Label}: {f.Value}"));
-                            }
+                                    reqMessg = "DG Quality Process Check, " + string.Join(", ", stage3Fields
+                                              .Where(f => !string.IsNullOrEmpty(f.Value) && !invalidValues.Contains(f.Value.Trim()))
+                                              .Select(f => $"{f.Label}: {f.Value}"));
+                                }
 
-                            await _context.Database.ExecuteSqlRawAsync(@"INSERT INTO CorporateRequisition (ReqCode, Dt, Yr, MaxSrNo, EmpCode, FromPCCode, ToEmpCode, ToPCCode,
+                                await _context.Database.ExecuteSqlRawAsync(@"INSERT INTO CorporateRequisition (ReqCode, Dt, Yr, MaxSrNo, EmpCode, FromPCCode, ToEmpCode, ToPCCode,
                                                                    Priority, ReqMsg, CompanyCode, AssignStatus, Active, Discard)
                                                                    VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13})",
-                                MaxSrNo.Trim(),
-                                DateTime.Now,
-                                MaxSrNo.Substring(4, 5),
-                                MaxSrNo.Substring(10, 8),
-                                data.ecode.Trim(),
-                                data.pccode.Trim(),
-                                item.RaiseEsp,
-                                toPCCode,
-                                "High Priority",
-                                reqMessg.Trim(),
-                                data.cid,
-                                "P",
-                                "1",
-                                "1"
-                            );
-                        } 
-                    }
-
-                    // ✅ Update QA Status for both Reject and Rework
-                    if (request.QProcessCheckerData.qualityStatus == "Reject" || request.QProcessCheckerData.qualityStatus == "Rework")
-                    {
-                        var stageName = request.QProcessCheckerData.stageName;
-                        var data = request.QProcessCheckerData;
-
-                        // ✅ Set status based on qualityStatus
-                        string statusValue = request.QProcessCheckerData.qualityStatus == "Reject" ? "Rej" : "Rew";
-
-                        if (stageName == "Stage1" || stageName == "Stage2")
-                        {
-                            var jobCode = data.JobCode;
-                            var pcCode = data.pccode;
-                            var partCode = data.partCode;
-
-                            // Build list of valid serial numbers
-                            var serialNumbers = new List<string>();
-
-                            if (!string.IsNullOrWhiteSpace(data.EngSrNo))
-                                serialNumbers.Add(data.EngSrNo);
-
-                            if (!string.IsNullOrWhiteSpace(data.AltSrNo))
-                                serialNumbers.Add(data.AltSrNo);
-
-                            if (stageName == "Stage2")
-                            {
-                                if (!string.IsNullOrWhiteSpace(data.CpySrNo))
-                                    serialNumbers.Add(data.CpySrNo);
-                                if (!string.IsNullOrWhiteSpace(data.BatSrNo))
-                                    serialNumbers.Add(data.BatSrNo);
-                                if (!string.IsNullOrWhiteSpace(data.Bat2SrNo))
-                                    serialNumbers.Add(data.Bat2SrNo);
-                                if (!string.IsNullOrWhiteSpace(data.Bat3SrNo))
-                                    serialNumbers.Add(data.Bat3SrNo);
-                                if (!string.IsNullOrWhiteSpace(data.Bat4SrNo))
-                                    serialNumbers.Add(data.Bat4SrNo);
-                                if (!string.IsNullOrWhiteSpace(data.Bat5SrNo))
-                                    serialNumbers.Add(data.Bat5SrNo);
-                                if (!string.IsNullOrWhiteSpace(data.Bat6SrNo))
-                                    serialNumbers.Add(data.Bat6SrNo);
+                                    MaxSrNo.Trim(),
+                                    DateTime.Now,
+                                    MaxSrNo.Substring(4, 5),
+                                    MaxSrNo.Substring(10, 8),
+                                    data.ecode.Trim(),
+                                    data.pccode.Trim(),
+                                    item.RaiseEsp,
+                                    toPCCode,
+                                    "High Priority",
+                                    reqMessg.Trim(),
+                                    data.cid,
+                                    "P",
+                                    "1",
+                                    "1"
+                                );
                             }
+                        }
 
-                            if (serialNumbers.Any())
+                        // ✅ Update QA Status for both Reject and Rework
+                        if (request.QProcessCheckerData.qualityStatus == "Reject" || request.QProcessCheckerData.qualityStatus == "Rework")
+                        {
+                            var stageName = request.QProcessCheckerData.stageName;
+                            var data = request.QProcessCheckerData;
+
+                            // ✅ Set status based on qualityStatus
+                            string statusValue = request.QProcessCheckerData.qualityStatus == "Reject" ? "Rej" : "Rew";
+
+                            if (stageName == "Stage1" || stageName == "Stage2")
                             {
-                                var serialNumbersParam = string.Join("','", serialNumbers);
+                                var jobCode = data.JobCode;
+                                var pcCode = data.pccode;
+                                var partCode = data.partCode;
 
-                                var records = await _context.JobCardDetailsSubs
-                                    .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds 
+                                // Build list of valid serial numbers
+                                var serialNumbers = new List<string>();
+
+                                if (!string.IsNullOrWhiteSpace(data.EngSrNo))
+                                    serialNumbers.Add(data.EngSrNo);
+
+                                if (!string.IsNullOrWhiteSpace(data.AltSrNo))
+                                    serialNumbers.Add(data.AltSrNo);
+
+                                if (stageName == "Stage2")
+                                {
+                                    if (!string.IsNullOrWhiteSpace(data.CpySrNo))
+                                        serialNumbers.Add(data.CpySrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.BatSrNo))
+                                        serialNumbers.Add(data.BatSrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.Bat2SrNo))
+                                        serialNumbers.Add(data.Bat2SrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.Bat3SrNo))
+                                        serialNumbers.Add(data.Bat3SrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.Bat4SrNo))
+                                        serialNumbers.Add(data.Bat4SrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.Bat5SrNo))
+                                        serialNumbers.Add(data.Bat5SrNo);
+                                    if (!string.IsNullOrWhiteSpace(data.Bat6SrNo))
+                                        serialNumbers.Add(data.Bat6SrNo);
+                                }
+
+                                if (serialNumbers.Any())
+                                {
+                                    var serialNumbersParam = string.Join("','", serialNumbers);
+
+                                    var records = await _context.JobCardDetailsSubs
+                                        .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds 
                                INNER JOIN JobCard j ON j.JobCode = jds.JobCode
                                WHERE j.JobCode = {{0}}
                                AND j.PCCode = {{1}}
                                AND jds.PartCode = {{2}}
                                AND jds.SerialNo IN ('{serialNumbersParam}')",
-                                                 jobCode, pcCode, partCode)
-                                    .ToListAsync();
+                                                     jobCode, pcCode, partCode)
+                                        .ToListAsync();
 
-                                foreach (var record in records)
-                                {
-                                    if (stageName == "Stage1")
+                                    foreach (var record in records)
                                     {
-                                        record.Stage1Qastatus = statusValue;  // ✅ "Rej" or "Rew"
+                                        if (stageName == "Stage1")
+                                        {
+                                            record.Stage1Qastatus = statusValue;  // ✅ "Rej" or "Rew"
+                                        }
+                                        else if (stageName == "Stage2")
+                                        {
+                                            record.Stage3Qastatus = statusValue;  // ✅ "Rej" or "Rew"
+                                        }
                                     }
-                                    else if (stageName == "Stage2")
-                                    {
-                                        record.Stage3Qastatus = statusValue;  // ✅ "Rej" or "Rew"
-                                    }
+
+                                    await _context.SaveChangesAsync();
                                 }
-
-                                await _context.SaveChangesAsync();
                             }
-                        }
-                        else if (stageName == "Stage3")
-                        {
-                            var pfbCode = data.PFBCode;
-                            var pcCode = data.pccode;
-                            var partCode = data.partCode;
-
-                            // Build list of valid serial numbers for Stage 3
-                            var serialNumbers = new List<string>();
-
-                            if (!string.IsNullOrWhiteSpace(data.Engine))
-                                serialNumbers.Add(data.Engine);
-                            if (!string.IsNullOrWhiteSpace(data.Alternator))
-                                serialNumbers.Add(data.Alternator);
-                            if (!string.IsNullOrWhiteSpace(data.Canopy))
-                                serialNumbers.Add(data.Canopy);
-                            if (!string.IsNullOrWhiteSpace(data.ControlPanel1))
-                                serialNumbers.Add(data.ControlPanel1);
-                            if (!string.IsNullOrWhiteSpace(data.ControlPanel2))
-                                serialNumbers.Add(data.ControlPanel2);
-                            if (!string.IsNullOrWhiteSpace(data.Battery1))
-                                serialNumbers.Add(data.Battery1);
-                            if (!string.IsNullOrWhiteSpace(data.Battery2))
-                                serialNumbers.Add(data.Battery2);
-                            if (!string.IsNullOrWhiteSpace(data.Battery3))
-                                serialNumbers.Add(data.Battery3);
-                            if (!string.IsNullOrWhiteSpace(data.Battery4))
-                                serialNumbers.Add(data.Battery4);
-                            if (!string.IsNullOrWhiteSpace(data.Battery5))
-                                serialNumbers.Add(data.Battery5);
-                            if (!string.IsNullOrWhiteSpace(data.Battery6))
-                                serialNumbers.Add(data.Battery6);
-                            if (!string.IsNullOrWhiteSpace(data.Krm))
-                                serialNumbers.Add(data.Krm);
-
-                            if (serialNumbers.Any())
+                            else if (stageName == "Stage3")
                             {
-                                var serialNumbersParam = string.Join("','", serialNumbers);
+                                var pfbCode = data.PFBCode;
+                                var pcCode = data.pccode;
+                                var partCode = data.partCode;
 
-                                var processFeedback = await _context.ProcessFeedbackDetailsSubs
-                                    .FromSqlRaw($@"SELECT pfds.* FROM ProcessFeedbackDetailsSub pfds 
+                                // Build list of valid serial numbers for Stage 3
+                                var serialNumbers = new List<string>();
+
+                                if (!string.IsNullOrWhiteSpace(data.Engine))
+                                    serialNumbers.Add(data.Engine);
+                                if (!string.IsNullOrWhiteSpace(data.Alternator))
+                                    serialNumbers.Add(data.Alternator);
+                                if (!string.IsNullOrWhiteSpace(data.Canopy))
+                                    serialNumbers.Add(data.Canopy);
+                                if (!string.IsNullOrWhiteSpace(data.ControlPanel1))
+                                    serialNumbers.Add(data.ControlPanel1);
+                                if (!string.IsNullOrWhiteSpace(data.ControlPanel2))
+                                    serialNumbers.Add(data.ControlPanel2);
+                                if (!string.IsNullOrWhiteSpace(data.Battery1))
+                                    serialNumbers.Add(data.Battery1);
+                                if (!string.IsNullOrWhiteSpace(data.Battery2))
+                                    serialNumbers.Add(data.Battery2);
+                                if (!string.IsNullOrWhiteSpace(data.Battery3))
+                                    serialNumbers.Add(data.Battery3);
+                                if (!string.IsNullOrWhiteSpace(data.Battery4))
+                                    serialNumbers.Add(data.Battery4);
+                                if (!string.IsNullOrWhiteSpace(data.Battery5))
+                                    serialNumbers.Add(data.Battery5);
+                                if (!string.IsNullOrWhiteSpace(data.Battery6))
+                                    serialNumbers.Add(data.Battery6);
+                                if (!string.IsNullOrWhiteSpace(data.Krm))
+                                    serialNumbers.Add(data.Krm);
+
+                                if (serialNumbers.Any())
+                                {
+                                    var serialNumbersParam = string.Join("','", serialNumbers);
+
+                                    var processFeedback = await _context.ProcessFeedbackDetailsSubs
+                                        .FromSqlRaw($@"SELECT pfds.* FROM ProcessFeedbackDetailsSub pfds 
                                INNER JOIN ProcessFeedBack pf ON pf.Pfbcode = pfds.Pfbcode
                                WHERE pf.Pfbcode = {{0}}
                                AND pf.ProfitCenterCode = {{1}}
                                AND pf.PartCode = {{2}}
                                AND pfds.SerialNo IN ('{serialNumbersParam}')",
-                                                 pfbCode, pcCode, partCode)
-                                    .ToListAsync();
+                                                     pfbCode, pcCode, partCode)
+                                        .ToListAsync();
 
-                                foreach (var record in processFeedback)
-                                {
-                                    record.Qpcstatus = statusValue;  // ✅ "Rej" or "Rew"
+                                    foreach (var record in processFeedback)
+                                    {
+                                        record.Qpcstatus = statusValue;  // ✅ "Rej" or "Rew"
+                                    }
+
+                                    await _context.SaveChangesAsync();
                                 }
-
-                                await _context.SaveChangesAsync();
                             }
                         }
                     }
-                }
 
-                // 🔹 4. Commit transaction
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception("Error saving Stage Wise Quality Check List", ex);
-            }
+                    // 🔹 4. Commit transaction
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw new Exception("Error saving Stage Wise Quality Check List", ex);
+                }
+            });
         }
         #endregion
 
-        #region Employee Methods
+            #region Employee Methods
 
-        /// <summary>
-        /// Retrieves list of active employees for ESP dropdown.
-        /// </summary>
-        /// <returns>
-        /// A list of <see cref="EmployeeListForRaiseESPResponseDTO"/> containing:
-        /// - ECode: Employee code
-        /// - EmployeeName: Full name (First + Last)
-        /// </returns>
-        /// <exception cref="Exception">Thrown when database operation fails.</exception>
+            /// <summary>
+            /// Retrieves list of active employees for ESP dropdown.
+            /// </summary>
+            /// <returns>
+            /// A list of <see cref="EmployeeListForRaiseESPResponseDTO"/> containing:
+            /// - ECode: Employee code
+            /// - EmployeeName: Full name (First + Last)
+            /// </returns>
+            /// <exception cref="Exception">Thrown when database operation fails.</exception>
         public async Task<List<EmployeeListForRaiseESPResponseDTO>> FetchEmployeeListAsync()
         {
             try
