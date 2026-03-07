@@ -132,7 +132,7 @@ namespace KalaGenset.ERP.Core.Services
 
                         if (mof == null)
                         {
-                            result = "MOF not found or not in Auth2='1' state";
+                            result = "MOF not found or already processed";
                         }
 
                         // Update fields

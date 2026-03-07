@@ -30,6 +30,7 @@ namespace KalaGenset.ERP.Core.Services
                 {
                     cmd.CommandText = "assignDataService_sp";
                     cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 120;
 
                     cmd.Parameters.Add(new SqlParameter("@user_id", Ecode));
 
@@ -92,7 +93,8 @@ namespace KalaGenset.ERP.Core.Services
                     var recordGetMaxCodes = await _context.GetMaxCodes
                         .FirstOrDefaultAsync(x => x.Prefix == "CFS" &&
                                                  x.TblName == "CustomerFeedbackService" &&
-                                                 x.CompCode == submitCustomerFeedbackReq.companyId &&
+                                                 //x.CompCode == submitCustomerFeedbackReq.companyId &&
+                                                 x.CompCode == "07" &&
                                                  x.Yr == YearEnd);
 
                     int intmax = 0;
@@ -222,7 +224,8 @@ namespace KalaGenset.ERP.Core.Services
                         new SqlParameter("@TransactionType", "S"),
                         new SqlParameter("@TransactionFrom", "Customer Feedback"),
                         new SqlParameter("@TransactionNo", maxNo.Trim()),
-                        new SqlParameter("@CompanyCode", submitCustomerFeedbackReq.companyId.Trim())
+                       // new SqlParameter("@CompanyCode", submitCustomerFeedbackReq.companyId.Trim())
+                        new SqlParameter("@CompanyCode", "07")
                     );
 
                     // Commit transaction
