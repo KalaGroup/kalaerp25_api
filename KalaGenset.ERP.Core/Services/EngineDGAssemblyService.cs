@@ -4150,7 +4150,7 @@ namespace KalaGenset.ERP.Core.Services
                 .FirstOrDefault();
 
             // Build complete path
-            string fullPath = Path.Combine("D:\\ERP", year, month, fileFolder.Trim());
+            string fullPath = Path.Combine("F:\\ERP", year, month, fileFolder.Trim());
 
             // Create all directories in one call
             Directory.CreateDirectory(fullPath);
