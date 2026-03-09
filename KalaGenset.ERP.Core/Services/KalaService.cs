@@ -106,7 +106,8 @@ namespace KalaGenset.ERP.Core.Services
                           AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
                             new SqlParameter("@Prefix", "CFS"),
                             new SqlParameter("@TblName", "CustomerFeedbackService"),
-                            new SqlParameter("@CompCode", submitCustomerFeedbackReq.companyId),
+                            //new SqlParameter("@CompCode", submitCustomerFeedbackReq.companyId),
+                            new SqlParameter("@CompCode", "07"),
                             new SqlParameter("@Yr", YearEnd)
                         );
 
@@ -130,7 +131,8 @@ namespace KalaGenset.ERP.Core.Services
                         GetMaxValue = intmax.ToString();
                     // ============================================================
 
-                    MaxSrNo = submitCustomerFeedbackReq.companyId + GetMaxValue;
+                    //MaxSrNo = submitCustomerFeedbackReq.companyId + GetMaxValue;
+                    MaxSrNo = "07" + GetMaxValue;
                     maxNo = "CFS/" + YearEnd.Trim() + "/" + MaxSrNo;
 
                     // Insert main feedback record
@@ -143,7 +145,8 @@ namespace KalaGenset.ERP.Core.Services
                         new SqlParameter("@Yr", YearEnd.Trim()),
                         new SqlParameter("@ACTNo", PCANo.Trim()),
                         new SqlParameter("@Remark", "record saved from app"),
-                        new SqlParameter("@CompanyCode", submitCustomerFeedbackReq.companyId.Trim())
+                       //  new SqlParameter("@CompanyCode", submitCustomerFeedbackReq.companyId.Trim())
+                       new SqlParameter("@CompanyCode", "07")
                     );
 
                     // Insert feedback details
@@ -184,7 +187,8 @@ namespace KalaGenset.ERP.Core.Services
                             throw new Exception("Invalid file format");
                         }
 
-                        string finalFileName = YearEnd.Trim() + submitCustomerFeedbackReq.companyId.Trim() + MaxSrNo.Trim() + extension;
+                        //string finalFileName = YearEnd.Trim() + submitCustomerFeedbackReq.companyId.Trim() + MaxSrNo.Trim() + extension;
+                        string finalFileName = YearEnd.Trim() + "07" + MaxSrNo.Trim() + extension;
                         string mainFilePath = GetMainFilePath("CustFeedbackServicefile");
                         string savedFileName = Path.Combine(mainFilePath, finalFileName);
 
@@ -305,13 +309,17 @@ namespace KalaGenset.ERP.Core.Services
             var month = now.ToString("MM MMMM"); // "12 December"
 
             // Build complete path
-            string fullPath = Path.Combine("D:\\Attachments", year, month, fileFolder.Trim());
+            string fullPath = Path.Combine("F:\\ERP", year, month, fileFolder.Trim());
 
             // Create all directories in one call
             Directory.CreateDirectory(fullPath); // Creates all missing directories in the path
 
             return fullPath;
         }
+
+       
+
+
 
         public async Task<string> SubmitSiteVisitDetailsAsync(SubmitSiteVisitDetailsRequest submitSiteVisitDetailsRequest)
         {
@@ -351,17 +359,17 @@ namespace KalaGenset.ERP.Core.Services
                         .FirstOrDefaultAsync();
 
                     // Get Max Value
-                    GetMaxValue = await GetMaxAsync("ActionTaken", "MaxValue", YearEnd, submitSiteVisitDetailsRequest.comp_code.Trim());
+                    GetMaxValue = await GetMaxAsync("ActionTaken", "MaxValue", YearEnd, "07");
 
                     // Generate ACT Number
-                    actNo = $"ACT/{YearEnd.Trim()}/{submitSiteVisitDetailsRequest.comp_code.Trim()}{GetMaxValue}";
+                    actNo = $"ACT/{YearEnd.Trim()}/{"07"}{GetMaxValue}";
 
                     // ✅ Update MaxValue with verification
                     var result = await _context.Database.ExecuteSqlRawAsync(@"UPDATE GetMaxCode SET MaxValue = MaxValue + 1 OUTPUT INSERTED.MaxValue
                                                                         WHERE Prefix = @Prefix AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
                         new SqlParameter("@Prefix", "ACT"),
                         new SqlParameter("@TblName", "ActionTaken"),
-                        new SqlParameter("@CompCode", submitSiteVisitDetailsRequest.comp_code.Trim()),
+                        new SqlParameter("@CompCode", "07"),
                         new SqlParameter("@Yr", YearEnd.Trim())
                     );
 
@@ -486,7 +494,7 @@ namespace KalaGenset.ERP.Core.Services
                         var record = await _context.PrimaryCompAssigns
                             .FirstOrDefaultAsync(x =>
                                 x.Pcacode == submitSiteVisitDetailsRequest.pca_code.Trim() &&
-                                x.CompNo == submitSiteVisitDetailsRequest.comp_code.Trim());
+                                x.CompNo == "07");
 
                         if (record != null)
                         {
@@ -498,7 +506,7 @@ namespace KalaGenset.ERP.Core.Services
                         var record = await _context.PrimaryCompAssigns
                             .FirstOrDefaultAsync(x =>
                                 x.Pcacode == submitSiteVisitDetailsRequest.pca_code.Trim() &&
-                                x.CompNo == submitSiteVisitDetailsRequest.comp_code.Trim());
+                                x.CompNo == "07");
 
                         if (record != null)
                         {
@@ -518,9 +526,9 @@ namespace KalaGenset.ERP.Core.Services
                         new SqlParameter("@TransactionDtTime", DateTime.Now),
                         new SqlParameter("@EmpID", submitSiteVisitDetailsRequest.user_code.Trim()),
                         new SqlParameter("@TransactionType", "S"),
-                        new SqlParameter("@TransactionFrom", "Site Visit"),
+                        new SqlParameter("@TransactionFrom", "ActionTaken"),
                         new SqlParameter("@TransactionNo", actNo),
-                        new SqlParameter("@CompanyCode", submitSiteVisitDetailsRequest.comp_code.Trim()));
+                        new SqlParameter("@CompanyCode", "07"));
 
                     // ✅ Commit transaction - ALL operations successful
                     await transaction.CommitAsync();
