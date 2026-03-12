@@ -2,6 +2,7 @@
 {
     public class CreateKaizenSheetRequest
     {
+        public string CompanyId { get; set; }
         // Header Info
         public int? DivisionId { get; set; }
         public string? DivisionName { get; set; }

@@ -28,13 +28,26 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result);
         }
 
+        //[HttpPost("SubmitMOFNFALevel")]
+        //public async Task<IActionResult> SubmitMOFNFALevel([FromBody] MOFNFALevelAuthSubmitRequest req)
+        //{
+        //    var result = await _marketing.SubmitMOFNFALevelAsync(req);
+        //    if (string.IsNullOrEmpty(result))
+        //        return BadRequest("Submission failed.");
+        //    return Ok(result);
+        //}
+
+
         [HttpPost("SubmitMOFNFALevel")]
         public async Task<IActionResult> SubmitMOFNFALevel([FromBody] MOFNFALevelAuthSubmitRequest req)
         {
             var result = await _marketing.SubmitMOFNFALevelAsync(req);
             if (string.IsNullOrEmpty(result))
                 return BadRequest("Submission failed.");
-            return Ok(result);
+            if (result == "Success")
+                return Ok(result);
+            // Return 400 for business logic failures
+            return BadRequest(result);
         }
     }
 }

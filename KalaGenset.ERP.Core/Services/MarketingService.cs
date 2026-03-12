@@ -91,6 +91,7 @@ namespace KalaGenset.ERP.Core.Services
                         {
                             // nothing to update
                             result = "MOF not found or already processed";
+                            return;
                         }
 
                         // Update fields
@@ -133,6 +134,7 @@ namespace KalaGenset.ERP.Core.Services
                         if (mof == null)
                         {
                             result = "MOF not found or already processed";
+                            return;
                         }
 
                         // Update fields
@@ -164,6 +166,7 @@ namespace KalaGenset.ERP.Core.Services
                     else
                     {
                         result = "Invalid SaveType";
+                        return;
                     }
                 }
                 catch (Exception ex)
