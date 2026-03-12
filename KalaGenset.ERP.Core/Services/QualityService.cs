@@ -182,7 +182,7 @@ namespace KalaGenset.ERP.Core.Services
             try
             {
                 // Generate KaizenSheetNo
-                var kaizenSheetNo = await GenerateKaizenSheetNo();
+                var kaizenSheetNo = await GenerateKaizenSheetNo(request.CompanyId);
 
                 var entity = new KaizenSheetMaster
                 {
@@ -273,36 +273,40 @@ namespace KalaGenset.ERP.Core.Services
         /// <summary>
         /// Generate next KaizenSheetNo: KZ-YYYY-NNNN
         /// </summary>
-        public async Task<string> GenerateKaizenSheetNo()
+        public async Task<string> GenerateKaizenSheetNo(string companyCode)
         {
-            try
+            // Fetch financial year from DB (e.g., "25-26")
+            var yearEnd = await _context.YearEnds
+                .Select(y => $"{y.StartDate:yy}-{y.EndDate:yy}")
+                .FirstOrDefaultAsync();
+
+            if (string.IsNullOrEmpty(yearEnd))
+                throw new Exception("Financial year not configured in YearEnd table.");
+
+            // Prefix: KSN/25-26/01
+            var prefix = $"KSN/{yearEnd}/{companyCode}";
+
+            // Get max serial number for this company in this financial year
+            var lastSheet = await _context.KaizenSheetMasters
+                .Where(k => k.KaizenSheetNo.StartsWith(prefix))
+                .OrderByDescending(k => k.KaizenSheetNo)
+                .Select(k => k.KaizenSheetNo)
+                .FirstOrDefaultAsync();
+
+            int nextNum = 1;
+
+            if (lastSheet != null)
             {
-                var year = DateTime.Now.Year.ToString();
-                var prefix = $"KZ-{year}-";
-
-                // Get the max number for current year
-                var lastSheet = await _context.KaizenSheetMasters
-                    .Where(k => k.KaizenSheetNo.StartsWith(prefix))
-                    .OrderByDescending(k => k.KaizenSheetNo)
-                    .Select(k => k.KaizenSheetNo)
-                    .FirstOrDefaultAsync();
-
-                int nextNum = 1;
-                if (lastSheet != null)
+                // Extract serial part after prefix → e.g., "000001" from "KSN/25-26/01000001"
+                var serialStr = lastSheet.Substring(prefix.Length);
+                if (int.TryParse(serialStr, out int lastNum))
                 {
-                    var lastNumStr = lastSheet.Substring(prefix.Length);
-                    if (int.TryParse(lastNumStr, out int lastNum))
-                    {
-                        nextNum = lastNum + 1;
-                    }
+                    nextNum = lastNum + 1;
                 }
+            }
 
-                return $"{prefix}{nextNum:D4}";
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
+            // Result: KSN/25-26/01000001
+            return $"{prefix}{nextNum:D6}";
         }
 
         public async Task<List<KaizenSheetListResponse>> GetAllKaizenSheets()

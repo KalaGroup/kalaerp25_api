@@ -94,17 +94,17 @@ namespace KalaGenset.ERP.API.Controllers
             {
                 if (beforePhoto != null)
                 {
-                    request.BeforePhotoPath = await SaveFile(beforePhoto, "before");
+                    request.BeforePhotoPath = await SaveFile(beforePhoto, "before", request.CompanyId);
                     request.BeforePhotoName = beforePhoto.FileName;
                 }
                 if (afterPhoto != null)
                 {
-                    request.AfterPhotoPath = await SaveFile(afterPhoto, "after");
+                    request.AfterPhotoPath = await SaveFile(afterPhoto, "after", request.CompanyId);
                     request.AfterPhotoName = afterPhoto.FileName;
                 }
                 if (impactGraph != null)
                 {
-                    request.ImpactGraphPath = await SaveFile(impactGraph, "graphs");
+                    request.ImpactGraphPath = await SaveFile(impactGraph, "graphs", request.CompanyId);
                     request.ImpactGraphName = impactGraph.FileName;
                 }
 
@@ -117,19 +117,31 @@ namespace KalaGenset.ERP.API.Controllers
             }
         }
 
-        private async Task<string> SaveFile(IFormFile file, string subFolder)
+        private async Task<string> SaveFile(IFormFile file, string subFolder, string companyId)
         {
-            // ContentRootPath is NEVER null (unlike WebRootPath)
-            var uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads", "Kaizen", subFolder);
+            // Get current year and month from server
+            var now = DateTime.Now;
+            var year = now.Year.ToString();                          // "2026"
+            var month = now.ToString("MM") + " " + now.ToString("MMMM"); // "03 March"
+
+            // Build path: F:\ERP\2026\03 March\Kaizen\before
+            var basePath = @"D:\ERP";
+            var uploadsFolder = Path.Combine(basePath, year, month, "Kaizen", subFolder);
             Directory.CreateDirectory(uploadsFolder);
 
-            var uniqueName = $"{Guid.NewGuid()}_{file.FileName}";
+            // Unique filename with companyCode: 07_20260311_143025_originalname.jpg
+            var timestamp = now.ToString("yyyyMMdd_HHmmss");
+            var safeFileName = Path.GetFileNameWithoutExtension(file.FileName);
+            var extension = Path.GetExtension(file.FileName);
+            var uniqueName = $"{companyId}_{timestamp}_{safeFileName}{extension}";
+
             var filePath = Path.Combine(uploadsFolder, uniqueName);
 
             using var stream = new FileStream(filePath, FileMode.Create);
             await file.CopyToAsync(stream);
 
-            return $"/Uploads/Kaizen/{subFolder}/{uniqueName}";
+            // Return relative path for DB storage
+            return Path.Combine("ERP", year, month, "Kaizen", subFolder, uniqueName).Replace("\\", "/");
         }
 
         [HttpGet("GetAllKaizenSheets")]
@@ -161,7 +173,7 @@ namespace KalaGenset.ERP.API.Controllers
                 // New file uploaded → save and set path
                 if (beforePhoto != null)
                 {
-                    request.BeforePhotoPath = await SaveFile(beforePhoto, "before");
+                    request.BeforePhotoPath = await SaveFile(beforePhoto, "before", request.CompanyId);
                     request.BeforePhotoName = beforePhoto.FileName;
                 }
                 // else: request.BeforePhotoPath comes from FormData (existing path) or is null
@@ -169,13 +181,13 @@ namespace KalaGenset.ERP.API.Controllers
 
                 if (afterPhoto != null)
                 {
-                    request.AfterPhotoPath = await SaveFile(afterPhoto, "after");
+                    request.AfterPhotoPath = await SaveFile(afterPhoto, "after", request.CompanyId);
                     request.AfterPhotoName = afterPhoto.FileName;
                 }
 
                 if (impactGraph != null)
                 {
-                    request.ImpactGraphPath = await SaveFile(impactGraph, "graphs");
+                    request.ImpactGraphPath = await SaveFile(impactGraph, "graphs", request.CompanyId);
                     request.ImpactGraphName = impactGraph.FileName;
                 }
 
