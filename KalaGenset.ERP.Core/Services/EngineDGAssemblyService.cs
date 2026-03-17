@@ -1163,27 +1163,27 @@ namespace KalaGenset.ERP.Core.Services
                     };
                     await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
 
-                    //var sqlQuery1 = "";
-                    //sqlQuery1 = @"INSERT INTO StockWIP 
-                    //           (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                    //          VALUES
-                    //          (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                        var sqlQuery1 = "";
+                        sqlQuery1 = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                              VALUES
+                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
 
-                    //var parameters1 = new[]
-                    //{
-                    //   new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                    //   new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
-                    //   new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
-                    //   new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
-                    //   new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
-                    //   new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                    //   new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                    //   new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                    //   new SqlParameter("@StageName", "StageIV  ")
-                    //};
-                    //await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                        var parameters1 = new[]
+                        {
+                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                       new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
+                       new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
+                       new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                       new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
+                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                       new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                       new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                       new SqlParameter("@StageName", "StageIV  ")
+                    };
+                        await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
 
-                    if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
+                        if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
                     {
                         var jobCard1E = await _context.JobCardDetailsSubs
                               .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
@@ -1212,8 +1212,11 @@ namespace KalaGenset.ERP.Core.Services
                             && j.PartCode == dgStageScanReq.ProductCode.Trim())
                             .FirstOrDefaultAsync();
 
-                        jobcard2E.Stage3Status = "D";
-                        jobcard2E.JobCard1 = dgStageScanReq.JBCode;
+                       if (jobcard2E != null)
+                       {
+                          jobcard2E.Stage3Status = "D";
+                          jobcard2E.JobCard1 = dgStageScanReq.JBCode;
+                       }
 
                         await _context.SaveChangesAsync();
                     }
@@ -1313,7 +1316,7 @@ namespace KalaGenset.ERP.Core.Services
                         await _context.Database.ExecuteSqlRawAsync(SqlQuerycpy, Parameterscpy);
                     }
 
-                    if (dgStageScanReq.BatPartcode.Trim().Substring(0, 3) == "001")
+                    if (dgStageScanReq.BatPartcode.Trim().Substring(0, 3) == "010")
                     {
                         var jobCard1B = await _context.JobCardDetailsSubs
                                   .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
@@ -1373,62 +1376,71 @@ namespace KalaGenset.ERP.Core.Services
 
                     if (double.Parse(_getKVA) > 160)
                     {
-                        if (dgStageScanReq.Bat2Partcode.Trim().Length > 2)
-                        {
-                            if (dgStageScanReq.Bat2Partcode.Trim().Substring(0, 3) == "010")
+                            var engineModel = await _context.Parts
+                                              .Where(p => p.PartCode == dgStageScanReq.EngPartCode.Trim())
+                                              .Select(p => p.Model)
+                                              .FirstOrDefaultAsync();
+
+                            if (string.IsNullOrEmpty(engineModel) || !engineModel.TrimStart().StartsWith("6K1080ETA"))
                             {
-                                var jobCard1B2 = await _context.JobCardDetailsSubs
-                                   .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                                    && j.SerialNo == dgStageScanReq.Bat2Srno.Trim()
-                                    && j.SrNoPartCode == dgStageScanReq.Bat2Partcode.Trim()
-                                    && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                   .FirstOrDefaultAsync();
-
-                                if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                                if (dgStageScanReq.Bat2Partcode.Trim().Length > 2)
                                 {
-                                    jobCard1B2.Stage3Status = "D";
-                                    jobCard1B2.Stage3Date = DateTime.Now;
-                                }
-                                else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                                {
-                                    jobCard1B2.Stage3Status = "R";
-                                }
-
-                                await _context.SaveChangesAsync();
-
-                                if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                                {
-                                    var jobcard2B2 = await _context.Jobcard2DetailsSubs
-                                         .Where(j => j.SerialNo == dgStageScanReq.Bat2Srno.Trim()
-                                         && j.SrNoPartCode == dgStageScanReq.Bat2Partcode.Trim()
-                                         && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                         .FirstOrDefaultAsync();
-
-                                    if (jobcard2B2 != null)
+                                    if (dgStageScanReq.Bat2Partcode.Trim().Substring(0, 3) == "010")
                                     {
-                                        jobcard2B2.Stage3Status = "D";
-                                        jobcard2B2.JobCard1 = dgStageScanReq.JBCode; 
+                                        var jobCard1B2 = await _context.JobCardDetailsSubs
+                                           .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                            && j.SerialNo == dgStageScanReq.Bat2Srno.Trim()
+                                            && j.SrNoPartCode == dgStageScanReq.Bat2Partcode.Trim()
+                                            && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                           .FirstOrDefaultAsync();
+
+                                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                                        {
+                                            jobCard1B2.Stage3Status = "D";
+                                            jobCard1B2.Stage3Date = DateTime.Now;
+                                        }
+                                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                                        {
+                                            jobCard1B2.Stage3Status = "R";
+                                        }
+
+                                        await _context.SaveChangesAsync();
+
+                                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                                        {
+                                            var jobcard2B2 = await _context.Jobcard2DetailsSubs
+                                                 .Where(j => j.SerialNo == dgStageScanReq.Bat2Srno.Trim()
+                                                 && j.SrNoPartCode == dgStageScanReq.Bat2Partcode.Trim()
+                                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                                 .FirstOrDefaultAsync();
+
+                                            if (jobcard2B2 != null)
+                                            {
+                                                jobcard2B2.Stage3Status = "D";
+                                                jobcard2B2.JobCard1 = dgStageScanReq.JBCode;
+                                            }
+
+                                            await _context.SaveChangesAsync();
+                                        }
+
+                                        var _stockWip = await _context.Stockwips
+                                            .Where(s => s.FromProfitCenterCode == dgStageScanReq.PCCode.Trim()
+                                            && s.IssueCode == $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"
+                                            && s.StageName == "StageIII"
+                                            && s.PartCode == dgStageScanReq.BatPartcode.Trim()
+                                            && s.ToProfitCenterCode == dgStageScanReq.PCCode.Trim())
+                                            .FirstOrDefaultAsync();
+
+                                        if (_stockWip != null)
+                                        {
+                                            _stockWip.IssueQty = _stockWip.IssueQty + 1;
+                                        }
+
+                                        await _context.SaveChangesAsync();
                                     }
-
-                                    await _context.SaveChangesAsync();
-                                }
-
-                                var _stockWip = await _context.Stockwips
-                                    .Where(s => s.FromProfitCenterCode == dgStageScanReq.PCCode.Trim()
-                                    && s.IssueCode == $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"
-                                    && s.StageName == "StageIII"
-                                    && s.PartCode == dgStageScanReq.BatPartcode.Trim()
-                                    && s.ToProfitCenterCode == dgStageScanReq.PCCode.Trim())
-                                    .FirstOrDefaultAsync();
-
-                                if (_stockWip != null)
-                                {
-                                    _stockWip.IssueQty = _stockWip.IssueQty + 1;
-                                }
-
-                                await _context.SaveChangesAsync();
+                                } 
                             }
-                        }
+
                     }
 
                     foreach (var chekpoint in dgStageScanReq.PrcChkDts)
@@ -1445,7 +1457,8 @@ namespace KalaGenset.ERP.Core.Services
                            new SqlParameter("@ChkPointId",chekpoint.PrcId),
                            new SqlParameter("@PrcChkPoints",chekpoint.Remark),
                            new SqlParameter("@PrcStatus",dgStageScanReq.PrcStatus),
-                           new SqlParameter("@DGStartTime",DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                          // new SqlParameter("@DGStartTime",DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                           new SqlParameter("@DGStartTime",DateTime.Now),
                            new SqlParameter("@QA6M",dgStageScanReq.QA6M)
                         };
                         await _context.Database.ExecuteSqlRawAsync(sqlqueryprc, Parametersprc);
@@ -4009,6 +4022,7 @@ namespace KalaGenset.ERP.Core.Services
 
 
         public async Task<string> UploadVideoAndPDFAsync(UploadVideopdfDGAssemblyRequest uploadVideopdfDGAssemblyReq)
+
         {
             string location = "";
             string file_name = "";
@@ -4151,7 +4165,6 @@ namespace KalaGenset.ERP.Core.Services
 
             // Build complete path
             string fullPath = Path.Combine("F:\\ERP", year, month, fileFolder.Trim());
-
             // Create all directories in one call
             Directory.CreateDirectory(fullPath);
 
