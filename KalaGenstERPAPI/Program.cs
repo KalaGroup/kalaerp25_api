@@ -124,6 +124,8 @@ builder.Services.AddScoped<IKalaService, KalaService>();
 builder.Services.AddScoped<IDgStageChecker, DgStageCheckerService>();
 builder.Services.AddScoped<IQuality, QualityService>();
 builder.Services.AddScoped<ICanopy, CanopyService>();
+builder.Services.AddScoped<IJobcard, JobcardService>();
+builder.Services.AddScoped<I_invoiceScan, InvoiceScanService>();
 
 // ✅ CORS Policy
 builder.Services.AddCors(options =>

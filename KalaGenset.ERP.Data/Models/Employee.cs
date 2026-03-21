@@ -275,6 +275,8 @@ public partial class Employee
 
     public bool Computer { get; set; }
 
+    public bool Laptop { get; set; }
+
     public bool CanteenC { get; set; }
 
     public string? FilePath { get; set; }
