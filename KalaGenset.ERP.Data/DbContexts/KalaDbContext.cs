@@ -28,6 +28,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<Company> Companies { get; set; }
 
+    public virtual DbSet<ConvertSerialNoDetail> ConvertSerialNoDetails { get; set; }
+
     public virtual DbSet<DepartmentMst> DepartmentMsts { get; set; }
 
     public virtual DbSet<DispatchInstruction> DispatchInstructions { get; set; }
@@ -46,6 +48,10 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<GiirdetailsSub> GiirdetailsSubs { get; set; }
 
+    public virtual DbSet<InvoiceDealer> InvoiceDealers { get; set; }
+
+    public virtual DbSet<InvoiceSale> InvoiceSales { get; set; }
+
     public virtual DbSet<JobCard> JobCards { get; set; }
 
     public virtual DbSet<JobCardDetail> JobCardDetails { get; set; }
@@ -57,6 +63,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<KaizenSheetMaster> KaizenSheetMasters { get; set; }
 
     public virtual DbSet<LoginMst> LoginMsts { get; set; }
+
+    public virtual DbSet<MaterialRequisitionWithOutPlan> MaterialRequisitionWithOutPlans { get; set; }
 
     public virtual DbSet<MemoExciseMfg> MemoExciseMfgs { get; set; }
 
@@ -84,6 +92,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<ProcessFeedbackDetailsSub> ProcessFeedbackDetailsSubs { get; set; }
 
+    public virtual DbSet<ProductWip> ProductWips { get; set; }
+
     public virtual DbSet<ProfitCenter> ProfitCenters { get; set; }
 
     public virtual DbSet<ProfitCenterPldetail> ProfitCenterPldetails { get; set; }
@@ -91,8 +101,6 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<ProfitCenterplDetailsChanged> ProfitCenterplDetailsChangeds { get; set; }
 
     public virtual DbSet<PurchaseCosting> PurchaseCostings { get; set; }
-
-    public virtual DbSet<QualityProcessCheckDefectDg> QualityProcessCheckDefectDgs { get; set; }
 
     public virtual DbSet<QualityProcessCheckerDetailsDg> QualityProcessCheckerDetailsDgs { get; set; }
 
@@ -120,11 +128,7 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<_6m> _6ms { get; set; }
 
-//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//        => optionsBuilder.UseSqlServer("Server=13.71.50.58;Database=ERP_NEW_System;Uid=sa;Pwd=3HMungiIMR;Encrypt=false;MultipleActiveResultSets=True;");
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+      protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ActionTaken>(entity =>
         {
@@ -439,9 +443,11 @@ public partial class KalaDbContext : DbContext
                 .HasNoKey()
                 .ToTable("BOMDetails");
 
-            entity.HasIndex(e => new { e.Kitcode, e.PartCode, e.Bomcode }, "_dta_index_BOMDetails_12_849450846__K26_K3_K1").HasFillFactor(80);
+            entity.HasIndex(e => new { e.Bomcode, e.SrNo }, "CIX_BOMDetails")
+                .IsClustered()
+                .HasFillFactor(80);
 
-            entity.HasIndex(e => new { e.Kitcode, e.PartCode }, "_dta_index_BOMDetails_14_849450846__K26_K3").HasFillFactor(80);
+            entity.HasIndex(e => new { e.Kitcode, e.PartCode, e.Bomcode }, "_dta_index_BOMDetails_12_849450846__K26_K3_K1").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.PartCode, e.Kitcode }, "_dta_index_BOMDetails_14_849450846__K3_K26").HasFillFactor(80);
 
@@ -523,7 +529,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<CalibrationMst>(entity =>
         {
-            entity.HasKey(e => e.InstrumentId).HasName("PK__Calibrat__430A5386E51EC584");
+            entity.HasKey(e => e.InstrumentId).HasName("PK__Calibrat__430A5386B148BE3C");
 
             entity.ToTable("Calibration_mst");
 
@@ -740,6 +746,49 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(300)
                 .HasDefaultValue("NIL")
                 .HasColumnName("WAdd");
+        });
+
+        modelBuilder.Entity<ConvertSerialNoDetail>(entity =>
+        {
+            entity.HasNoKey();
+
+            entity.Property(e => e.Cmtfcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("CMTFCode");
+            entity.Property(e => e.Cnvcode)
+                .HasMaxLength(50)
+                .HasColumnName("CNVCode");
+            entity.Property(e => e.Giircode)
+                .HasMaxLength(50)
+                .HasColumnName("GIIRCode");
+            entity.Property(e => e.JobCardStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.MtfserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("MTFSerialStatus");
+            entity.Property(e => e.PartCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.SerialNo).HasMaxLength(50);
+            entity.Property(e => e.SerialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("D")
+                .IsFixedLength();
+            entity.Property(e => e.TrserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasComment("P- Pending Q - Quality C- PV I - INvoice D - Done")
+                .HasColumnName("TRSerialStatus");
         });
 
         modelBuilder.Entity<DepartmentMst>(entity =>
@@ -1478,6 +1527,595 @@ public partial class KalaDbContext : DbContext
                 .HasColumnName("TRSerialStatus");
         });
 
+        modelBuilder.Entity<InvoiceDealer>(entity =>
+        {
+            entity.HasKey(e => e.Invid);
+
+            entity.ToTable("InvoiceDealer");
+
+            entity.HasIndex(e => new { e.MemoCode, e.Invid, e.Active }, "_dta_index_InvoiceDealer_15_868471164__K7_K1_K36_3");
+
+            entity.Property(e => e.Invid)
+                .HasMaxLength(50)
+                .HasColumnName("INVID");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.BillAckCustDt2).HasColumnType("datetime");
+            entity.Property(e => e.BillAckCustDt3).HasColumnType("datetime");
+            entity.Property(e => e.BillAckDt).HasColumnType("datetime");
+            entity.Property(e => e.BillAckNo)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.BillAttachment).HasMaxLength(50);
+            entity.Property(e => e.BillSubBankDt1).HasColumnType("datetime");
+            entity.Property(e => e.BillSubCustDt2).HasColumnType("datetime");
+            entity.Property(e => e.BillSubCustDt3).HasColumnType("datetime");
+            entity.Property(e => e.BillSubErpdt)
+                .HasColumnType("datetime")
+                .HasColumnName("BillSubERPDt");
+            entity.Property(e => e.BillSubmissionDt).HasColumnType("datetime");
+            entity.Property(e => e.BillSubmissionRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.BoqsubDt)
+                .HasColumnType("datetime")
+                .HasColumnName("BOQSubDt");
+            entity.Property(e => e.CgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("CGSTInWords");
+            entity.Property(e => e.Cgstper).HasColumnName("CGSTPer");
+            entity.Property(e => e.CommisioningDt).HasColumnType("datetime");
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.CreditStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Cst).HasColumnName("CST");
+            entity.Property(e => e.CustAckDt).HasColumnType("datetime");
+            entity.Property(e => e.CustAckName)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.CustAckSign).HasDefaultValue("NIL");
+            entity.Property(e => e.CustAckStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.DebitStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.DelDt).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryAckCopySubDt).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryAckCopySubRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.DgcbillAmount).HasColumnName("DGCBillAmount");
+            entity.Property(e => e.DgcbillNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("DGCBillNo");
+            entity.Property(e => e.DgcbillNoDt)
+                .HasColumnType("datetime")
+                .HasColumnName("DGCBillNoDt");
+            entity.Property(e => e.DgcbillRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("DGCBillRemark");
+            entity.Property(e => e.DocSubtoElInspecDt).HasColumnType("datetime");
+            entity.Property(e => e.Dqty)
+                .HasComment("For Bhilad")
+                .HasColumnName("DQty");
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.EInvAckDt)
+                .HasColumnType("datetime")
+                .HasColumnName("eInvAckDt");
+            entity.Property(e => e.EInvAckNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eInvAckNo");
+            entity.Property(e => e.EInvIrnno)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eInvIRNNo");
+            entity.Property(e => e.EWayBillNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eWayBillNo");
+            entity.Property(e => e.ElectBillDt).HasColumnType("datetime");
+            entity.Property(e => e.ExciseAmount).HasDefaultValue("NIL");
+            entity.Property(e => e.ExciseAmountS).HasDefaultValue("NIL");
+            entity.Property(e => e.ExpectedPaymentDt).HasColumnType("datetime");
+            entity.Property(e => e.ExpectedPaymentRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.FinalApprovalDt).HasColumnType("datetime");
+            entity.Property(e => e.FormDt).HasColumnType("datetime");
+            entity.Property(e => e.FormNo)
+                .HasMaxLength(100)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.GateOut)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.GateOutTime).HasColumnType("datetime");
+            entity.Property(e => e.Giircode)
+                .HasMaxLength(50)
+                .HasDefaultValue("NULL")
+                .HasColumnName("GIIRCode");
+            entity.Property(e => e.GoutStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("GOutStatus");
+            entity.Property(e => e.HandOverDate).HasColumnType("datetime");
+            entity.Property(e => e.HardCopyConfirmDt).HasColumnType("datetime");
+            entity.Property(e => e.HardCopySubmitDt).HasColumnType("datetime");
+            entity.Property(e => e.IgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("IGSTInWords");
+            entity.Property(e => e.Igstper).HasColumnName("IGSTPer");
+            entity.Property(e => e.IndentorCode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("0");
+            entity.Property(e => e.InstCommReportDt).HasColumnType("datetime");
+            entity.Property(e => e.InstallationDt).HasColumnType("datetime");
+            entity.Property(e => e.InvDigitalSignAttachment)
+                .HasMaxLength(50)
+                .HasDefaultValue("P");
+            entity.Property(e => e.Invcode).HasColumnName("INVCode");
+            entity.Property(e => e.InvoiceTotal).HasDefaultValue("NIL");
+            entity.Property(e => e.Invstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("INVStatus");
+            entity.Property(e => e.IrecStatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("IRecStatus");
+            entity.Property(e => e.IssTime).HasColumnType("datetime");
+            entity.Property(e => e.IssueDate).HasColumnType("datetime");
+            entity.Property(e => e.Itcremark).HasColumnName("ITCRemark");
+            entity.Property(e => e.Jvstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("JVStatus");
+            entity.Property(e => e.MailStatus)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MailStatusB)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MailStatusD)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.MemoCode).HasMaxLength(50);
+            entity.Property(e => e.PayCollectionDt1).HasColumnType("datetime");
+            entity.Property(e => e.PayCollectionDt2).HasColumnType("datetime");
+            entity.Property(e => e.PayCollectionDt3).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalCopySubmitDt).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalDispDt).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalDispatchDt).HasColumnType("datetime");
+            entity.Property(e => e.Pwdremark).HasColumnName("PWDRemark");
+            entity.Property(e => e.ReceieptOfPoddt)
+                .HasColumnType("datetime")
+                .HasColumnName("ReceieptOfPODDt");
+            entity.Property(e => e.ReceiptAtSiteDt).HasColumnType("datetime");
+            entity.Property(e => e.ReceiptInstPodt)
+                .HasColumnType("datetime")
+                .HasColumnName("ReceiptInstPODt");
+            entity.Property(e => e.RejStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.RemTime).HasColumnType("datetime");
+            entity.Property(e => e.Remark).HasDefaultValue("NIL");
+            entity.Property(e => e.RemovalDate).HasColumnType("datetime");
+            entity.Property(e => e.RtnbillSubmissionDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNBillSubmissionDt");
+            entity.Property(e => e.RtnbillSubmissionRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("RTNBillSubmissionRemark");
+            entity.Property(e => e.Rtnno)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("RTNNo");
+            entity.Property(e => e.RtnnoAmount).HasColumnName("RTNNoAmount");
+            entity.Property(e => e.RtnnoDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNNoDt");
+            entity.Property(e => e.RtnnoPaymentDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNNoPaymentDt");
+            entity.Property(e => e.RtnnoPaymentRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("RTNNoPaymentRemark");
+            entity.Property(e => e.SgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("SGSTInWords");
+            entity.Property(e => e.Sgstper).HasColumnName("SGSTPer");
+            entity.Property(e => e.SubDt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.TallyNarration).HasDefaultValue("NIL");
+            entity.Property(e => e.Tcs).HasColumnName("TCS");
+            entity.Property(e => e.Tmcode)
+                .HasMaxLength(50)
+                .HasDefaultValue("01")
+                .HasColumnName("TMCode");
+            entity.Property(e => e.TmobileNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("TMobileNo");
+            entity.Property(e => e.TransportName).HasDefaultValue("NA");
+            entity.Property(e => e.UnloadingDt).HasColumnType("datetime");
+            entity.Property(e => e.Vat).HasColumnName("VAT");
+            entity.Property(e => e.VehicleNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA");
+            entity.Property(e => e.Viostatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("I")
+                .IsFixedLength()
+                .HasColumnName("VIOStatus");
+            entity.Property(e => e.VmarchStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("VMarchStatus");
+            entity.Property(e => e.Yr)
+                .HasMaxLength(50)
+                .HasDefaultValue("10-11");
+        });
+
+        modelBuilder.Entity<InvoiceSale>(entity =>
+        {
+            entity.HasKey(e => e.Invid);
+
+            entity.HasIndex(e => new { e.IndentorCode, e.Active, e.Dt, e.CompanyCode, e.Dicode, e.Sofcode, e.Invid, e.Mecode }, "_dta_index_InvoiceSales_12_2030538913__K10_K67_K3_K45_K8_K7_K1_K6_11_26_27_28").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.CompanyCode, e.Dt }, "_dta_index_InvoiceSales_12_2030538913__K45_K3_7_11").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.CompanyCode, e.Dt, e.Sofcode, e.Active, e.Dicode, e.Invid, e.Mecode, e.IndentorCode }, "_dta_index_InvoiceSales_12_2030538913__K45_K3_K7_K67_K8_K1_K6_K10_11_26_27_28").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.Mecode, e.Invid }, "_dta_index_InvoiceSales_12_2030538913__K6_K1").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.Dicode, e.Active, e.Dt, e.CompanyCode, e.Sofcode, e.Invid, e.Mecode }, "_dta_index_InvoiceSales_12_2030538913__K8_K67_K3_K45_K7_K1_K6_11_26_27_28").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.Invid, e.CustomerCode, e.IndentorCode, e.Active }, "_dta_index_InvoiceSales_15_352993330__K1_K10_K11_K69_3");
+
+            entity.Property(e => e.Invid)
+                .HasMaxLength(50)
+                .HasDefaultValue("0")
+                .HasColumnName("INVID");
+            entity.Property(e => e.ActOff)
+                .HasMaxLength(50)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.BasicInWords).HasDefaultValue("NIL");
+            entity.Property(e => e.BillAckCustDt2).HasColumnType("datetime");
+            entity.Property(e => e.BillAckCustDt3).HasColumnType("datetime");
+            entity.Property(e => e.BillAckDt).HasColumnType("datetime");
+            entity.Property(e => e.BillAckNo)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.BillAttachment).HasMaxLength(50);
+            entity.Property(e => e.BillSubBankDt1).HasColumnType("datetime");
+            entity.Property(e => e.BillSubCustDt2).HasColumnType("datetime");
+            entity.Property(e => e.BillSubCustDt3).HasColumnType("datetime");
+            entity.Property(e => e.BillSubErpdt)
+                .HasColumnType("datetime")
+                .HasColumnName("BillSubERPDt");
+            entity.Property(e => e.BillSubmissionDt).HasColumnType("datetime");
+            entity.Property(e => e.BillSubmissionRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.BoqsubDt)
+                .HasColumnType("datetime")
+                .HasColumnName("BOQSubDt");
+            entity.Property(e => e.Cessinwords)
+                .HasDefaultValue("NIL")
+                .HasColumnName("CESSInwords");
+            entity.Property(e => e.CformPaymentRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.CgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("CGSTInWords");
+            entity.Property(e => e.Cgstper).HasColumnName("CGSTPer");
+            entity.Property(e => e.ChapterNo)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.CommisioningDt).HasColumnType("datetime");
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.CreditStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Cstper).HasColumnName("CSTPer");
+            entity.Property(e => e.CustAckDt).HasColumnType("datetime");
+            entity.Property(e => e.CustAckName)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.CustAckSign).HasDefaultValue("NIL");
+            entity.Property(e => e.CustAckStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.CustComm4ElectBillDt).HasColumnType("datetime");
+            entity.Property(e => e.CustomerCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.DebitStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.DelDt).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryAckCopySubDt).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryAckCopySubRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.DeliveryTerms).HasDefaultValue("NIL");
+            entity.Property(e => e.DescriptionManual).HasDefaultValue("NIL");
+            entity.Property(e => e.DgcbillAmount).HasColumnName("DGCBillAmount");
+            entity.Property(e => e.DgcbillNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("DGCBillNo");
+            entity.Property(e => e.DgcbillNoDt)
+                .HasColumnType("datetime")
+                .HasColumnName("DGCBillNoDt");
+            entity.Property(e => e.DgcbillRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("DGCBillRemark");
+            entity.Property(e => e.Dicode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("DICode");
+            entity.Property(e => e.DocPwdreadyDt)
+                .HasColumnType("datetime")
+                .HasColumnName("DocPWDReadyDt");
+            entity.Property(e => e.DocSubtoElInspecDt).HasColumnType("datetime");
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.EInvAckDt)
+                .HasColumnType("datetime")
+                .HasColumnName("eInvAckDt");
+            entity.Property(e => e.EInvAckNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eInvAckNo");
+            entity.Property(e => e.EInvIrnno)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eInvIRNNo");
+            entity.Property(e => e.EWayBillNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("eWayBillNo");
+            entity.Property(e => e.Edper).HasColumnName("EDper");
+            entity.Property(e => e.ElectBillDt).HasColumnType("datetime");
+            entity.Property(e => e.ExciseDutyInWords).HasDefaultValue("NIL");
+            entity.Property(e => e.ExpectedPaymentDt).HasColumnType("datetime");
+            entity.Property(e => e.ExpectedPaymentRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.FilePath).HasDefaultValue("NA");
+            entity.Property(e => e.FinalApprovalDt).HasColumnType("datetime");
+            entity.Property(e => e.FormDt).HasColumnType("datetime");
+            entity.Property(e => e.FormNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA");
+            entity.Property(e => e.FormRemark).HasDefaultValue("NA");
+            entity.Property(e => e.GateOut)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.GateOutTime).HasColumnType("datetime");
+            entity.Property(e => e.GoutStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("GOutStatus");
+            entity.Property(e => e.HandOverDate).HasColumnType("datetime");
+            entity.Property(e => e.HardCopyConfirmDt).HasColumnType("datetime");
+            entity.Property(e => e.HardCopySubmitDt).HasColumnType("datetime");
+            entity.Property(e => e.HecessPer).HasColumnName("HEcessPer");
+            entity.Property(e => e.Hedcessinwords)
+                .HasDefaultValue("NIL")
+                .HasColumnName("HEDCESSInwords");
+            entity.Property(e => e.IgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("IGSTInWords");
+            entity.Property(e => e.Igstper).HasColumnName("IGSTPer");
+            entity.Property(e => e.IndentorCode).HasMaxLength(50);
+            entity.Property(e => e.InstCommReportDt).HasColumnType("datetime");
+            entity.Property(e => e.InstallationDt).HasColumnType("datetime");
+            entity.Property(e => e.InvDesc)
+                .IsUnicode(false)
+                .HasDefaultValue("NA");
+            entity.Property(e => e.InvDigitalSignAttachment)
+                .HasMaxLength(50)
+                .HasDefaultValue("P");
+            entity.Property(e => e.InvUom)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("NA")
+                .HasColumnName("InvUOM");
+            entity.Property(e => e.Invcode).HasColumnName("INVCode");
+            entity.Property(e => e.Invstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("INVStatus");
+            entity.Property(e => e.Invtype)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("D")
+                .IsFixedLength()
+                .HasColumnName("INVType");
+            entity.Property(e => e.IrecStatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("IRecStatus");
+            entity.Property(e => e.IssueDate).HasColumnType("datetime");
+            entity.Property(e => e.IssueTime).HasColumnType("datetime");
+            entity.Property(e => e.Itcremark).HasColumnName("ITCRemark");
+            entity.Property(e => e.Jvstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("JVStatus");
+            entity.Property(e => e.MailStatus)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MailStatusB)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MailStatusD)
+                .IsRequired()
+                .HasDefaultValueSql("('0')");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.Mecode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("MECode");
+            entity.Property(e => e.NatureOfRemoval)
+                .HasMaxLength(50)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.OnAcParty).HasDefaultValue("NIL");
+            entity.Property(e => e.PayCollectionDt1).HasColumnType("datetime");
+            entity.Property(e => e.PayCollectionDt2).HasColumnType("datetime");
+            entity.Property(e => e.PayCollectionDt3).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalCopySubmitDt).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalDispDt).HasColumnType("datetime");
+            entity.Property(e => e.PhysicalDispatchDt).HasColumnType("datetime");
+            entity.Property(e => e.PoDate).HasColumnType("datetime");
+            entity.Property(e => e.Pono)
+                .HasMaxLength(100)
+                .HasDefaultValue("NIL")
+                .HasColumnName("PONo");
+            entity.Property(e => e.PortOfDischarge).HasDefaultValue("NIL");
+            entity.Property(e => e.PortOfLoading).HasDefaultValue("NIL");
+            entity.Property(e => e.PrcinvType)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("O")
+                .IsFixedLength()
+                .HasColumnName("PRCInvType");
+            entity.Property(e => e.Pwdremark).HasColumnName("PWDRemark");
+            entity.Property(e => e.ReceieptOfPoddt)
+                .HasColumnType("datetime")
+                .HasColumnName("ReceieptOfPODDt");
+            entity.Property(e => e.ReceiptAtSiteDt).HasColumnType("datetime");
+            entity.Property(e => e.ReceiptInstPodt)
+                .HasColumnType("datetime")
+                .HasColumnName("ReceiptInstPODt");
+            entity.Property(e => e.RejStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Remark).HasDefaultValue("NIL");
+            entity.Property(e => e.RemovalDate).HasColumnType("datetime");
+            entity.Property(e => e.RemovalTime).HasColumnType("datetime");
+            entity.Property(e => e.RtnbillSubmissionDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNBillSubmissionDt");
+            entity.Property(e => e.RtnbillSubmissionRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("RTNBillSubmissionRemark");
+            entity.Property(e => e.Rtnno)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("RTNNo");
+            entity.Property(e => e.RtnnoAmount).HasColumnName("RTNNoAmount");
+            entity.Property(e => e.RtnnoDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNNoDt");
+            entity.Property(e => e.RtnnoPaymentDt)
+                .HasColumnType("datetime")
+                .HasColumnName("RTNNoPaymentDt");
+            entity.Property(e => e.RtnnoPaymentRemark)
+                .HasDefaultValue("NIL")
+                .HasColumnName("RTNNoPaymentRemark");
+            entity.Property(e => e.SgstinWords)
+                .HasMaxLength(4000)
+                .HasDefaultValue("NIL")
+                .HasColumnName("SGSTInWords");
+            entity.Property(e => e.Sgstper).HasColumnName("SGSTPer");
+            entity.Property(e => e.Sofcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("SOFCode");
+            entity.Property(e => e.SubDt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.TallyNarration).HasDefaultValue("NIL");
+            entity.Property(e => e.Tcsper).HasColumnName("TCSPer");
+            entity.Property(e => e.Tmcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("TMCode");
+            entity.Property(e => e.TmobileNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NA")
+                .HasColumnName("TMobileNo");
+            entity.Property(e => e.TransportName)
+                .HasMaxLength(100)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.TransportRoute).HasDefaultValue("NIL");
+            entity.Property(e => e.UnloadingDt).HasColumnType("datetime");
+            entity.Property(e => e.VehicleNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.VehicleType)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("RR")
+                .IsFixedLength()
+                .HasComment("RR - Vehicle Registerd NR - Not registered");
+            entity.Property(e => e.VesselFlightNo).HasDefaultValue("NIL");
+            entity.Property(e => e.Viostatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("I")
+                .IsFixedLength()
+                .HasColumnName("VIOStatus");
+            entity.Property(e => e.VmarchStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("VMarchStatus");
+            entity.Property(e => e.Yr)
+                .HasMaxLength(50)
+                .HasDefaultValue("10-11");
+        });
+
         modelBuilder.Entity<JobCard>(entity =>
         {
             entity.HasKey(e => e.JobCode);
@@ -1825,6 +2463,64 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("E")
                 .IsFixedLength();
+        });
+
+        modelBuilder.Entity<MaterialRequisitionWithOutPlan>(entity =>
+        {
+            entity.HasKey(e => e.Reqcode);
+
+            entity.ToTable("MaterialRequisitionWithOutPlan");
+
+            entity.Property(e => e.Reqcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasComment("WithOut Plan")
+                .HasColumnName("REQCode");
+            entity.Property(e => e.ActNo)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.AuthDt).HasColumnType("datetime");
+            entity.Property(e => e.ClassCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.InActiveRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.Pofcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("POFCode");
+            entity.Property(e => e.ProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.Remark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.ReqType)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasDefaultValue("WOP")
+                .IsFixedLength();
+            entity.Property(e => e.Reqstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("REQStatus");
+            entity.Property(e => e.RequisitionFor)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.SourceCode)
+                .HasMaxLength(60)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.ToProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.Yr)
+                .HasMaxLength(50)
+                .HasDefaultValue("10-11");
         });
 
         modelBuilder.Entity<MemoExciseMfg>(entity =>
@@ -2406,49 +3102,17 @@ public partial class KalaDbContext : DbContext
 
             entity.ToTable("Part", tb => tb.HasTrigger("sp_MSsync_upd_trig_Part_1"));
 
-            entity.HasIndex(e => new { e.PartCode, e.Uomcode }, "_dta_index_Part_12_1631305567__K1_K8_3").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ClassCode, e.Mob }, "_dta_index_Part_12_1631305567__K7_K12_1").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ClassCode, e.Mob, e.PartCode }, "_dta_index_Part_12_1631305567__K7_K12_K1").HasFillFactor(80);
-
             entity.HasIndex(e => new { e.ClassCode, e.Mob, e.PartCode, e.CategoryId, e.Uomcode }, "_dta_index_Part_12_1631305567__K7_K12_K1_K11_K8").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ClassCode, e.PartCode, e.CategoryId, e.Uomcode }, "_dta_index_Part_12_1631305567__K7_K1_K11_K8").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ChapterCode, e.PartCode }, "_dta_index_Part_12_1631305567__K84_K1").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.Uomcode, e.ClassCode, e.Mob, e.PartCode, e.CategoryId }, "_dta_index_Part_12_1631305567__K8_K7_K12_K1_K11").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.CategoryId, e.Twelve, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K11_K71_K1_K85");
-
-            entity.HasIndex(e => new { e.CategoryId, e.Fourteen, e.Thirteen, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K11_K73_K72_K1_K85_71");
 
             entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_30_63_71_72_73_85_95");
 
             entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_3_30_32_43_54");
 
-            entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_9987");
-
             entity.HasIndex(e => new { e.PartCode, e.Kva, e.Model, e.Phase }, "_dta_index_Part_5_337253548__K1_K30_K32_K43_31");
-
-            entity.HasIndex(e => new { e.PartCode, e.Four }, "_dta_index_Part_5_337253548__K1_K63");
-
-            entity.HasIndex(e => new { e.PartCode, e.Twelve }, "_dta_index_Part_5_337253548__K1_K71");
 
             entity.HasIndex(e => new { e.PartCode, e.Uomcode }, "_dta_index_Part_5_337253548__K1_K8_3_86");
 
-            entity.HasIndex(e => new { e.Twelve, e.PartCode }, "_dta_index_Part_5_337253548__K71_K1");
-
-            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K71_K1_K85");
-
-            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Thirteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K72");
-
             entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Thirteen, e.Fourteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K72_K73");
-
-            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Fourteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K73");
-
-            entity.HasIndex(e => new { e.Twelve, e.Fourteen, e.Thirteen, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K71_K73_K72_K1_K85");
 
             entity.Property(e => e.PartCode).HasMaxLength(50);
             entity.Property(e => e.Active).HasDefaultValue(true);
@@ -3112,6 +3776,32 @@ public partial class KalaDbContext : DbContext
                 .HasColumnName("TRSerialStatus");
         });
 
+        modelBuilder.Entity<ProductWip>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("ProductWip");
+
+            entity.Property(e => e.FromPccode)
+                .HasMaxLength(50)
+                .HasColumnName("FromPCCode");
+            entity.Property(e => e.Id)
+                .ValueGeneratedOnAdd()
+                .HasColumnName("id");
+            entity.Property(e => e.IssueCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.IssueDate).HasColumnType("datetime");
+            entity.Property(e => e.ProductCode).HasMaxLength(50);
+            entity.Property(e => e.ReceivedCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.ReceivedDate).HasColumnType("datetime");
+            entity.Property(e => e.ToPccode)
+                .HasMaxLength(50)
+                .HasColumnName("ToPCCode");
+        });
+
         modelBuilder.Entity<ProfitCenter>(entity =>
         {
             entity.HasKey(e => e.PcId).HasName("PK_ProfitCenter_NEW_1");
@@ -3313,32 +4003,6 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValue("10-11");
         });
 
-        modelBuilder.Entity<QualityProcessCheckDefectDg>(entity =>
-        {
-            entity.HasKey(e => e.QpcdefectDgid);
-
-            entity.ToTable("QualityProcessCheckDefectDG");
-
-            entity.Property(e => e.QpcdefectDgid).HasColumnName("QPCDefectDGId");
-            entity.Property(e => e.Instrument)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-            entity.Property(e => e.Pccode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("PCCode");
-            entity.Property(e => e.Qdccode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("QDCCode");
-            entity.Property(e => e.QualityProcessCheckerDgid).HasColumnName("QualityProcessCheckerDGId");
-
-            entity.HasOne(d => d.QualityProcessCheckerDg).WithMany(p => p.QualityProcessCheckDefectDgs)
-                .HasForeignKey(d => d.QualityProcessCheckerDgid)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_QualityProcessCheckDefectDG_QualityProcessCheckerDG");
-        });
-
         modelBuilder.Entity<QualityProcessCheckerDetailsDg>(entity =>
         {
             entity.HasKey(e => e.QpcdetailsDgid);
@@ -3364,7 +4028,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<QualityProcessCheckerDg>(entity =>
         {
-            entity.HasKey(e => e.QualityProcessCheckerDgid).HasName("PK__QualityP__93C1707142C357FC");
+            entity.HasKey(e => e.QualityProcessCheckerDgid).HasName("PK__QualityP__93C1707140F9507A");
 
             entity.ToTable("QualityProcessCheckerDG");
 
@@ -3405,7 +4069,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<StageWiseQualityCheckList>(entity =>
         {
-            entity.HasKey(e => e.StageWiseQcid).HasName("PK__StageWis__FFE308E77544A9CB");
+            entity.HasKey(e => e.StageWiseQcid).HasName("PK__StageWis__FFE308E7591E6B39");
 
             entity.ToTable("StageWiseQualityCheckList");
 
@@ -3467,19 +4131,15 @@ public partial class KalaDbContext : DbContext
                 .HasNoKey()
                 .ToTable("STOCKWIP");
 
+            entity.HasIndex(e => new { e.PartCode, e.FromProfitCenterCode, e.IssueDate }, "CIX_STOCKWIP")
+                .IsClustered()
+                .HasFillFactor(80);
+
             entity.HasIndex(e => new { e.FromProfitCenterCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K1_K4_K8_2_5_6_9_10").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.PartCode, e.FromProfitCenterCode, e.ToProfitCenterCode, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K1_K6_K8_3_4_5_7_9").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.PartCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K4_K8_1_5_6_9").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.PartCode, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K8_1_3_4_5_6_7_9").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.ToProfitCenterCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K6_K4_K8_1_2_5_9_10").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ToProfitCenterCode, e.ReceivedDate, e.IssueDate }, "_dta_index_STOCKWIP_14_904142762__K6_K8_K4").HasFillFactor(80);
-
-            entity.HasIndex(e => new { e.ReceivedQty, e.ReceivedDate, e.PartCode, e.ToProfitCenterCode }, "_dta_index_STOCKWIP_14_904142762__K9_K8_K2_K6").HasFillFactor(80);
 
             entity.Property(e => e.FromProfitCenterCode).HasMaxLength(50);
             entity.Property(e => e.Grade)
