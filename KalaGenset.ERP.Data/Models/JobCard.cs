@@ -28,4 +28,6 @@ public partial class JobCard
     public bool Active { get; set; }
 
     public bool Auth { get; set; }
+
+    public string? PccodeAct { get; set; }
 }

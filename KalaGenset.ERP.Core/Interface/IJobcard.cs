@@ -12,5 +12,13 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<List<Dictionary<string, object>>> GetDGAsync(string strJobCardType, string strCompID);
 
         public Task<string> SubmitJobCardAsync(JobCardSubmitRequest request);
+
+        public Task<List<Dictionary<string, object>>> GetDGJobcard1CheckerDetails(string jobCode);
+
+        public Task<List<string>> GetPendingAuthJobCodes();
+
+        public Task<List<Dictionary<string, object>>> GetPlanDetails(string jobCode);
+
+        public Task<string> SubmitJobcard1Checker(Jobcard1CheckerSubmitRequest jobcard1CheckerSubmitReq);
     }
 }

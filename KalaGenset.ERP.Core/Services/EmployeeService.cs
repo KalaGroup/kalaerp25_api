@@ -29,65 +29,6 @@ namespace KalaGenset.ERP.Core.Services
             _secretKey = configuration["JwtSettings:SecretKey"];
         }
 
-        //public AuthResponse AuthenticateUser(string userid, string password)
-        //{
-        //    var user = (from emp in _context.Employees
-        //                join login in _context.LoginMsts
-        //                on emp.Ecode equals login.Name
-        //                join comp in _context.Companies
-        //                on emp.CompanyCodeAct equals comp.Cid
-        //                join pcenter in _context.ProfitCenters
-        //                on emp.ProfitCenterAct equals pcenter.Pccode
-        //                where emp.Ecode == userid && login.PassWord == password
-        //                select new UserDto
-        //                {
-        //                    EmpCode = emp.Ecode,
-        //                    UserId = login.Id,
-        //                    LoginType = login.LoginType,
-        //                    Ename = emp.Fname + " " + emp.Lname,
-        //                    PCCode = emp.ProfitCenterAct,
-        //                    CompanyId = emp.CompanyCodeAct,
-        //                    CompanyName = comp.Cname,
-        //                    ProfitCenterName = pcenter.Pcname,
-        //                    IsActive = emp.Active
-        //                }).FirstOrDefault();
-
-
-        //    if (user == null)
-        //    {
-        //        return new AuthResponse
-        //        {
-        //            success = false,
-        //            message = "Invalid User Or Password..!"
-        //        };
-        //    }
-        //    else if (!user.IsActive)
-        //    {
-        //        return new AuthResponse
-        //        {
-        //            success = false,
-        //            message = "The User Is Either Inactive or Invalid..!"
-        //        };
-        //    }
-        //    {
-        //        var _token = GenerateJwtToken(user.EmpCode);
-        //        return new AuthResponse
-        //        {
-        //            token = _token,
-        //            username = user.Ename,
-        //            pccode = user.PCCode,
-        //            empCode = user.EmpCode,
-        //            loginType = user.LoginType,
-        //            userId = user.UserId,
-        //            companyId = user.CompanyId,
-        //            companyName = user.CompanyName,
-        //            profitCenterName = user.ProfitCenterName,
-        //            success = true,
-        //            message = "Login Successful..!"
-        //        };
-        //    }
-        //}
-
         public AuthResponse AuthenticateUser(string userid, string password)
         {
             var user = (from emp in _context.Employees
@@ -106,6 +47,7 @@ namespace KalaGenset.ERP.Core.Services
                             UserId = login.Id,
                             LoginType = login.LoginType,
                             Ename = emp.Fname + " " + emp.Lname,
+                            PCCode_Old = emp.ProfitCenterOld ?? "",
                             PCCode = emp.ProfitCenterAct ?? "",
                             CompanyId = emp.CompanyCodeAct ?? "",
                             CompanyName = comp != null ? comp.Cname : "",
@@ -136,6 +78,7 @@ namespace KalaGenset.ERP.Core.Services
                     token = _token,
                     username = user.Ename,
                     pccode = user.PCCode ?? "",
+                    pccode_old = user.PCCode_Old ?? "",
                     empCode = user.EmpCode,
                     loginType = user.LoginType,
                     userId = user.UserId,

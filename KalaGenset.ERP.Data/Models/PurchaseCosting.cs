@@ -46,6 +46,12 @@ public partial class PurchaseCosting
 
     public double Vatperc { get; set; }
 
+    public double Cgstperc { get; set; }
+
+    public double Sgstperc { get; set; }
+
+    public double Igstperc { get; set; }
+
     public double TransCharges { get; set; }
 
     public string RateSelected { get; set; } = null!;

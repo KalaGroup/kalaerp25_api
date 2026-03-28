@@ -12,12 +12,15 @@ namespace KalaGenset.ERP.API.Controllers
     public class QualityController : ControllerBase
     {
         private readonly IQuality _qualityService;
+        private readonly string _fileBasePath;
         private readonly IWebHostEnvironment _env;
 
-        public QualityController(IQuality qualityService, IWebHostEnvironment env)
+        public QualityController(IQuality qualityService, IWebHostEnvironment env, IConfiguration configuration)
         {
             _qualityService = qualityService;
             _env = env;
+            // Base path for file storage, can be set in appsettings.json or environment variable
+            _fileBasePath = configuration["FileStorage:BasePath"];
         }
 
         [HttpGet("GetCompany")]
@@ -207,7 +210,8 @@ namespace KalaGenset.ERP.API.Controllers
                 return BadRequest(new { message = "File path is required" });
 
             // Build full path from ContentRootPath
-            var fullPath = Path.Combine(_env.ContentRootPath, path.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
+            //var fullPath = Path.Combine(_fileBasePath, path.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
+            var fullPath = Path.Combine(@"D:\", path.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
 
             if (!System.IO.File.Exists(fullPath))
                 return NotFound(new { message = "File not found" });

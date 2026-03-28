@@ -13,6 +13,7 @@ namespace KalaGenset.ERP.Core.DTO
         public string EmpCode { get; set; }
         public string Ename { get; set; }
         public string PCCode { get; set; }
+        public string PCCode_Old { get; set; }
         public int UserId { get; set; }
         public string CompanyId { get; set; }
         public string CompanyName { get; set; }

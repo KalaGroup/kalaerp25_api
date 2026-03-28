@@ -102,6 +102,8 @@ public partial class ProcessFeedBack
 
     public string PrcinvType { get; set; } = null!;
 
+    public bool Checker1 { get; set; }
+
     public bool Active { get; set; }
 
     public bool Discard { get; set; }

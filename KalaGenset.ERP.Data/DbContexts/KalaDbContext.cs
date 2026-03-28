@@ -54,6 +54,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<JobCard> JobCards { get; set; }
 
+    public virtual DbSet<JobCardCheckerDetail> JobCardCheckerDetails { get; set; }
+
     public virtual DbSet<JobCardDetail> JobCardDetails { get; set; }
 
     public virtual DbSet<JobCardDetailsSub> JobCardDetailsSubs { get; set; }
@@ -102,6 +104,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<PurchaseCosting> PurchaseCostings { get; set; }
 
+    public virtual DbSet<QualityProcessCheckDefectDg> QualityProcessCheckDefectDgs { get; set; }
+
     public virtual DbSet<QualityProcessCheckerDetailsDg> QualityProcessCheckerDetailsDgs { get; set; }
 
     public virtual DbSet<QualityProcessCheckerDg> QualityProcessCheckerDgs { get; set; }
@@ -128,7 +132,7 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<_6m> _6ms { get; set; }
 
-      protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ActionTaken>(entity =>
         {
@@ -443,11 +447,9 @@ public partial class KalaDbContext : DbContext
                 .HasNoKey()
                 .ToTable("BOMDetails");
 
-            entity.HasIndex(e => new { e.Bomcode, e.SrNo }, "CIX_BOMDetails")
-                .IsClustered()
-                .HasFillFactor(80);
-
             entity.HasIndex(e => new { e.Kitcode, e.PartCode, e.Bomcode }, "_dta_index_BOMDetails_12_849450846__K26_K3_K1").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.Kitcode, e.PartCode }, "_dta_index_BOMDetails_14_849450846__K26_K3").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.PartCode, e.Kitcode }, "_dta_index_BOMDetails_14_849450846__K3_K26").HasFillFactor(80);
 
@@ -529,7 +531,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<CalibrationMst>(entity =>
         {
-            entity.HasKey(e => e.InstrumentId).HasName("PK__Calibrat__430A5386B148BE3C");
+            entity.HasKey(e => e.InstrumentId).HasName("PK__Calibrat__430A5386891A20E2");
 
             entity.ToTable("Calibration_mst");
 
@@ -2137,6 +2139,10 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false)
                 .HasColumnName("PCCode");
+            entity.Property(e => e.PccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode_Act");
             entity.Property(e => e.Remark)
                 .HasMaxLength(500)
                 .IsUnicode(false);
@@ -2159,6 +2165,31 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false)
                 .HasDefaultValueSql("((0))");
+        });
+
+        modelBuilder.Entity<JobCardCheckerDetail>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__JobCardC__3214EC07ECB5F967");
+
+            entity.Property(e => e.AssignTo)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CorReqNo)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Description)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.SixMname)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("SixMName");
+            entity.Property(e => e.Status)
+                .HasMaxLength(10)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<JobCardDetail>(entity =>
@@ -2491,6 +2522,10 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(300)
                 .HasDefaultValue("NIL");
             entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.PccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode_Act");
             entity.Property(e => e.Pofcode)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("((0))")
@@ -3102,17 +3137,41 @@ public partial class KalaDbContext : DbContext
 
             entity.ToTable("Part", tb => tb.HasTrigger("sp_MSsync_upd_trig_Part_1"));
 
+            entity.HasIndex(e => new { e.ClassCode, e.Mob }, "_dta_index_Part_12_1631305567__K7_K12_1").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.ClassCode, e.Mob, e.PartCode }, "_dta_index_Part_12_1631305567__K7_K12_K1").HasFillFactor(80);
+
             entity.HasIndex(e => new { e.ClassCode, e.Mob, e.PartCode, e.CategoryId, e.Uomcode }, "_dta_index_Part_12_1631305567__K7_K12_K1_K11_K8").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.CategoryId, e.Twelve, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K11_K71_K1_K85");
+
+            entity.HasIndex(e => new { e.CategoryId, e.Fourteen, e.Thirteen, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K11_K73_K72_K1_K85_71");
 
             entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_30_63_71_72_73_85_95");
 
             entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_3_30_32_43_54");
 
+            entity.HasIndex(e => e.PartCode, "_dta_index_Part_5_337253548__K1_9987");
+
             entity.HasIndex(e => new { e.PartCode, e.Kva, e.Model, e.Phase }, "_dta_index_Part_5_337253548__K1_K30_K32_K43_31");
+
+            entity.HasIndex(e => new { e.PartCode, e.Four }, "_dta_index_Part_5_337253548__K1_K63");
+
+            entity.HasIndex(e => new { e.PartCode, e.Twelve }, "_dta_index_Part_5_337253548__K1_K71");
 
             entity.HasIndex(e => new { e.PartCode, e.Uomcode }, "_dta_index_Part_5_337253548__K1_K8_3_86");
 
+            entity.HasIndex(e => new { e.Twelve, e.PartCode }, "_dta_index_Part_5_337253548__K71_K1");
+
+            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K71_K1_K85");
+
+            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Thirteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K72");
+
             entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Thirteen, e.Fourteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K72_K73");
+
+            entity.HasIndex(e => new { e.Twelve, e.PartCode, e.Kit, e.Fourteen }, "_dta_index_Part_5_337253548__K71_K1_K85_K73");
+
+            entity.HasIndex(e => new { e.Twelve, e.Fourteen, e.Thirteen, e.PartCode, e.Kit }, "_dta_index_Part_5_337253548__K71_K73_K72_K1_K85");
 
             entity.Property(e => e.PartCode).HasMaxLength(50);
             entity.Property(e => e.Active).HasDefaultValue(true);
@@ -3320,6 +3379,8 @@ public partial class KalaDbContext : DbContext
                 .IsFixedLength();
             entity.Property(e => e.Active).HasDefaultValue(true);
             entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.AuthChk1).HasDefaultValue(true);
+            entity.Property(e => e.AuthChk2).HasDefaultValue(true);
             entity.Property(e => e.Dt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -3964,6 +4025,7 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("NIL");
             entity.Property(e => e.Cessperc).HasColumnName("CESSPerc");
+            entity.Property(e => e.Cgstperc).HasColumnName("CGSTPerc");
             entity.Property(e => e.CompanyCode)
                 .HasMaxLength(10)
                 .IsUnicode(false);
@@ -3972,6 +4034,7 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.Dt).HasColumnType("datetime");
             entity.Property(e => e.Edperc).HasColumnName("EDPerc");
             entity.Property(e => e.HcessPerc).HasColumnName("HCessPerc");
+            entity.Property(e => e.Igstperc).HasColumnName("IGSTPerc");
             entity.Property(e => e.OrderValidSelected)
                 .HasMaxLength(2)
                 .IsUnicode(false)
@@ -3989,6 +4052,7 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(1000)
                 .IsUnicode(false)
                 .HasDefaultValue("NIL");
+            entity.Property(e => e.Sgstperc).HasColumnName("SGSTPerc");
             entity.Property(e => e.SupplierCode).HasMaxLength(50);
             entity.Property(e => e.Uomcode)
                 .HasMaxLength(50)
@@ -4001,6 +4065,32 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false)
                 .HasDefaultValue("10-11");
+        });
+
+        modelBuilder.Entity<QualityProcessCheckDefectDg>(entity =>
+        {
+            entity.HasKey(e => e.QpcdefectDgid);
+
+            entity.ToTable("QualityProcessCheckDefectDG");
+
+            entity.Property(e => e.QpcdefectDgid).HasColumnName("QPCDefectDGId");
+            entity.Property(e => e.Instrument)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.Pccode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode");
+            entity.Property(e => e.Qdccode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("QDCCode");
+            entity.Property(e => e.QualityProcessCheckerDgid).HasColumnName("QualityProcessCheckerDGId");
+
+            entity.HasOne(d => d.QualityProcessCheckerDg).WithMany(p => p.QualityProcessCheckDefectDgs)
+                .HasForeignKey(d => d.QualityProcessCheckerDgid)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_QualityProcessCheckDefectDG_QualityProcessCheckerDG");
         });
 
         modelBuilder.Entity<QualityProcessCheckerDetailsDg>(entity =>
@@ -4028,7 +4118,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<QualityProcessCheckerDg>(entity =>
         {
-            entity.HasKey(e => e.QualityProcessCheckerDgid).HasName("PK__QualityP__93C1707140F9507A");
+            entity.HasKey(e => e.QualityProcessCheckerDgid).HasName("PK__QualityP__93C170712A515A22");
 
             entity.ToTable("QualityProcessCheckerDG");
 
@@ -4069,7 +4159,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<StageWiseQualityCheckList>(entity =>
         {
-            entity.HasKey(e => e.StageWiseQcid).HasName("PK__StageWis__FFE308E7591E6B39");
+            entity.HasKey(e => e.StageWiseQcid).HasName("PK__StageWis__FFE308E78552692B");
 
             entity.ToTable("StageWiseQualityCheckList");
 
@@ -4131,15 +4221,19 @@ public partial class KalaDbContext : DbContext
                 .HasNoKey()
                 .ToTable("STOCKWIP");
 
-            entity.HasIndex(e => new { e.PartCode, e.FromProfitCenterCode, e.IssueDate }, "CIX_STOCKWIP")
-                .IsClustered()
-                .HasFillFactor(80);
-
             entity.HasIndex(e => new { e.FromProfitCenterCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K1_K4_K8_2_5_6_9_10").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.PartCode, e.FromProfitCenterCode, e.ToProfitCenterCode, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K1_K6_K8_3_4_5_7_9").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.PartCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K4_K8_1_5_6_9").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.PartCode, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K2_K8_1_3_4_5_6_7_9").HasFillFactor(80);
 
             entity.HasIndex(e => new { e.ToProfitCenterCode, e.IssueDate, e.ReceivedDate }, "_dta_index_STOCKWIP_12_904142762__K6_K4_K8_1_2_5_9_10").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.ToProfitCenterCode, e.ReceivedDate, e.IssueDate }, "_dta_index_STOCKWIP_14_904142762__K6_K8_K4").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.ReceivedQty, e.ReceivedDate, e.PartCode, e.ToProfitCenterCode }, "_dta_index_STOCKWIP_14_904142762__K9_K8_K2_K6").HasFillFactor(80);
 
             entity.Property(e => e.FromProfitCenterCode).HasMaxLength(50);
             entity.Property(e => e.Grade)
