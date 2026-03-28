@@ -40,5 +40,50 @@ namespace KalaGenset.ERP.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, "Failed to submit job card.");
             return Ok(result);
         }
+
+        [HttpGet("GetJobCard1CheckerDetails")]
+        public async Task<IActionResult> GetJobCard1ChekerDetails()
+        {
+            var data = await _jobcardService.GetPendingAuthJobCodes();
+            if (data == null || data.Count == 0)
+                return NotFound("No records found.");
+            return Ok(data);
+        }
+
+        [HttpGet("GetJobCard1CheckerDetails/{jobCode}")]
+        public async Task<IActionResult> GetJobCard1CheckerDetails(string jobCode)
+        {
+            if (string.IsNullOrWhiteSpace(jobCode))
+                return BadRequest("jobCode is required.");
+            jobCode = Uri.UnescapeDataString(jobCode);
+            var data = await _jobcardService.GetDGJobcard1CheckerDetails(jobCode);
+            if (data == null || data.Count == 0)
+                return NotFound("No records found for the specified job code.");
+            return Ok(data);
+
+        }
+
+        [HttpGet("GetPlanDetails/{jobCode}")]
+        public async Task<IActionResult> GetPlanDetails(string jobCode)
+        {
+            if (string.IsNullOrWhiteSpace(jobCode))
+                return BadRequest("jobCode is required.");
+            jobCode = Uri.UnescapeDataString(jobCode);
+            var data = await _jobcardService.GetPlanDetails(jobCode);
+            if (data == null || data.Count == 0)
+                return NotFound("No records found for the specified job code.");
+            return Ok(data);
+        }
+
+        [HttpPost("SubmitJobcard1Checker")]
+        public async Task<IActionResult> SubmitJobcard1Checker([FromBody] Jobcard1CheckerSubmitRequest request)
+        {
+            if (request == null)
+                return BadRequest("Request body is required.");
+            var result = await _jobcardService.SubmitJobcard1Checker(request);
+            if (string.IsNullOrEmpty(result))
+                return StatusCode(StatusCodes.Status500InternalServerError, "Failed to submit job card checker.");
+            return Ok(result);
+        }
     }
 }

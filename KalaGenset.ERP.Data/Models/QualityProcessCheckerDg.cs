@@ -21,5 +21,7 @@ public partial class QualityProcessCheckerDg
 
     public bool? IsDiscard { get; set; }
 
+    public virtual ICollection<QualityProcessCheckDefectDg> QualityProcessCheckDefectDgs { get; set; } = new List<QualityProcessCheckDefectDg>();
+
     public virtual ICollection<QualityProcessCheckerDetailsDg> QualityProcessCheckerDetailsDgs { get; set; } = new List<QualityProcessCheckerDetailsDg>();
 }

@@ -47,6 +47,10 @@ public partial class PartTocdetailsSupplier
 
     public string Remark { get; set; } = null!;
 
+    public bool AuthChk1 { get; set; }
+
+    public bool AuthChk2 { get; set; }
+
     public bool Active { get; set; }
 
     public bool Auth { get; set; }

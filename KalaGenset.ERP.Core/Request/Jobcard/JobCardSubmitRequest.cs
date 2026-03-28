@@ -13,10 +13,11 @@ namespace KalaGenset.ERP.Core.Request.Jobcard
     /// </summary>
     public class JobCardSubmitRequest
     {
-        public string PCCode { get; set; }
+        public string pcCode_Act { get; set; }
+        public string pcCode_Old { get; set; }
         public string Remark { get; set; }
         public string EmpCode { get; set; }
-        public List<JobCardDtsRow> Rows { get; set; } = new();
+        public List<JobCardDtsRow> Plans { get; set; } = new();
     }
 
     /// <summary>
