@@ -14,17 +14,19 @@ namespace KalaGenset.ERP.Core.Interface
 {
     public interface IEngineDGAssembly
     {
-        public Task<BaseGetStageScanDts> GetStageScanDetailsByQrSrNo(EngineDetailsRequest qrSrNo);
+       public Task<StageScanCombinedResult> GetStageScanDetailsByQrSrNo(EngineDetailsRequest reqParam);
+
+        //public Task<BaseGetStageScanDts> GetStageScanDetailsByQrSrNo(EngineDetailsRequest qrSrNo);
         public Task<TestReportScanDts?> GetTestReportScanDetails(TestReportDetailsRequest testReportDetailsRequestDTO);
         public Task<List<Dictionary<string, object?>>> GetPackingSlipScanDtsAsync(PackingSlipDetailsRequest req);
         public Task<List<Dictionary<string, object?>>> GetJobCard1RptAsync(JobCardRequest req);
         public Task<List<Dictionary<string, object?>>> GetJobCard2RptAsync(JobCardRequest req);
         public Task<string> SubmitJobCard2Details(Jobcard2SubmitDetails jobcard2SubmitDetailsReq);
-        public Task<List<Dictionary<string, object?>>> GetJobCardDGDtsAsync(string strJobCardType, string strcompID);
-        public Task<List<GetDGKitDetails>> GetDGKitDetailsFromDB(string strPrdPartCode, string strPCCode);
+        public Task<List<Dictionary<string, object?>>> GetJobCardDGDtsAsync(string strJobCardType, string strcompID, string assemblyLine);
+        public Task<List<GetDGKitDetails>> GetDGKitDetailsFromDB(string strPrdPartCode, string strPCCode_Old, string PCCode_Act);
         public Task<List<GetTRKitDetails>> GetTRKitDetailsFromDB(string strPartcode, string strDGSrNo, string strPfbCode);
         // public Task<List<dynamic>> GetMOFAdditionalPartDtsFromDB(string strMOFCode);
-        public Task<List<MOFAddPartDetailsResponseDTO>> GetMOFAdditionalPartDtsFromDB(string strMOFCode);
+        public Task<List<MOFAddPartDetailsResponseDTO>> GetMOFAdditionalPartDtsFromDB(string strMOFCode, string AssemblyLine);
         public Task<bool> CheckStageStatus(string JBCode, string EngSrNo, int StageNo);
         public Task SubmitDGAssemblyDetails(DGAssemblySubmitRequest dgStageScanReq);
         public Task<string> SubmitDGAssemblyStage4Details(DGAssemblySubmitRequest dgStageScanReq);

@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Reflection.Emit;
 using Azure.Core;
 using KalaGenset.ERP.Core.Interface;
 using KalaGenset.ERP.Core.Request;
@@ -115,9 +116,8 @@ namespace KalaGenset.ERP.Core.Services
                 {
                     var result = await _context.Database
                         .SqlQueryRaw<Stage3QAPendingListResponseDTO>(
-                            "EXEC GetStageQAPendingList @StageName, @PCCode",
-                            stageNameParam,
-                            pcCodeParam
+                            "EXEC GetStageQAPendingList @StageName",
+                            stageNameParam                           
                         )
                         .ToListAsync();
                     return result;
@@ -126,9 +126,8 @@ namespace KalaGenset.ERP.Core.Services
                 {
                     var result = await _context.Database
                         .SqlQueryRaw<Stage1And2QAPendingListResponseDTO>(
-                            "EXEC GetStageQAPendingList @StageName, @PCCode",
-                            stageNameParam,
-                            pcCodeParam
+                            "EXEC GetStageQAPendingList @StageName",
+                            stageNameParam                           
                         )
                         .ToListAsync();
                     return result;
@@ -668,8 +667,13 @@ namespace KalaGenset.ERP.Core.Services
                         if (stageName == "Stage1" || stageName == "Stage2")
                         {
                             var jobCode = request.QProcessCheckerData.JobCode;
-                            var pcCode = request.QProcessCheckerData.pccode;
+                            var pcCode = request.QProcessCheckerData.pccode_act;      
                             var partCode = request.QProcessCheckerData.partCode;
+                            var engSrNo = request.QProcessCheckerData.EngSrNo;
+                            var cpySrNo = request.QProcessCheckerData.CpySrNo;
+
+                            var receivedEngCode = $"{jobCode}-->{engSrNo}";  // For Stage 1
+                            var issuedEngCode = $"{jobCode}-->{engSrNo}"; // For Stage 2
 
                             // Build list of valid serial numbers
                             var serialNumbers = new List<string>();
@@ -683,29 +687,85 @@ namespace KalaGenset.ERP.Core.Services
 
                             if (stageName == "Stage1")
                             {
-                                var sqlQuery = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                                var stockWipDataStage1 = await _context.Stockwips.Where(sw => sw.PartCode.StartsWith("001") && sw.ReceivedCode == receivedEngCode &&
+                                                         sw.StageName == "StageI").Select(sw => new
+                                                         {
+                                                            sw.FromProfitCenterCode,
+                                                            sw.ToProfitCenterCode,
+                                                            sw.FromProfitCenterCodeAct,
+                                                            sw.ToProfitCenterCodeAct
+                                                         })
+                                                         .FirstOrDefaultAsync();
 
-                                var parameters = new[]
+                                var sqlQueryIssue = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                              VALUES
+                              (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
+
+                                var parametersIssue = new[]
                                 {
-                                new SqlParameter("@PCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
+                                   new SqlParameter("@FromPCCode_Old", stockWipDataStage1.FromProfitCenterCode ?? (object)DBNull.Value),
+                                   new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
+                                   new SqlParameter("@IssueCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
+                                   new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                                   new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
+                                   new SqlParameter("@ToPCCode_Old", stockWipDataStage1.ToProfitCenterCode ?? (object)DBNull.Value),
+                                   new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                                   new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                                   new SqlParameter("@StageName", "StageI"),
+                                   new SqlParameter("@FromProfitCenterCode_Act", stockWipDataStage1.FromProfitCenterCodeAct ?? (object)DBNull.Value),
+                                   new SqlParameter("@ToProfitCenterCode_Act", stockWipDataStage1.ToProfitCenterCodeAct ?? (object)DBNull.Value)
+                                };
+                                await _context.Database.ExecuteSqlRawAsync(sqlQueryIssue, parametersIssue);
+
+
+
+                                var sqlQueryRecieve = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                              VALUES
+                              (@PCCode_Old, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
+
+                                var parametersRecieve = new[]
+                                {
+                                new SqlParameter("@PCCode_Old", stockWipDataStage1.FromProfitCenterCode ?? (object)DBNull.Value),
                                 new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
                                 new SqlParameter("@ReceivedCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
                                 new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
                                 new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
-                                new SqlParameter("@ToPCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
+                                new SqlParameter("@ToPCCode_Old", stockWipDataStage1.ToProfitCenterCode ?? (object)DBNull.Value),
                                 new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                                 new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                                new SqlParameter("@StageName", "StageIII")
-                            };
-                                await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                                new SqlParameter("@StageName", "StageIII"),
+                                new SqlParameter("@FromProfitCenterCode_Act", stockWipDataStage1.FromProfitCenterCodeAct ?? (object)DBNull.Value),
+                                new SqlParameter("@ToProfitCenterCode_Act", stockWipDataStage1.ToProfitCenterCodeAct ?? (object)DBNull.Value)
+                                };
+                                await _context.Database.ExecuteSqlRawAsync(sqlQueryRecieve, parametersRecieve);
+
+                                await _context.Database.ExecuteSqlRawAsync(
+                                 "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                 new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                 new SqlParameter("@EmpID", request.QProcessCheckerData.ecode),
+                                 new SqlParameter("@TransactionType", 'A'),
+                                 new SqlParameter("@TransactionFrom", "DG Stagewise Checker"),
+                                 new SqlParameter("@TransactionNo", request.QProcessCheckerData.JobCode),
+                                 new SqlParameter("@CompanyCode", request.QProcessCheckerData.cid));
+
                             }
 
                             // Additional for Stage 2
                             if (stageName == "Stage2")
                             {
+                                var stockWipDataSatge2 = await _context.Stockwips.Where(sw => sw.PartCode.StartsWith("401") && sw.IssueCode == issuedEngCode &&
+                                                         sw.StageName == "StageIII").Select(sw => new
+                                                         {
+                                                             sw.FromProfitCenterCode,
+                                                             sw.ToProfitCenterCode,
+                                                             sw.FromProfitCenterCodeAct,
+                                                             sw.ToProfitCenterCodeAct
+                                                         })
+                                                         .FirstOrDefaultAsync();
+
+
                                 if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.CpySrNo))
                                     serialNumbers.Add(request.QProcessCheckerData.CpySrNo);
 
@@ -727,23 +787,47 @@ namespace KalaGenset.ERP.Core.Services
                                 if (!string.IsNullOrWhiteSpace(request.QProcessCheckerData.Bat6SrNo))
                                     serialNumbers.Add(request.QProcessCheckerData.Bat6SrNo);
 
+
+                                var sqlQuery = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act,ToProfitCenterCode_Act)
+                              VALUES
+                              (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
+
+                                var parameters = new[]
+                                {
+                                     new SqlParameter("@FromPCCode_Old", stockWipDataSatge2.FromProfitCenterCode ?? (object)DBNull.Value),
+                                     new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
+                                     new SqlParameter("@IssueCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
+                                     new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                                     new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
+                                     new SqlParameter("@ToPCCode_Old", stockWipDataSatge2.ToProfitCenterCode ?? (object)DBNull.Value),
+                                     new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                                     new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                                     new SqlParameter("@StageName", "StageIII"),
+                                     new SqlParameter("@FromProfitCenterCode_Act",stockWipDataSatge2.FromProfitCenterCodeAct ?? (object)DBNull.Value),
+                                     new SqlParameter("@ToProfitCenterCode_Act", stockWipDataSatge2.ToProfitCenterCodeAct ?? (object)DBNull.Value)
+                                };
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+
                                 var sqlQuery1 = "";
                                 sqlQuery1 = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                               VALUES
-                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                              (@PCCode_Old, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
                                 var parameters1 = new[]
                                {
-                                new SqlParameter("@PCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
+                                new SqlParameter("@PCCode_Old", stockWipDataSatge2.FromProfitCenterCode ?? (object)DBNull.Value),
                                 new SqlParameter("@ProductCode", request.QProcessCheckerData.partCode?.Trim() ?? (object)DBNull.Value),
                                 new SqlParameter("@ReceivedCode", $"{request.QProcessCheckerData.JobCode}-->{request.QProcessCheckerData.EngSrNo}"),
                                 new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
                                 new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
-                                new SqlParameter("@ToPCCode", request.QProcessCheckerData.pccode ?? (object)DBNull.Value),
+                                new SqlParameter("@ToPCCode_Old", stockWipDataSatge2.ToProfitCenterCode ?? (object)DBNull.Value),
                                 new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                                 new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                                new SqlParameter("@StageName", "StageIV")
+                                new SqlParameter("@StageName", "StageIV"),
+                                new SqlParameter("@FromProfitCenterCode_Act", stockWipDataSatge2.FromProfitCenterCodeAct ?? (object)DBNull.Value),
+                                new SqlParameter("@ToProfitCenterCode_Act", stockWipDataSatge2.ToProfitCenterCodeAct ?? (object)DBNull.Value)
                             };
                                 await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
                             }
@@ -756,11 +840,10 @@ namespace KalaGenset.ERP.Core.Services
 
                                 var records = await _context.JobCardDetailsSubs
                                     .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds INNER JOIN JobCard j ON j.JobCode = jds.JobCode
-                                              WHERE j.JobCode = {{0}}
-                                              AND j.PCCode = {{1}}
-                                              AND jds.PartCode = {{2}}
+                                              WHERE j.JobCode = {{0}}                                             
+                                              AND jds.PartCode = {{1}}
                                               AND jds.SerialNo IN ('{serialNumbersParam}')",
-                                                 jobCode, pcCode, partCode)
+                                                 jobCode, partCode)
                                     .ToListAsync();
 
                                 foreach (var record in records)
@@ -775,6 +858,15 @@ namespace KalaGenset.ERP.Core.Services
                                     }
                                 }
 
+                                await _context.Database.ExecuteSqlRawAsync(
+                                  "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                  new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                  new SqlParameter("@EmpID", request.QProcessCheckerData.ecode),
+                                  new SqlParameter("@TransactionType", 'A'),
+                                  new SqlParameter("@TransactionFrom", "DG Stagewise Checker"),
+                                  new SqlParameter("@TransactionNo", request.QProcessCheckerData.JobCode),
+                                  new SqlParameter("@CompanyCode", request.QProcessCheckerData.cid));
+
                                 await _context.SaveChangesAsync();
                             }
                         }
@@ -785,7 +877,7 @@ namespace KalaGenset.ERP.Core.Services
                         else if (stageName == "Stage3")
                         {
                             var pfbCode = request.QProcessCheckerData.PFBCode;
-                            var pcCode = request.QProcessCheckerData.pccode;
+                            var pcCode = request.QProcessCheckerData.pccode_act;
                             var partCode = request.QProcessCheckerData.partCode;
 
                             // Build list of valid serial numbers for Stage 3
@@ -849,6 +941,17 @@ namespace KalaGenset.ERP.Core.Services
                                     }
                                     await _context.SaveChangesAsync();
                                 }
+
+                                await _context.Database.ExecuteSqlRawAsync(
+                                  "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                  new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                  new SqlParameter("@EmpID", request.QProcessCheckerData.ecode),
+                                  new SqlParameter("@TransactionType", 'A'),
+                                  new SqlParameter("@TransactionFrom", "DG Stagewise Checker"),
+                                  new SqlParameter("@TransactionNo", request.QProcessCheckerData.JobCode),
+                                  new SqlParameter("@CompanyCode", request.QProcessCheckerData.cid));
+
+
                                 await _context.SaveChangesAsync();
                             }
                         }
@@ -896,7 +999,7 @@ namespace KalaGenset.ERP.Core.Services
                                 {
                                     await _context.Database.ExecuteSqlRawAsync(
                                         @"UPDATE GetMaxCode SET MaxValue = MaxValue + 1 WHERE Prefix = @Prefix 
-                                AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
+                                        AND TblName = @TblName AND CompCode = @CompCode AND Yr = @Yr",
                                         new SqlParameter("@Prefix", "COR"),
                                         new SqlParameter("@TblName", "CorporateRequisition"),
                                         new SqlParameter("@CompCode", request.QProcessCheckerData.cid),
@@ -929,23 +1032,23 @@ namespace KalaGenset.ERP.Core.Services
                                     // ✅ Use Dictionary for optional fields
                                     var stage2Fields = new (string Label, string? Value)[]
                                     {
-                              ("Cpy Sr.No:", data.CpySrNo),
-                              ("Bat Sr.No:", data.BatSrNo),
-                              ("Bat2 Sr.No:", data.Bat2SrNo),
-                              ("Bat3 Sr.No:", data.Bat3SrNo),
-                              ("Bat4 Sr.No:", data.Bat4SrNo),
-                              ("Bat5 Sr.No:", data.Bat5SrNo),
-                              ("Bat6 Sr.No:", data.Bat6SrNo),
-                              ("Sub-Assembly Part:", item.subAssemblyPart),
-                              ("Remark:", item.Remark),
-                              ("6M Type", item.sixM),
+                                      ("Cpy Sr.No:", data.CpySrNo),
+                                      ("Bat Sr.No:", data.BatSrNo),
+                                      ("Bat2 Sr.No:", data.Bat2SrNo),
+                                      ("Bat3 Sr.No:", data.Bat3SrNo),
+                                      ("Bat4 Sr.No:", data.Bat4SrNo),
+                                      ("Bat5 Sr.No:", data.Bat5SrNo),
+                                      ("Bat6 Sr.No:", data.Bat6SrNo),
+                                      ("Sub-Assembly Part:", item.subAssemblyPart),
+                                      ("Remark:", item.Remark),
+                                      ("6M Type", item.sixM),
                                     };
 
                                     // Invalid values to exclude
                                     var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                                {
-                                 "", "NA", "N/A", "NULL", "0", "-"
-                            };
+                                    {
+                                       "", "NA", "N/A", "NULL", "0", "-"
+                                    };
 
 
                                     reqMessg = $"DG Quality Process Check, Jobcode: {data.JobCode}, KVA: {data.Kva}, Model: {data.model}, Eng Sr.No: {data.EngSrNo}, Alt Sr.No: {data.AltSrNo}";
@@ -960,29 +1063,29 @@ namespace KalaGenset.ERP.Core.Services
                                     var stage3Fields = new (string Label, string? Value)[]
                                     {
 
-                                ("PFBCode:",data.PFBCode),
-                                ("Engine:", data.Engine),
-                                ("Alternator:", data.Alternator),
-                                ("Canopy:", data.Canopy),
-                                ("Control Panel 1:", data.ControlPanel1),
-                                ("Control Panel 2:", data.ControlPanel2),
-                                ("Battery 1:", data.Battery1),
-                                ("Battery 2:", data.Battery2),
-                                ("Battery 3:", data.Battery3),
-                                ("Battery 4:", data.Battery4),
-                                ("Battery 5:", data.Battery5),
-                                ("Battery 6:", data.Battery6),
-                                ("KRM:", data.Krm),
-                                ("Sub-Assembly Part:", item.subAssemblyPart),
-                                ("Remark:", item.Remark),
-                                ("6M Type", item.sixM),
+                                        ("PFBCode:",data.PFBCode),
+                                        ("Engine:", data.Engine),
+                                        ("Alternator:", data.Alternator),
+                                        ("Canopy:", data.Canopy),
+                                        ("Control Panel 1:", data.ControlPanel1),
+                                        ("Control Panel 2:", data.ControlPanel2),
+                                        ("Battery 1:", data.Battery1),
+                                        ("Battery 2:", data.Battery2),
+                                        ("Battery 3:", data.Battery3),
+                                        ("Battery 4:", data.Battery4),
+                                        ("Battery 5:", data.Battery5),
+                                        ("Battery 6:", data.Battery6),
+                                        ("KRM:", data.Krm),
+                                        ("Sub-Assembly Part:", item.subAssemblyPart),
+                                        ("Remark:", item.Remark),
+                                        ("6M Type", item.sixM),
                                     };
 
                                     // Invalid values to exclude
                                     var invalidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                            {
-                                 "", "NA", "N/A", "NULL", "0", "-"
-                            };
+                                    {
+                                       "", "NA", "N/A", "NULL", "0", "-"
+                                    };
 
                                     reqMessg = "DG Quality Process Check, " + string.Join(", ", stage3Fields
                                               .Where(f => !string.IsNullOrEmpty(f.Value) && !invalidValues.Contains(f.Value.Trim()))
@@ -997,7 +1100,7 @@ namespace KalaGenset.ERP.Core.Services
                                     MaxSrNo.Substring(4, 5),
                                     MaxSrNo.Substring(10, 8),
                                     data.ecode.Trim(),
-                                    data.pccode.Trim(),
+                                    data.pccode_act.Trim(),
                                     item.RaiseEsp,
                                     toPCCode,
                                     "High Priority",
@@ -1022,7 +1125,7 @@ namespace KalaGenset.ERP.Core.Services
                             if (stageName == "Stage1" || stageName == "Stage2")
                             {
                                 var jobCode = data.JobCode;
-                                var pcCode = data.pccode;
+                                var pcCode = data.pccode_act;
                                 var partCode = data.partCode;
 
                                 // Build list of valid serial numbers
@@ -1058,11 +1161,11 @@ namespace KalaGenset.ERP.Core.Services
 
                                     var records = await _context.JobCardDetailsSubs
                                         .FromSqlRaw($@"SELECT jds.* FROM JobCardDetailsSub jds 
-                               INNER JOIN JobCard j ON j.JobCode = jds.JobCode
-                               WHERE j.JobCode = {{0}}
-                               AND j.PCCode = {{1}}
-                               AND jds.PartCode = {{2}}
-                               AND jds.SerialNo IN ('{serialNumbersParam}')",
+                                                       INNER JOIN JobCard j ON j.JobCode = jds.JobCode
+                                                       WHERE j.JobCode = {{0}}
+                                                       AND j.PCCode_Act = {{1}}
+                                                       AND jds.PartCode = {{2}}
+                                                       AND jds.SerialNo IN ('{serialNumbersParam}')",
                                                      jobCode, pcCode, partCode)
                                         .ToListAsync();
 
@@ -1078,13 +1181,22 @@ namespace KalaGenset.ERP.Core.Services
                                         }
                                     }
 
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                  "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                  new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                  new SqlParameter("@EmpID", request.QProcessCheckerData.ecode),
+                                  new SqlParameter("@TransactionType", 'R'),
+                                  new SqlParameter("@TransactionFrom", "DG Stagewise Checker"),
+                                  new SqlParameter("@TransactionNo", request.QProcessCheckerData.JobCode),
+                                  new SqlParameter("@CompanyCode", request.QProcessCheckerData.cid));
+
                                     await _context.SaveChangesAsync();
                                 }
                             }
                             else if (stageName == "Stage3")
                             {
                                 var pfbCode = data.PFBCode;
-                                var pcCode = data.pccode;
+                                var pcCode = data.pccode_act;
                                 var partCode = data.partCode;
 
                                 // Build list of valid serial numbers for Stage 3
@@ -1134,12 +1246,20 @@ namespace KalaGenset.ERP.Core.Services
                                         record.Qpcstatus = statusValue;  // ✅ "Rej" or "Rew"
                                     }
 
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                  "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                  new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                  new SqlParameter("@EmpID", request.QProcessCheckerData.ecode),
+                                  new SqlParameter("@TransactionType", 'R'),
+                                  new SqlParameter("@TransactionFrom", "DG Stagewise Checker"),
+                                  new SqlParameter("@TransactionNo", request.QProcessCheckerData.JobCode),
+                                  new SqlParameter("@CompanyCode", request.QProcessCheckerData.cid));
+
                                     await _context.SaveChangesAsync();
                                 }
                             }
                         }
-                    }
-
+                    }                    
                     // 🔹 4. Commit transaction
                     await transaction.CommitAsync();
                 }

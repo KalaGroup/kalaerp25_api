@@ -21,7 +21,8 @@ namespace KalaGenset.ERP.Core.ResponseDTO
     /// </summary>
     public class QProcessCheckerData
     {
-        public string pccode { get; set; }
+        public string pccode_old { get; set; }
+        public string pccode_act { get; set; }
         public string ecode { get; set; }
         public string cid { get; set; }
         public string? JobCode { get; set; }      // For Stage 1 & 2

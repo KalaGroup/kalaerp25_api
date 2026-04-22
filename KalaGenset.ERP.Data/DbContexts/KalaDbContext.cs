@@ -30,6 +30,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<ConvertSerialNoDetail> ConvertSerialNoDetails { get; set; }
 
+    public virtual DbSet<CorporateRequisition> CorporateRequisitions { get; set; }
+
     public virtual DbSet<DepartmentMst> DepartmentMsts { get; set; }
 
     public virtual DbSet<DispatchInstruction> DispatchInstructions { get; set; }
@@ -791,6 +793,50 @@ public partial class KalaDbContext : DbContext
                 .IsFixedLength()
                 .HasComment("P- Pending Q - Quality C- PV I - INvoice D - Done")
                 .HasColumnName("TRSerialStatus");
+        });
+
+        modelBuilder.Entity<CorporateRequisition>(entity =>
+        {
+            entity.HasKey(e => e.ReqCode);
+
+            entity.ToTable("CorporateRequisition");
+
+            entity.Property(e => e.ReqCode).HasMaxLength(50);
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.AssignStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.EmpCode).HasMaxLength(50);
+            entity.Property(e => e.FeedbackDt).HasColumnType("datetime");
+            entity.Property(e => e.FeedbackRating)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("0")
+                .IsFixedLength();
+            entity.Property(e => e.FeedbackRemark).HasDefaultValue("NIL");
+            entity.Property(e => e.FeedbackStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.FromPccode)
+                .HasMaxLength(50)
+                .HasColumnName("FromPCCode");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.Priority)
+                .HasMaxLength(50)
+                .HasDefaultValue("Low Priority");
+            entity.Property(e => e.TargetDate).HasColumnType("datetime");
+            entity.Property(e => e.ToEmpCode).HasMaxLength(50);
+            entity.Property(e => e.ToPccode)
+                .HasMaxLength(50)
+                .HasColumnName("ToPCCode");
+            entity.Property(e => e.Yr).HasMaxLength(50);
         });
 
         modelBuilder.Entity<DepartmentMst>(entity =>
@@ -3443,6 +3489,10 @@ public partial class KalaDbContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.JobCode).HasMaxLength(20);
+            entity.Property(e => e.PccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode_Act");
         });
 
         modelBuilder.Entity<PcstageWiseRateChange>(entity =>
@@ -3461,6 +3511,10 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("PCCode");
+            entity.Property(e => e.PccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode_Act");
             entity.Property(e => e.StageName)
                 .HasMaxLength(20)
                 .IsUnicode(false);
@@ -3636,6 +3690,10 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(30)
                 .IsUnicode(false)
                 .HasDefaultValueSql("((0))");
+            entity.Property(e => e.PccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("PCCode_Act");
             entity.Property(e => e.Pfbrate).HasColumnName("PFBRate");
             entity.Property(e => e.Pfbtype)
                 .HasMaxLength(10)
@@ -4236,6 +4294,10 @@ public partial class KalaDbContext : DbContext
             entity.HasIndex(e => new { e.ReceivedQty, e.ReceivedDate, e.PartCode, e.ToProfitCenterCode }, "_dta_index_STOCKWIP_14_904142762__K9_K8_K2_K6").HasFillFactor(80);
 
             entity.Property(e => e.FromProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.FromProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("FromProfitCenterCode_Act");
             entity.Property(e => e.Grade)
                 .HasMaxLength(5)
                 .IsUnicode(false);
@@ -4258,6 +4320,10 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValue("0");
             entity.Property(e => e.StockType).HasDefaultValueSql("('0')");
             entity.Property(e => e.ToProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.ToProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ToProfitCenterCode_Act");
         });
 
         modelBuilder.Entity<SupplierPriceListChanged>(entity =>

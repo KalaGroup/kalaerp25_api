@@ -8,8 +8,11 @@ namespace KalaGenset.ERP.Core.Request.Jobcard
 {
     public class Jobcard1CheckerSubmitRequest
     {
-        public string JobCode { get; set; }
-        public string Status { get; set; }  // "Auth" or "Reject"
+        public string? EmpCode { get; set; }
+        public string? PCCode_Act { get; set; }
+        public string? PCCode_Old { get; set; }
+        public string? JobCode { get; set; }
+        public string? Status { get; set; }  // "Auth" or "Reject"
         public List<CheckerDetailItem> Details { get; set; }
     }
 

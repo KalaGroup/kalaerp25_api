@@ -24,7 +24,7 @@ namespace KalaGenset.ERP.Core.Services
             _context = context;
         }
 
-        public async Task<List<Dictionary<string, object>>> GetDGAsync(string strJobCardType, string strCompID)
+        public async Task<List<Dictionary<string, object>>> GetDGAsync(string strJobCardType, string strCompID, string strAssemblyLine)
         {
             var data = new List<Dictionary<string, object>>();
 
@@ -32,12 +32,13 @@ namespace KalaGenset.ERP.Core.Services
             {
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "GetJobCardDGDts";
+                    cmd.CommandText = "GetJobCardDGDts_Checker_maker";
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.CommandTimeout = 0;
 
                     cmd.Parameters.Add(new SqlParameter("@JobCardType", SqlDbType.Char) { Value = strJobCardType });
                     cmd.Parameters.Add(new SqlParameter("@CompCode", SqlDbType.Char) { Value = strCompID });
+                    cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.VarChar, 10) { Value = strAssemblyLine });
 
                     if (conn.State == ConnectionState.Closed)
                         await conn.OpenAsync();
@@ -1187,27 +1188,19 @@ namespace KalaGenset.ERP.Core.Services
                     var sqlConn = (SqlConnection)_context.Database.GetDbConnection();
                     var sqlTran = (SqlTransaction)_context.Database.CurrentTransaction.GetDbTransaction();
 
+                    var maxJcRecord = await _context.GetMaxCodes.Where(g => g.TblName == "JobCard" && g.CompCode == compCode
+                                      && g.Prefix == "JCD" && g.Yr == yr).FirstOrDefaultAsync();
+
+                    int intMaxJC = maxJcRecord != null ? Convert.ToInt32(maxJcRecord.MaxValue) : 0;
+
                     foreach (var row in activeRows)
                     {
                         #region STEP 2 — GETMAXNO INLINE — Generate unique JobCard number per row
-                        var maxJcRecord = await _context.GetMaxCodes
-                            .Where(g => g.TblName == "JobCard" && g.CompCode == compCode
-                                     && g.Prefix == "JCD" && g.Yr == yr)
-                            .FirstOrDefaultAsync();
+                        intMaxJC++;  // Increment in memory each iteration
 
-                        int intMaxJC = maxJcRecord != null ? Convert.ToInt32(maxJcRecord.MaxValue) : 0;
-                        string strMaxJC = intMaxJC switch
-                        {
-                            0 => "000001",
-                            < 9 => "00000" + (intMaxJC + 1),
-                            < 99 => "0000" + (intMaxJC + 1),
-                            < 999 => "000" + (intMaxJC + 1),
-                            < 9999 => "00" + (intMaxJC + 1),
-                            < 99999 => "0" + (intMaxJC + 1),
-                            _ => Convert.ToString(intMaxJC + 1)
-                        };
+                        string strMaxJC = intMaxJC.ToString("D6");  // Pads to 6 digits: 000001, 001118, etc.
                         string jobCardNo = $"JCD/{yr}/{compCode}{strMaxJC}";
-
+                       
                         if (maxJcRecord != null)
                         {
                             maxJcRecord.MaxValue = int.Parse(strMaxJC);
@@ -1611,11 +1604,9 @@ namespace KalaGenset.ERP.Core.Services
 
                         if (jobcard1CheckerSubmitReq.Status == "Auth")
                         {
-                            // ── Authorize the job card ──
                             jobCard.Auth = true;
                             await _context.SaveChangesAsync();
 
-                            // ── Insert checker details for all 6Ms ──
                             foreach (var detail in jobcard1CheckerSubmitReq.Details)
                             {
                                 await _context.Database.ExecuteSqlRawAsync(
@@ -1629,7 +1620,6 @@ namespace KalaGenset.ERP.Core.Services
                                     new SqlParameter("@Status", "AUTH"));
                             }
 
-                            // Skipped for CompCode 28 (Bangalore) — business rule added 21/11/2025.
                             if (compCode == "28")
                             {
                                 await transaction.CommitAsync();
@@ -1637,10 +1627,8 @@ namespace KalaGenset.ERP.Core.Services
                                 return;
                             }
 
-                            // ── Fetch Job Card header for PcCode ──
                             string pcCode = jobCard.Pccode?.Trim() ?? "";
 
-                            // ── Fetch all JobCardDetails rows for this job card ──
                             var jobCard1Details = await _context.JobCardDetails
                                 .Where(d => d.JobCode == jobcard1CheckerSubmitReq.JobCode)
                                 .Select(d => new { d.PartCode, d.Qty })
@@ -1649,48 +1637,43 @@ namespace KalaGenset.ERP.Core.Services
                             if (!jobCard1Details.Any())
                             {
                                 await transaction.CommitAsync();
-                                result = "No Job Card Details found.";
+                                result = $"{jobcard1CheckerSubmitReq.JobCode} authorized. But No Job Card Details found for Requisition.";
                                 return;
                             }
+
+                            int intMaxReq = await _context.GetMaxCodes
+                                .Where(g => g.TblName == "MaterialRequisitionWithOutPlan"
+                                         && g.CompCode == compCode
+                                         && g.Prefix == "REQ"
+                                         && g.Yr == yr)
+                                .Select(g => (int?)g.MaxValue)
+                                .FirstOrDefaultAsync() ?? 0;                          
 
                             var reqCodes = new List<string>();
 
                             foreach (var detail in jobCard1Details)
                             {
                                 string partCode = detail.PartCode?.Trim() ?? "";
-                                int qty = Convert.ToInt32(detail.Qty);
+                                double qty = detail.Qty;
 
-                                #region GETMAXNO INLINE — MaterialRequisitionWithOutPlan
-                                var maxReqRecord = await _context.GetMaxCodes
-                                    .Where(g => g.TblName == "MaterialRequisitionWithOutPlan"
-                                             && g.CompCode == compCode
-                                             && g.Prefix == "REQ"
-                                             && g.Yr == yr)
-                                    .FirstOrDefaultAsync();
-
-                                int intMaxReq = maxReqRecord != null ? Convert.ToInt32(maxReqRecord.MaxValue) : 0;
-                                string strMaxReq = (intMaxReq + 1).ToString("D6");
+                                intMaxReq++;
+                                string strMaxReq = intMaxReq.ToString("D6");
                                 string reqCode = $"REQ/{yr}/{compCode}{strMaxReq}";
+                                
 
-                                if (maxReqRecord != null)
-                                {
-                                    maxReqRecord.MaxValue = int.Parse(strMaxReq);
-                                    await _context.SaveChangesAsync();
-                                }
-                                #endregion
-
-                                #region INSERT Requisition master header via SP
                                 await _context.Database.ExecuteSqlRawAsync(
                                     "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
-                                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
+                                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, @ProfitCenterCode_Act, @ToProfitCenterCode_Act " +
                                     "@ClassCode, @ActNo, @SourceCode, @CompanyCode, @REQStatus, @REQType, " +
-                                    "@Remark, @Discard, @Active, @Auth, @@PCCodeAct",
+                                    "@Remark, @Discard, @Active, @Auth",
                                     new SqlParameter("@REQCode", reqCode),
                                     new SqlParameter("@MaxSrNo", reqCode.Substring(10, 8)),
                                     new SqlParameter("@Dt", DateTime.Now),
                                     new SqlParameter("@Yr", yr),
                                     new SqlParameter("@ProfitCenterCode", pcCode),
                                     new SqlParameter("@ToProfitCenterCode", "23.001"),
+                                    new SqlParameter("@ProfitCenterCode_Act", "23.001"),
+                                    new SqlParameter("@ToProfitCenterCode_Act", jobcard1CheckerSubmitReq.PCCode_Act),
                                     new SqlParameter("@ClassCode", partCode),
                                     new SqlParameter("@ActNo", qty.ToString()),
                                     new SqlParameter("@SourceCode", jobcard1CheckerSubmitReq.JobCode),
@@ -1700,13 +1683,8 @@ namespace KalaGenset.ERP.Core.Services
                                     new SqlParameter("@Remark", $"Auto Req For Plan No {jobcard1CheckerSubmitReq.JobCode}"),
                                     new SqlParameter("@Discard", 1),
                                     new SqlParameter("@Active", 1),
-                                    new SqlParameter("@Auth", 1),
-                                    new SqlParameter("@PCCodeAct", jobCard.PccodeAct)
-                                    );
-                                    
-                                #endregion
+                                    new SqlParameter("@Auth", 1));                               
 
-                                #region Fetch BOM component list via SP
                                 var bomRows = new List<(string PartCode, double Qty)>();
                                 using (var bomCmd = new SqlCommand(
                                     $"EXEC InternalReqLogisticsdetailsDG '{partCode}'",
@@ -1717,14 +1695,14 @@ namespace KalaGenset.ERP.Core.Services
                                         bomRows.Add((
                                             bomReader["Partcode"]?.ToString()?.Trim() ?? "",
                                             double.Parse(bomReader["RaiseReqQty"]?.ToString() ?? "0")));
-                                }
-                                #endregion
+                                }                              
 
-                                #region INSERT one detail line per BOM component
                                 int reqSrNo = 0;
                                 foreach (var (bomPartCode, bomQty) in bomRows)
                                 {
                                     reqSrNo++;
+                                    Console.WriteLine($"[AUTH-DETAIL] ReqCode: {reqCode}, SrNo: {reqSrNo}, BomPartCode: {bomPartCode}, BomQty: {bomQty}, FinalQty: {bomQty * qty}");
+
                                     await _context.Database.ExecuteSqlRawAsync(
                                         "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus",
                                         new SqlParameter("@REQCode", reqCode),
@@ -1733,41 +1711,61 @@ namespace KalaGenset.ERP.Core.Services
                                         new SqlParameter("@Qty", bomQty * qty),
                                         new SqlParameter("@REQStatus", "P"));
                                 }
-                                #endregion
 
-                                #region INSERT audit log entry
                                 await _context.Database.ExecuteSqlRawAsync(
                                     "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
                                     new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
-                                    new SqlParameter("@EmpID", "Auto Against Plan"),
+                                    new SqlParameter("@EmpID", jobcard1CheckerSubmitReq.EmpCode),
                                     new SqlParameter("@TransactionType", "S"),
-                                    new SqlParameter("@TransactionFrom", "MaterialRequisitionWithoutPlan"),
+                                    new SqlParameter("@TransactionFrom", "Jobcard Checker"),
                                     new SqlParameter("@TransactionNo", reqCode),
                                     new SqlParameter("@CompanyCode", compCode));
-                                #endregion
+
+                                Console.WriteLine($"[AUTH-AUDIT] ReqCode: {reqCode} audit log inserted");
 
                                 reqCodes.Add(reqCode);
                             }
+                         
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE GetMaxCode SET MaxValue = @MaxValue " +
+                                "WHERE TblName = @TblName AND CompCode = @CompCode AND Prefix = @Prefix AND Yr = @Yr",
+                                new SqlParameter("@MaxValue", intMaxReq),
+                                new SqlParameter("@TblName", "MaterialRequisitionWithOutPlan"),
+                                new SqlParameter("@CompCode", compCode),
+                                new SqlParameter("@Prefix", "REQ"),
+                                new SqlParameter("@Yr", yr));                          
 
                             result = reqCodes.Any()
-                                ? $"{jobcard1CheckerSubmitReq.JobCode} With Requisition No: {string.Join("#", reqCodes)}"
-                                : jobcard1CheckerSubmitReq.JobCode;
+                                ? $"{jobcard1CheckerSubmitReq.JobCode} Authorized Successfully. Requisition No(s): {string.Join(" | ", reqCodes)}"
+                                : $"{jobcard1CheckerSubmitReq.JobCode} Authorized Successfully. No Requisitions Generated.";
                         }
                         else
                         {
-                            // ── Reject flow: insert checker details with COR requisition codes ──
+                            int intMaxReq = await _context.GetMaxCodes
+                                .Where(g => g.TblName == "CorporateRequisition"
+                                         && g.CompCode == compCode
+                                         && g.Prefix == "COR"
+                                         && g.Yr == yr)
+                                .Select(g => (int?)g.MaxValue)
+                                .FirstOrDefaultAsync() ?? 0;
+
+                            int originalMaxValue = intMaxReq;
+                            var rejReqCodes = new List<string>();                           
+
                             foreach (var detail in jobcard1CheckerSubmitReq.Details)
                             {
-                                var maxReqRecord = await _context.GetMaxCodes
-                                    .Where(g => g.TblName == "CorporateRequisition"
-                                             && g.CompCode == compCode
-                                             && g.Prefix == "COR"
-                                             && g.Yr == yr)
-                                    .FirstOrDefaultAsync();
+                                string reqCode = "0";
 
-                                int intMaxReq = maxReqRecord != null ? Convert.ToInt32(maxReqRecord.MaxValue) : 0;
-                                string strMaxReq = (intMaxReq + 1).ToString("D6");
-                                string reqCode = $"COR/{yr}/{compCode}{strMaxReq}";
+                                if (!string.IsNullOrWhiteSpace(detail.AssignTo))
+                                {
+                                    intMaxReq++;
+                                    string strMaxReq = intMaxReq.ToString("D6");
+                                    reqCode = $"COR/{yr}/{compCode}{strMaxReq}";                                   
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"[REJ-LOOP] AssignTo is blank, skipping COR generation, SixM: {detail.SixM}");
+                                }
 
                                 await _context.Database.ExecuteSqlRawAsync(
                                     "INSERT INTO JobCardCheckerDetails (PlanCode, SixMName, Description, AssignTo, CorReqNo, Status) " +
@@ -1778,17 +1776,104 @@ namespace KalaGenset.ERP.Core.Services
                                     new SqlParameter("@AssignTo", detail.AssignTo ?? "0"),
                                     new SqlParameter("@CorReqNo", reqCode),
                                     new SqlParameter("@Status", "REJ"));
+
+                                if (!string.IsNullOrWhiteSpace(detail.AssignTo))
+                                {
+                                    string ReqMsg = $"Jobcard Checker  JobCode: {jobcard1CheckerSubmitReq.JobCode?.Trim()}, " +
+                                                    $"6MType: {detail.SixM?.Trim()}, " +
+                                                    $"Description: {detail.Description?.Trim()}";
+
+                                    string ToPCCode = _context.Employees
+                                        .Where(e => e.Ecode == detail.AssignTo)
+                                        .Select(e => e.ProfitCenter)
+                                        .FirstOrDefault() ?? "0";
+
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "INSERT INTO CorporateRequisition " +
+                                        "(ReqCode, Dt, Yr, MaxSrNo, EmpCode, FromPCCode, ToEmpCode, ToPCCode, Priority, ReqMsg, CompanyCode, AssignStatus, Active, Discard) " +
+                                        "VALUES (@ReqCode, @Dt, @Yr, @MaxSrNo, @EmpCode, @FromPCCode, @ToEmpCode, @ToPCCode, @Priority, @ReqMsg, @CompanyCode, @AssignStatus, @Active, @Discard)",
+                                        new SqlParameter("@ReqCode", reqCode.Trim()),
+                                        new SqlParameter("@Dt", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                                        new SqlParameter("@Yr", reqCode.Substring(4, 5)),
+                                        new SqlParameter("@MaxSrNo", reqCode.Substring(12, 6)),
+                                        new SqlParameter("@EmpCode", jobcard1CheckerSubmitReq.EmpCode),
+                                        new SqlParameter("@FromPCCode", jobcard1CheckerSubmitReq.PCCode_Old),
+                                        new SqlParameter("@ToEmpCode", detail.AssignTo),
+                                        new SqlParameter("@ToPCCode", ToPCCode),
+                                        new SqlParameter("@Priority", "High Priority"),
+                                        new SqlParameter("@ReqMsg", ReqMsg.Trim()),
+                                        new SqlParameter("@CompanyCode", reqCode.Substring(10, 2)),
+                                        new SqlParameter("@AssignStatus", "P"),
+                                        new SqlParameter("@Active", "1"),
+                                        new SqlParameter("@Discard", "1"));
+
+                                    using var actionCmd = new SqlCommand(
+                                        "INSERT INTO CorporateRequisitionActionTaken " +
+                                        "(Dt, ReqCode, AssignByCode, AssignToCode, ActionTaken, Priority, ActionStatus, AssOrAction, Active, Discard) " +
+                                        "VALUES (@Dt, @ReqCode, @AssignByCode, @AssignToCode, @ActionTaken, @Priority, @ActionStatus, @AssOrAction, @Active, @Discard); " +
+                                        "SELECT SCOPE_IDENTITY();",
+                                        sqlConn, sqlTran);
+
+                                    actionCmd.Parameters.AddRange(new[]
+                                    {
+                                        new SqlParameter("@Dt",           DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                                       new SqlParameter("@ReqCode",      reqCode.Trim()),
+                                       new SqlParameter("@AssignByCode", jobcard1CheckerSubmitReq.EmpCode),
+                                       new SqlParameter("@AssignToCode", detail.AssignTo ?? "0"),
+                                       new SqlParameter("@ActionTaken",  ""),
+                                       new SqlParameter("@Priority",     "High Priority"),
+                                       new SqlParameter("@ActionStatus", "P"),
+                                       new SqlParameter("@AssOrAction",  "ASS"),
+                                       new SqlParameter("@Active",       "1"),
+                                       new SqlParameter("@Discard",      "1")
+                                    });
+
+                                    object lblDispID = await actionCmd.ExecuteScalarAsync();
+
+                                    await _context.CorporateRequisitions
+                                        .Where(r => r.ReqCode == reqCode.Trim())
+                                        .ExecuteUpdateAsync(s => s.SetProperty(r => r.AssignStatus, "C"));
+
+                                    Console.WriteLine($"[REJ-COR] ReqCode: {reqCode} inserted, ActionID: {lblDispID}");
+
+                                    rejReqCodes.Add(reqCode);
+                                }
                             }
 
-                            result = jobcard1CheckerSubmitReq.JobCode;
+                            if (intMaxReq > originalMaxValue)
+                            {                              
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    "UPDATE GetMaxCode SET MaxValue = @MaxValue " +
+                                    "WHERE TblName = @TblName AND CompCode = @CompCode AND Prefix = @Prefix AND Yr = @Yr",
+                                    new SqlParameter("@MaxValue", intMaxReq),
+                                    new SqlParameter("@TblName", "CorporateRequisition"),
+                                    new SqlParameter("@CompCode", compCode),
+                                    new SqlParameter("@Prefix", "COR"),
+                                    new SqlParameter("@Yr", yr));
+                            }
+
+                            await _context.Database.ExecuteSqlRawAsync(
+                                   "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                   new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
+                                   new SqlParameter("@EmpID", jobcard1CheckerSubmitReq.EmpCode),
+                                   new SqlParameter("@TransactionType", "Rej"),
+                                   new SqlParameter("@TransactionFrom", "Jobcard Checker"),
+                                   new SqlParameter("@TransactionNo", rejReqCodes),
+                                   new SqlParameter("@CompanyCode", compCode));
+
+
+                            result = rejReqCodes.Any()
+                                ? $"{jobcard1CheckerSubmitReq.JobCode} Rejected Successfully. Corporate Requisition No(s): {string.Join(" | ", rejReqCodes)}"
+                                : $"{jobcard1CheckerSubmitReq.JobCode} Rejected. No Requisitions Generated.";
                         }
 
-                        await transaction.CommitAsync();
+                        await transaction.CommitAsync();                        
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Console.WriteLine($"[ERROR] Rolling back for JobCode: {jobcard1CheckerSubmitReq.JobCode}, Error: {ex.Message}");
                         await transaction.RollbackAsync();
-                        throw; // re-throw so the outer catch captures it
+                        throw;
                     }
                 });
 
@@ -1796,8 +1881,121 @@ namespace KalaGenset.ERP.Core.Services
             }
             catch (Exception ex)
             {
-                return $"StackTrace {ex.StackTrace} Message {ex.Message}";
+                Console.WriteLine($"[FATAL] JobCode: {jobcard1CheckerSubmitReq.JobCode}, Error: {ex.Message}, StackTrace: {ex.StackTrace}");
+                return $"Error processing JobCode {jobcard1CheckerSubmitReq.JobCode}: {ex.Message}";
             }
+        }
+
+        public async Task<List<Dictionary<string, object?>>> GetJobCardDG2DtsAsync(string strJobCardType, string strcompID, string strAssemblyLine)
+        {
+            var result = new List<Dictionary<string, object?>>();
+            try
+            {               
+                using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+                using (var command = new SqlCommand("GetJobCardDGDts_Checker_Maker", connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    command.Parameters.AddWithValue("@JobCardType", strJobCardType ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@CompCode", strcompID ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@AssemblyLine", strAssemblyLine ?? (object)DBNull.Value);
+
+                    await connection.OpenAsync();
+
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                var columnName = reader.GetName(i);
+                                var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
+                                row[columnName] = value;
+                            }
+
+                            result.Add(row);
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+
+            return result;
+        }
+
+        public async Task<List<Dictionary<string, object?>>> GetJobCard2CPAsync()
+        {
+            var result = new List<Dictionary<string, object?>>();
+
+            using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var command = new SqlCommand("GetJObCard2CP", connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+
+                await connection.OpenAsync();
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            var columnName = reader.GetName(i);
+                            var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
+                            row[columnName] = value;
+                        }
+
+                        result.Add(row);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+
+        public async Task<string> GetCPStkAsync(string strKVA, string ph, string panelType, string compId, string assemblyLine)
+        {
+            string spName = compId == "28" ? "GetCPStk_Bangalore_Checker_Maker" : "GetCPStk_Checker_Maker";
+            string cpStk = "";
+
+            using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var command = new SqlCommand(spName, connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+                command.Parameters.AddWithValue("@KVA", strKVA?.Trim() ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@ph", ph?.Trim() ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@PanelType", panelType?.Trim() ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@AssemblyLine", assemblyLine ?? (object)DBNull.Value);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    int rowIndex = 0;
+                    while (await reader.ReadAsync())
+                    {
+                        string stk = reader["Stk"]?.ToString()?.Trim() ?? "";
+                        cpStk = rowIndex == 0 ? stk : cpStk + "-->" + stk;
+                        rowIndex++;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(cpStk))
+                cpStk = "0-->0";
+
+            if (cpStk.Length < 5)
+                cpStk = cpStk + "-->0";
+
+            return cpStk;
         }
     }
 }
