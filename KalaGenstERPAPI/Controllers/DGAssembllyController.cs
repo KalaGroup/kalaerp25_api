@@ -283,9 +283,17 @@ namespace KalaGenset.ERP.API.Controllers
             }
         }
 
+        //[HttpPost("UploadTestReportAndPDIRVideo")]
+        //[RequestSizeLimit(104857600)] // 100MB
+        //[RequestFormLimits(MultipartBodyLengthLimit = 104857600)] // 100MB
+        //public async Task<IActionResult> UploadTestReportAndPDIRVideo([FromForm] UploadVideopdfDGAssemblyRequest uploadVideopdfDGAssemblyReq)
+        //{
+        //    var result = await _engineDGAssembly.UploadVideoAndPDFAsync(uploadVideopdfDGAssemblyReq);
+        //    return Ok(result);
+        //}
         [HttpPost("UploadTestReportAndPDIRVideo")]
-        [RequestSizeLimit(104857600)] // 100MB
-        [RequestFormLimits(MultipartBodyLengthLimit = 104857600)] // 100MB
+        [RequestSizeLimit(524288000)] // 500MB
+        [RequestFormLimits(MultipartBodyLengthLimit = 524288000)] // 500MB
         public async Task<IActionResult> UploadTestReportAndPDIRVideo([FromForm] UploadVideopdfDGAssemblyRequest uploadVideopdfDGAssemblyReq)
         {
             var result = await _engineDGAssembly.UploadVideoAndPDFAsync(uploadVideopdfDGAssemblyReq);
