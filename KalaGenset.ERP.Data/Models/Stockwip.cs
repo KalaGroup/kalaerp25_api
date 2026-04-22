@@ -32,4 +32,8 @@ public partial class Stockwip
     public string? LotNo { get; set; }
 
     public string? Grade { get; set; }
+
+    public string? FromProfitCenterCodeAct { get; set; }
+
+    public string? ToProfitCenterCodeAct { get; set; }
 }

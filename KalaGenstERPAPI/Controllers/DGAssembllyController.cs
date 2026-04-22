@@ -26,7 +26,6 @@ namespace KalaGenset.ERP.API.Controllers
 
         [HttpPost("GetStageScanDetails")]
         public async Task<IActionResult> GetStageScanDetails([FromBody] EngineDetailsRequest request)
-
         {
             if (request == null || string.IsNullOrEmpty(request.SerialNo))
             {
@@ -62,10 +61,10 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result);
         }
 
-        [HttpGet("GetDGKitDetails/{PrdPartCode}/{PCCode}")]
-        public async Task<IActionResult> GetDGKitDetails(string PrdPartCode, string PCCode)
+        [HttpGet("GetDGKitDetails/{PrdPartCode}/{PCCode_Old}/{PCCode_Act}")]
+        public async Task<IActionResult> GetDGKitDetails(string PrdPartCode, string PCCode_Old, string PCCode_Act )
         {
-            var result = await _engineDGAssembly.GetDGKitDetailsFromDB(PrdPartCode, PCCode);
+            var result = await _engineDGAssembly.GetDGKitDetailsFromDB(PrdPartCode, PCCode_Old, PCCode_Act);
             if (result == null || !result.Any())
             {
                 return NotFound("No data found.");
@@ -84,13 +83,13 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result);
         }
 
-        [HttpGet("GetMOFAddPartDts/{strMOFCode}")]
-        public async Task<IActionResult> GetMOFAddPartDts(string strMOFCode)
+        [HttpGet("GetMOFAddPartDts/{strMOFCode}/{AssemblyLine}")]
+        public async Task<IActionResult> GetMOFAddPartDts(string strMOFCode, string AssemblyLine )
         {
             // Decode the encoded URL value (standard decoding)
             strMOFCode = Uri.UnescapeDataString(strMOFCode);
 
-            var result = await _engineDGAssembly.GetMOFAdditionalPartDtsFromDB(strMOFCode);
+            var result = await _engineDGAssembly.GetMOFAdditionalPartDtsFromDB(strMOFCode, AssemblyLine);
 
             if (result == null || !result.Any())
             {
@@ -160,14 +159,14 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result);
         }
         [HttpGet("GetJobCardDGDetails/{strJobCardType}/{strcompID}")]
-        public async Task<IActionResult> GetJobCardDGDetails(string strJobCardType, string strcompID)
+        public async Task<IActionResult> GetJobCardDGDetails(string strJobCardType, string strcompID, string assemblyLine)
         {
             if (strcompID == null || string.IsNullOrEmpty(strcompID))
             {
                 return BadRequest("Invalid request parameters.");
             }
 
-            var result = await _engineDGAssembly.GetJobCardDGDtsAsync(strJobCardType, strcompID);
+            var result = await _engineDGAssembly.GetJobCardDGDtsAsync(strJobCardType, strcompID, assemblyLine);
 
             // var firstItem = result?.FirstOrDefault();  // Safely get the first item
 

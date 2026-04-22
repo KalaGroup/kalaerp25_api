@@ -103,4 +103,10 @@ namespace KalaGenset.ERP.Data.Models
         public string Stage4Status { get; set; }
         public string? PFBCode { get; set; }
     }
+
+    public class StageScanCombinedResult
+    {
+        public object? MakerCheckerResult { get; set; }
+        public object? OldResult { get; set; }          // from GetStageScanDts
+    }
 }

@@ -17,16 +17,48 @@ namespace KalaGenset.ERP.API.Controllers
         }
 
         [HttpGet("GetJobCard1")]
-        public async Task<IActionResult> GetJobCard1Details(string CompId)
+        public async Task<IActionResult> GetJobCard1Details(string CompId, string AssemblyLine)
         {
             if (string.IsNullOrWhiteSpace(CompId))
                 return BadRequest("CompId is required.");
 
-            var data = await _jobcardService.GetDGAsync("DGWOP", CompId);
+            var data = await _jobcardService.GetDGAsync("DGWOP", CompId, AssemblyLine);
 
             if (data == null || data.Count == 0)
                 return NotFound("No records found.");
 
+            return Ok(data);
+        }
+
+        [HttpGet("GetJobCard2")]
+        public async Task<IActionResult> GetJobCard2Details(string CompId, string AssemblyLine)
+        {
+            if (string.IsNullOrWhiteSpace(CompId))
+                return BadRequest("CompId is required.");
+
+            var data = await _jobcardService.GetJobCardDG2DtsAsync("DGWIP", CompId, AssemblyLine);
+
+            if (data == null || data.Count == 0)
+                return NotFound("No records found.");
+
+            return Ok(data);
+        }
+
+        [HttpGet("GetCPDetails")]
+        public async Task<IActionResult> GetCPDetails()
+        {         
+            var data = await _jobcardService.GetJobCard2CPAsync();
+            if (data == null || data.Count == 0)
+                return NotFound("No records found.");
+            return Ok(data);
+        }
+
+        [HttpGet("GetCPStk")]
+        public async Task<IActionResult> GetCPStkDetails(string strKVA, string ph, string panelType, string compId, string assemblyLine)
+        {
+            var data = await _jobcardService.GetCPStkAsync(strKVA, ph, panelType, compId, assemblyLine);
+            if (string.IsNullOrEmpty(data))
+                return NotFound("No records found.");
             return Ok(data);
         }
 

@@ -18,4 +18,6 @@ public partial class PcstageWiseRateChange
     public string JobCode { get; set; } = null!;
 
     public double Rate { get; set; }
+
+    public string? PccodeAct { get; set; }
 }

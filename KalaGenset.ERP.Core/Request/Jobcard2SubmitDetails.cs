@@ -9,6 +9,7 @@ namespace KalaGenset.ERP.Core.RequestDTO
     public class Jobcard2SubmitDetails
     {
         public string PCCode { get; set; }
+        public string PCCode_Act { get; set; }
         public string Remark { get; set; }
         public List<ModelDetailDto> JobCard2Dts { get; set; }
     }

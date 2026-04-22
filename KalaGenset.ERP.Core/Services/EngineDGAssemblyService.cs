@@ -1,5 +1,6 @@
 ﻿using System.Data;
 using System.Reflection;
+using System.Reflection.Metadata;
 using System.Text.RegularExpressions;
 using System.Web;
 using AutoMapper;
@@ -13,6 +14,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace KalaGenset.ERP.Core.Services
 {
@@ -32,105 +34,160 @@ namespace KalaGenset.ERP.Core.Services
             _configuration = configuration;
             _secretKey = configuration["JwtSettings:SecretKey"];
         }
-        public async Task<BaseGetStageScanDts?> GetStageScanDetailsByQrSrNo(EngineDetailsRequest reqParam)
+        //public async Task<BaseGetStageScanDts?> GetStageScanDetailsByQrSrNo(EngineDetailsRequest reqParam)
+        //{
+        //    try
+        //    {
+        //        string decodeQRSrNo = HttpUtility.UrlDecode(reqParam.SerialNo);
+
+        //        if (reqParam.Stage == "0") //stage 1 start
+        //        {
+        //            var parameters = new[]
+        //                   {
+        //                   new SqlParameter("@strSrNo",decodeQRSrNo),
+        //                   new SqlParameter("@strPartCode", reqParam.PartCode),
+        //                   new SqlParameter("@strCat", reqParam.Category),
+        //                   new SqlParameter("@strStage", reqParam.Stage),
+        //                   new SqlParameter("@PCCode",reqParam.PCCode)
+        //            };
+
+        //            var results = await _context.Database
+        //                .SqlQueryRaw<GetStageFirstStartDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
+        //                .ToListAsync();
+
+        //            return results.FirstOrDefault();
+        //        }
+        //        else if (reqParam.Stage == "1")  // stage 1 End
+        //        {
+        //            var parameters = new[]
+        //                {
+        //                  new SqlParameter("@strSrNo",decodeQRSrNo),
+        //                  new SqlParameter("@strPartCode", reqParam.PartCode),
+        //                  new SqlParameter("@strCat", reqParam.Category),
+        //                  new SqlParameter("@strStage", reqParam.Stage),
+        //                  new SqlParameter("@PCCode",reqParam.PCCode)
+        //            };
+
+        //            var results = await _context.Database
+        //                .SqlQueryRaw<GetStageFirstEndDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
+        //                .ToListAsync();
+
+        //            return results.FirstOrDefault();
+        //        }
+        //        else if (reqParam.Stage == "3") // stage 2 -- no start, end for second stage. fetch data at once.
+        //        {
+        //            var parameters = new[]
+        //            {
+        //                  new SqlParameter("@strSrNo",decodeQRSrNo),
+        //                  new SqlParameter("@strPartCode", reqParam.PartCode),
+        //                  new SqlParameter("@strCat", reqParam.Category),
+        //                  new SqlParameter("@strStage", reqParam.Stage),
+        //                  new SqlParameter("@PCCode",reqParam.PCCode)
+        //            };
+
+        //            var results = await _context.Database
+        //               .SqlQueryRaw<GetSecondStageDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
+        //               .ToListAsync();
+
+        //            return results.FirstOrDefault();
+        //        }
+        //        else if (reqParam.Stage == "4") //stage 3 Start
+        //        {
+        //            var parameters = new[]
+        //              {
+        //             new SqlParameter("@strSrNo",decodeQRSrNo),
+        //                  new SqlParameter("@strPartCode", reqParam.PartCode),
+        //                  new SqlParameter("@strCat", reqParam.Category),
+        //                  new SqlParameter("@strStage", reqParam.Stage),
+        //                  new SqlParameter("@PCCode",reqParam.PCCode)
+        //            };
+
+        //            var results = await _context.Database
+        //               .SqlQueryRaw<GetStageThirdStartDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
+        //               .ToListAsync();
+
+        //            return results.FirstOrDefault();
+        //        }
+        //        else if (reqParam.Stage == "5") //stage 3 End
+        //        {
+        //            var parameters = new[]
+        //              {
+        //             new SqlParameter("@strSrNo",decodeQRSrNo),
+        //                  new SqlParameter("@strPartCode", reqParam.PartCode),
+        //                  new SqlParameter("@strCat", reqParam.Category),
+        //                  new SqlParameter("@strStage", reqParam.Stage),
+        //                  new SqlParameter("@PCCode",reqParam.PCCode)
+        //            };
+
+        //            var results = await _context.Database
+        //               .SqlQueryRaw<GetStageThirdEndDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
+        //               .ToListAsync();
+
+        //            return results.FirstOrDefault();
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw;
+        //    }
+        //    return null;
+        //}
+
+
+        public async Task<StageScanCombinedResult> GetStageScanDetailsByQrSrNo(EngineDetailsRequest reqParam)
         {
-            try
+            string decodeQRSrNo = HttpUtility.UrlDecode(reqParam.SerialNo);
+
+            return reqParam.Stage switch
             {
-                string decodeQRSrNo = HttpUtility.UrlDecode(reqParam.SerialNo);
-
-                if (reqParam.Stage == "0") //stage 1 start
-                {
-                    var parameters = new[]
-                           {
-                           new SqlParameter("@strSrNo",decodeQRSrNo),
-                           new SqlParameter("@strPartCode", reqParam.PartCode),
-                           new SqlParameter("@strCat", reqParam.Category),
-                           new SqlParameter("@strStage", reqParam.Stage),
-                           new SqlParameter("@PCCode",reqParam.PCCode)
-                    };
-
-                    var results = await _context.Database
-                        .SqlQueryRaw<GetStageFirstStartDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
-                        .ToListAsync();
-
-                    return results.FirstOrDefault();
-                }
-                else if (reqParam.Stage == "1")  // stage 1 End
-                {
-                    var parameters = new[]
-                        {
-                          new SqlParameter("@strSrNo",decodeQRSrNo),
-                          new SqlParameter("@strPartCode", reqParam.PartCode),
-                          new SqlParameter("@strCat", reqParam.Category),
-                          new SqlParameter("@strStage", reqParam.Stage),
-                          new SqlParameter("@PCCode",reqParam.PCCode)
-                    };
-
-                    var results = await _context.Database
-                        .SqlQueryRaw<GetStageFirstEndDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
-                        .ToListAsync();
-
-                    return results.FirstOrDefault();
-                }
-                else if (reqParam.Stage == "3") // stage 2 -- no start, end for second stage. fetch data at once.
-                {
-                    var parameters = new[]
-                    {
-                          new SqlParameter("@strSrNo",decodeQRSrNo),
-                          new SqlParameter("@strPartCode", reqParam.PartCode),
-                          new SqlParameter("@strCat", reqParam.Category),
-                          new SqlParameter("@strStage", reqParam.Stage),
-                          new SqlParameter("@PCCode",reqParam.PCCode)
-                    };
-
-                    var results = await _context.Database
-                       .SqlQueryRaw<GetSecondStageDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
-                       .ToListAsync();
-
-                    return results.FirstOrDefault();
-                }
-                else if (reqParam.Stage == "4") //stage 3 Start
-                {
-                    var parameters = new[]
-                      {
-                     new SqlParameter("@strSrNo",decodeQRSrNo),
-                          new SqlParameter("@strPartCode", reqParam.PartCode),
-                          new SqlParameter("@strCat", reqParam.Category),
-                          new SqlParameter("@strStage", reqParam.Stage),
-                          new SqlParameter("@PCCode",reqParam.PCCode)
-                    };
-
-                    var results = await _context.Database
-                       .SqlQueryRaw<GetStageThirdStartDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
-                       .ToListAsync();
-
-                    return results.FirstOrDefault();
-                }
-                else if (reqParam.Stage == "5") //stage 3 End
-                {
-                    var parameters = new[]
-                      {
-                     new SqlParameter("@strSrNo",decodeQRSrNo),
-                          new SqlParameter("@strPartCode", reqParam.PartCode),
-                          new SqlParameter("@strCat", reqParam.Category),
-                          new SqlParameter("@strStage", reqParam.Stage),
-                          new SqlParameter("@PCCode",reqParam.PCCode)
-                    };
-
-                    var results = await _context.Database
-                       .SqlQueryRaw<GetStageThirdEndDts>("EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode", parameters)
-                       .ToListAsync();
-
-                    return results.FirstOrDefault();
-                }
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
-            return null;
+                "0" => await ExecuteDoubleSpAsync<GetStageFirstStartDts>(decodeQRSrNo, reqParam),
+                "1" => await ExecuteDoubleSpAsync<GetStageFirstEndDts>(decodeQRSrNo, reqParam),
+                "3" => await ExecuteDoubleSpAsync<GetSecondStageDts>(decodeQRSrNo, reqParam),
+                "4" => await ExecuteDoubleSpAsync<GetStageThirdStartDts>(decodeQRSrNo, reqParam),
+                "5" => await ExecuteDoubleSpAsync<GetStageThirdEndDts>(decodeQRSrNo, reqParam),
+                _ => new StageScanCombinedResult()
+            };
         }
-  
+
+        //Helper method — handles both SPs for any stage type
+        private async Task<StageScanCombinedResult> ExecuteDoubleSpAsync<T>(string decodedSrNo, EngineDetailsRequest reqParam) where T : BaseGetStageScanDts
+        {
+            string sql1 = "EXEC GetStageScanDts_New_maker_checker @strSrNo,@strPartCode,@strCat,@strStage,@PCCode";
+            string sql2 = "EXEC GetStageScanDts @strSrNo,@strPartCode,@strCat,@strStage,@PCCode";
+
+            SqlParameter[] MakeParamsAct() => new[]
+            {
+                new SqlParameter("@strSrNo", decodedSrNo),
+                new SqlParameter("@strPartCode", reqParam.PartCode),
+                new SqlParameter("@strCat", reqParam.Category),
+                new SqlParameter("@strStage", reqParam.Stage),
+                new SqlParameter("@PCCode", reqParam.PCCode_Act)
+            };
+
+            SqlParameter[] MakeParamsOld() => new[]
+            {
+                new SqlParameter("@strSrNo", decodedSrNo),
+                new SqlParameter("@strPartCode", reqParam.PartCode),
+                new SqlParameter("@strCat", reqParam.Category),
+                new SqlParameter("@strStage", reqParam.Stage),
+                new SqlParameter("@PCCode", reqParam.PCCode_Old)
+            };
+
+            var result1 = await _context.Database
+                .SqlQueryRaw<T>(sql1, MakeParamsAct())
+                .ToListAsync();
+
+            var result2 = await _context.Database
+                .SqlQueryRaw<T>(sql2, MakeParamsOld())
+                .ToListAsync();
+
+            return new StageScanCombinedResult
+            {
+                MakerCheckerResult = result1.FirstOrDefault(),
+                OldResult = result2.FirstOrDefault()
+            };
+        }
+
         public async Task<TestReportScanDts?> GetTestReportScanDetails(TestReportDetailsRequest testReportDetailsRequestDTO)
         {
             try
@@ -139,11 +196,11 @@ namespace KalaGenset.ERP.Core.Services
 
                 using (var connection = _context.Database.GetDbConnection())
                 {
-                    await connection.OpenAsync(); 
+                    await connection.OpenAsync();
 
                     using (var command = connection.CreateCommand())
                     {
-                        command.CommandText = "GetTRScanDts";
+                        command.CommandText = "GetTRScanDts_Maker_checker";
                         command.CommandType = CommandType.StoredProcedure;
 
                         var strSrNoParam = new SqlParameter("@strSrNo", SqlDbType.VarChar) { Value = testReportDetailsRequestDTO.strSrNo ?? (object)DBNull.Value };
@@ -201,7 +258,8 @@ namespace KalaGenset.ERP.Core.Services
             var result = new List<Dictionary<string, object?>>();
 
             using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
-            using (var command = new SqlCommand("GetPSScanDts", connection))
+           // using (var command = new SqlCommand("GetPSScanDts", connection))
+            using (var command = new SqlCommand("GetPSScanDts_Maker_Checker", connection))
             {
                 command.CommandType = CommandType.StoredProcedure;
 
@@ -214,7 +272,7 @@ namespace KalaGenset.ERP.Core.Services
                 await connection.OpenAsync();
                 using (var reader = await command.ExecuteReaderAsync())
                 {
-                    while (await reader.ReadAsync()) 
+                    while (await reader.ReadAsync())
                     {
                         var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
 
@@ -307,17 +365,18 @@ namespace KalaGenset.ERP.Core.Services
             return result;
         }
 
-        public async Task<List<Dictionary<string, object?>>> GetJobCardDGDtsAsync(string strJobCardType, string strcompID)
+        public async Task<List<Dictionary<string, object?>>> GetJobCardDGDtsAsync(string strJobCardType, string strcompID, string assemblyLine)
         {
             var result = new List<Dictionary<string, object?>>();
 
             using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
-            using (var command = new SqlCommand("GetJobCardDGDts", connection))
+            using (var command = new SqlCommand("GetJobCardDGDts_Checker_Maker", connection))
             {
                 command.CommandType = CommandType.StoredProcedure;
 
                 command.Parameters.AddWithValue("@JobCardType", strJobCardType ?? (object)DBNull.Value);
                 command.Parameters.AddWithValue("@CompCode", strcompID ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@AssemblyLine", assemblyLine ?? (object)DBNull.Value);
 
                 await connection.OpenAsync();
 
@@ -422,23 +481,23 @@ namespace KalaGenset.ERP.Core.Services
                     command.CommandText = "Select isNull(Count(pfd.SerialNo),0) as CntEngSRNo " +
                                           "From ProcessFeedBack Pf " +
                                           "Inner Join ProcessFeedBackDetailsSub Pfd on Pf.PfbCode=Pfd.PfbCode " +
-                                          "where TRFcode=@JobCode and pfd.SerialNo=@EngSrNo";
-                  
+                                          "where pf.PfbCode=@JobCode and pfd.SerialNo=@EngSrNo";
+
                     command.Parameters.Add(new SqlParameter("@JobCode", JBCode));
                     command.Parameters.Add(new SqlParameter("@EngSrNo", EngSrNo));
 
-                    await _context.Database.OpenConnectionAsync();  
+                    await _context.Database.OpenConnectionAsync();
 
                     int count = Convert.ToInt32(await command.ExecuteScalarAsync() ?? 0);
 
                     return count > 0;
                 }
-  
+
             }
             return false;
         }
 
-        public async Task<List<GetDGKitDetails>> GetDGKitDetailsFromDB(string strPrdPartCode, string strPCCode)
+        public async Task<List<GetDGKitDetails>> GetDGKitDetailsFromDB(string strPrdPartCode, string strPCCode_Old, string PCCode_Act)
         {
             List<GetDGKitDetails> _dgKitDetails = new List<GetDGKitDetails>();
             string? strBOMCode = await _context.Boms
@@ -453,14 +512,14 @@ namespace KalaGenset.ERP.Core.Services
             string[] prodDts = strBOMCode.Trim().Split("-->");
 
             // Generate Profit Center Code Mapping
-            string ratePCCode = strPCCode.Trim() switch
+            string ratePCCode = strPCCode_Old.Trim() switch
             {
                 "01.005" => "01.007,01.005,03.008",
                 "03.038" => "03.001,03.038,03.008",
                 "01.004" or "04.001" or "14.001" or "03.051" => "01.005,01.004,04.001,01.064,14.001,01.023,03.040,03.051",
                 "01.023" => "01.007,01.023,01.064",
                 "03.040" => "01.007,01.023,03.040,01.064",
-                _ => strPCCode.Trim()
+                _ => strPCCode_Old.Trim()
             };
 
             string formattedRatePCCode = "'" + string.Join("','", ratePCCode.Split(',')) + "'";
@@ -468,21 +527,24 @@ namespace KalaGenset.ERP.Core.Services
             {
                 var parameters = new[]
                       {
-                           new SqlParameter("@strPCCode",strPCCode),
+                           new SqlParameter("@strPCCode",strPCCode_Old),
                            new SqlParameter("@RatePCCode",formattedRatePCCode),
                            new SqlParameter("@ProdDts",prodDts[0]),
                            new SqlParameter("@strPrdPartCode",strPrdPartCode),
                     };
 
+                //_dgKitDetails = await _context.Database
+                //      .SqlQueryRaw<GetDGKitDetails>("EXEC GetDGKitDetails @strPCCode,@RatePCCode,@ProdDts,@strPrdPartCode", parameters)
+                //      .ToListAsync();
                 _dgKitDetails = await _context.Database
-                      .SqlQueryRaw<GetDGKitDetails>("EXEC GetDGKitDetails @strPCCode,@RatePCCode,@ProdDts,@strPrdPartCode", parameters)
-                      .ToListAsync();
+                     .SqlQueryRaw<GetDGKitDetails>("EXEC GetDGKitDetails_checkermaker @strPCCode,@RatePCCode,@ProdDts,@strPrdPartCode", parameters)
+                     .ToListAsync();
 
                 var partCodes = _dgKitDetails.Select(k => k.PartCode?.Trim()).Distinct().ToList();
-                Dictionary<string, double> stockData = await GetAllWIPStock(partCodes, strPCCode.Trim());
+                Dictionary<string, double> stockData = await GetAllWIPStock(partCodes, PCCode_Act.Trim());
 
                 double gridAmt = 0;
-                
+
                 foreach (var kitDetail in _dgKitDetails)
                 {
                     // Ensure Quantity is not null
@@ -495,7 +557,7 @@ namespace KalaGenset.ERP.Core.Services
                     kitDetail.Rate = Math.Round(
                         await GetRate4ProcessAsync(
                             kitDetail.PartCode?.Trim() ?? "",
-                            strPCCode.Trim(),
+                            PCCode_Act.Trim(),
                             kitDetail.ConversionValue,
                             kitDetail.UOMCode?.Trim() ?? "",
                             kitDetail.Mob?.Trim() ?? "",
@@ -522,8 +584,8 @@ namespace KalaGenset.ERP.Core.Services
                     {
                         kitDetail.QAP = 0;  // Default to 0 if parsing fails
                     }
-                    
-                    kitDetail.Amount = Math.Round(kitDetail.Rate * totalQty, 2);                   
+
+                    kitDetail.Amount = Math.Round(kitDetail.Rate * totalQty, 2);
                     gridAmt += kitDetail.Amount;
                 }
             }
@@ -531,7 +593,7 @@ namespace KalaGenset.ERP.Core.Services
             {
                 throw;
             }
-          
+
             return _dgKitDetails;
         }
 
@@ -560,17 +622,17 @@ namespace KalaGenset.ERP.Core.Services
             return _TRKitDetails;
         }
 
-        public async Task<List<MOFAddPartDetailsResponseDTO>> GetMOFAdditionalPartDtsFromDB(string strMOFCode)
+        public async Task<List<MOFAddPartDetailsResponseDTO>> GetMOFAdditionalPartDtsFromDB(string strMOFCode, string AssemblyLine)
         {
             strMOFCode = HttpUtility.UrlDecode(strMOFCode);
             List<MOFAddPartDetailsResponseDTO> _mofDetails = new List<MOFAddPartDetailsResponseDTO>();
             try
             {
-                var parameter = new SqlParameter("@strMOFCode", strMOFCode);
+                var param1 = new SqlParameter("@strMOFCode", strMOFCode);
+                var param2 = new SqlParameter("@AssemblyLine", AssemblyLine);
 
-                _mofDetails = await _context.Database
-                    .SqlQueryRaw<MOFAddPartDetailsResponseDTO>("EXEC GetMOFAddPartDts @strMOFCode", parameter)
-                    .ToListAsync();
+                _mofDetails = await _context.Database.SqlQueryRaw<MOFAddPartDetailsResponseDTO>(
+                "EXEC GetMOFAddPartDts_Maker_Checker @strMOFCode, @AssemblyLine", param1, param2).ToListAsync();
             }
             catch (Exception ex)
             {
@@ -646,23 +708,23 @@ namespace KalaGenset.ERP.Core.Services
 
                 if (!string.IsNullOrEmpty(query))
                 {
-                        await _context.Database.OpenConnectionAsync();
-                        using (var command = _context.Database.GetDbConnection().CreateCommand())
-                        {
-                            command.CommandText = query;
-                            command.CommandType = CommandType.Text;
+                    await _context.Database.OpenConnectionAsync();
+                    using (var command = _context.Database.GetDbConnection().CreateCommand())
+                    {
+                        command.CommandText = query;
+                        command.CommandType = CommandType.Text;
 
-                            // Add parameters
-                            var param = command.CreateParameter();
-                            param.ParameterName = "@PartCode";
-                            param.Value = strPartCode ?? (object)DBNull.Value;
-                            command.Parameters.Add(param);
+                        // Add parameters
+                        var param = command.CreateParameter();
+                        param.ParameterName = "@PartCode";
+                        param.Value = strPartCode ?? (object)DBNull.Value;
+                        command.Parameters.Add(param);
 
-                            var result = await command.ExecuteScalarAsync();
+                        var result = await command.ExecuteScalarAsync();
 
-                            prate = result != null ? Convert.ToDouble(result) : 0; // Assign default 0 if no value is found
-                        }
-                    
+                        prate = result != null ? Convert.ToDouble(result) : 0; // Assign default 0 if no value is found
+                    }
+
                 }
             }
             catch (Exception ex)
@@ -673,7 +735,7 @@ namespace KalaGenset.ERP.Core.Services
             return prate;
         }
 
-        public async Task<Dictionary<string, double>> GetAllWIPStock(List<string> partCodes, string strPCCode)
+        public async Task<Dictionary<string, double>> GetAllWIPStock(List<string> partCodes, string PCCode_Act)
         {
             if (partCodes == null || partCodes.Count == 0)
             {
@@ -684,17 +746,24 @@ namespace KalaGenset.ERP.Core.Services
             string partCodesString = string.Join("','", partCodes.Select(p => p.Replace("'", "''"))); // Handle escaping
 
             // Construct raw SQL query
-            string query = $@"
-               SELECT PartCode, 
-               SUM(CASE WHEN ToProfitCenterCode = @p0 THEN ReceivedQty ELSE 0 END) -
-               SUM(CASE WHEN FromProfitCenterCode = @p0 THEN IssueQty ELSE 0 END) AS StockQty
-               FROM Stockwip
-               WHERE PartCode IN ('{partCodesString}')
-               AND (ToProfitCenterCode = @p0 OR FromProfitCenterCode = @p0)
-               GROUP BY PartCode";
+            //string query = $@"
+            //   SELECT PartCode, 
+            //   SUM(CASE WHEN ToProfitCenterCode = @p0 THEN ReceivedQty ELSE 0 END) -
+            //   SUM(CASE WHEN FromProfitCenterCode = @p0 THEN IssueQty ELSE 0 END) AS StockQty
+            //   FROM Stockwip
+            //   WHERE PartCode IN ('{partCodesString}')
+            //   AND (ToProfitCenterCode = @p0 OR FromProfitCenterCode = @p0)
+            //   GROUP BY PartCode";
+            string query = $@"SELECT PartCode, 
+                           SUM(CASE WHEN ToProfitCenterCode_Act = @p0 THEN ReceivedQty ELSE 0 END) -
+                           SUM(CASE WHEN FromProfitCenterCode_Act = @p0 THEN IssueQty ELSE 0 END) AS StockQty
+                           FROM Stockwip
+                           WHERE PartCode IN ('{partCodesString}')
+                           AND (ToProfitCenterCode_Act = @p0 OR FromProfitCenterCode_Act = @p0)
+                           GROUP BY PartCode";
 
             // Execute raw SQL query and store results in a dictionary
-            var result = await _context.Database.SqlQueryRaw<DgKitStockResultDTO>(query, strPCCode).ToListAsync();
+            var result = await _context.Database.SqlQueryRaw<DgKitStockResultDTO>(query, PCCode_Act).ToListAsync();
 
             return result.ToDictionary(x => x.PartCode, x => x.StockQty);
 
@@ -706,43 +775,43 @@ namespace KalaGenset.ERP.Core.Services
 
             try
             {
-                    var conn = _context.Database.GetDbConnection();
-                    if (conn.State != ConnectionState.Open)
-                        await conn.OpenAsync();
-                    
-                    using (var cmd = conn.CreateCommand())
-                    {
-                        cmd.CommandText = "InternalTOCReq";
-                        cmd.CommandType = CommandType.StoredProcedure;
-                        cmd.Parameters.Add(new SqlParameter("@PCCode", PCCode.Trim()));
+                var conn = _context.Database.GetDbConnection();
+                if (conn.State != ConnectionState.Open)
+                    await conn.OpenAsync();
+
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "InternalTOCReq";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.Add(new SqlParameter("@PCCode", PCCode.Trim()));
 
                     var currentTransaction = _context.Database.CurrentTransaction;
-                        if (currentTransaction != null)
-                        {
-                            cmd.Transaction = currentTransaction.GetDbTransaction();
-                        }
+                    if (currentTransaction != null)
+                    {
+                        cmd.Transaction = currentTransaction.GetDbTransaction();
+                    }
 
-                        using (var reader = await cmd.ExecuteReaderAsync())
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
                         {
-                            while (await reader.ReadAsync())
+                            results.Add(new InternalTOCResult
                             {
-                                results.Add(new InternalTOCResult
-                                {
-                                    Partcode = reader["Partcode"].ToString(),
-                                    MOQ = reader["MOQ"] != DBNull.Value ? Convert.ToDecimal(reader["MOQ"]) : 0,
-                                    Poper = reader["Poper"] != DBNull.Value ? Convert.ToDecimal(reader["Poper"]) : 0,
-                                    Stk = reader["Stk"] != DBNull.Value ? Convert.ToDecimal(reader["Stk"]) : 0,
-                                    PndReq = reader["PndReq"] != DBNull.Value ? Convert.ToDecimal(reader["PndReq"]) : 0,
-                                    Req = reader["Req"] != DBNull.Value ? Convert.ToDecimal(reader["Req"]) : 0,
-                                    Flag = reader["Flag"] != DBNull.Value ? Convert.ToInt32(reader["Flag"]) : 0, 
-                                    RaiseReqQty = reader["RaiseReqQty"] != DBNull.Value ? Convert.ToDecimal(reader["RaiseReqQty"]) : 0,
-                                    FromPC = reader["FromPC"].ToString(),
-                                    ToPCCode = reader["ToPCCode"].ToString()
-                                });
-                            }
+                                Partcode = reader["Partcode"].ToString(),
+                                MOQ = reader["MOQ"] != DBNull.Value ? Convert.ToDecimal(reader["MOQ"]) : 0,
+                                Poper = reader["Poper"] != DBNull.Value ? Convert.ToDecimal(reader["Poper"]) : 0,
+                                Stk = reader["Stk"] != DBNull.Value ? Convert.ToDecimal(reader["Stk"]) : 0,
+                                PndReq = reader["PndReq"] != DBNull.Value ? Convert.ToDecimal(reader["PndReq"]) : 0,
+                                Req = reader["Req"] != DBNull.Value ? Convert.ToDecimal(reader["Req"]) : 0,
+                                Flag = reader["Flag"] != DBNull.Value ? Convert.ToInt32(reader["Flag"]) : 0,
+                                RaiseReqQty = reader["RaiseReqQty"] != DBNull.Value ? Convert.ToDecimal(reader["RaiseReqQty"]) : 0,
+                                FromPC = reader["FromPC"].ToString(),
+                                ToPCCode = reader["ToPCCode"].ToString()
+                            });
                         }
                     }
-                
+                }
+
             }
             catch (Exception ex)
             {
@@ -759,358 +828,371 @@ namespace KalaGenset.ERP.Core.Services
             await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await _context.Database.BeginTransactionAsync();
-               try
-            {
-                string _getKVA = await GetKVAFromPartTable(dgStageScanReq.ProductCode);
-
-                if (dgStageScanReq.StageNo == 0) //Stage I Start
+                try
                 {
-                    var sqlQuery = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                    string _getKVA = await GetKVAFromPartTable(dgStageScanReq.ProductCode);
 
-                    var parameters = new[]
+                    if (dgStageScanReq.StageNo == 0) //Stage I Start
                     {
-                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                        var sqlQuery = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act,ToProfitCenterCode_Act)
+                              VALUES
+                              (@FromPCCode_Old, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act,@ToProfitCenterCode_Act)";
+
+                        var parameters = new[]
+                        {
+                       new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                        new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value), // NVARCHAR
                        new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"), // NVARCHAR
                        new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime }, // DATETIME with proper type
                        new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float }, // FLOAT
-                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                       new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                        new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                        new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@StageName", "StageI") // VARCHAR
+                       new SqlParameter("@StageName", "StageI"), // VARCHAR
+                       new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                       new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                     };
-                    await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                        await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
 
-                    if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
-                    {
-                        try
+                        if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
                         {
-                            var jobCardDetails = await _context.JobCardDetailsSubs
-                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim() &&
-                                            j.PartCode == dgStageScanReq.ProductCode.Trim() &&
-                                            j.SerialNo == dgStageScanReq.EngSrNo.Trim() &&
-                                            j.SrNoPartCode == dgStageScanReq.EngPartCode)
-                                .ToListAsync();
-
-                            if (jobCardDetails.Any())
+                            try
                             {
-                                foreach (var jobCardDetail in jobCardDetails)
+                                var jobCardDetails = await _context.JobCardDetailsSubs
+                                    .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim() &&
+                                                j.PartCode == dgStageScanReq.ProductCode.Trim() &&
+                                                j.SerialNo == dgStageScanReq.EngSrNo.Trim() &&
+                                                j.SrNoPartCode == dgStageScanReq.EngPartCode)
+                                    .ToListAsync();
+
+                                if (jobCardDetails.Any())
                                 {
-                                    jobCardDetail.Stage1StartStatus = "D";
-                                    jobCardDetail.Stage1StartPlay = dgStageScanReq.EngPlay?.Trim();
-                                    jobCardDetail.Stage1StartDate = DateTime.Now;
+                                    foreach (var jobCardDetail in jobCardDetails)
+                                    {
+                                        jobCardDetail.Stage1StartStatus = "D";
+                                        jobCardDetail.Stage1StartPlay = dgStageScanReq.EngPlay?.Trim();
+                                        jobCardDetail.Stage1StartDate = DateTime.Now;
+                                    }
+
+                                    await _context.SaveChangesAsync();
                                 }
-
-                                await _context.SaveChangesAsync();
+                                else
+                                {
+                                    Console.WriteLine("No matching JobCardDetailssub records found to update.");
+                                }
                             }
-                            else
+                            catch (Exception)
                             {
-                                Console.WriteLine("No matching JobCardDetailssub records found to update.");
+                                throw;
                             }
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
 
-                        try
-                        {
-                            var sqlQuery1 = "";
-                             sqlQuery1 = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                            try
+                            {
+                                var sqlQuery1 = "";
+                                sqlQuery1 = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                               VALUES
-                              (@PCCode, @EnginePartCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                              (@FromPCCode_Old, @EnginePartCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                            var parameters1 = new[]
-                            {
-                              new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                                var parameters1 = new[]
+                                {
+                              new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@EnginePartCode", dgStageScanReq.EngPartCode?.Trim() ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"), // NVARCHAR
                               new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime }, // DATETIME with proper type
                               new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float }, // FLOAT
-                              new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                              new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                               new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                              new SqlParameter("@StageName", "StageI") // VARCHAR
+                              new SqlParameter("@StageName", "StageI"), // VARCHAR
+                              new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                              new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                             };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
-                    }
-
-                    if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
-                    {
-                        try
-                        {
-                            var jobCardDetails = await _context.JobCardDetailsSubs
-                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim() &&
-                                            j.PartCode == dgStageScanReq.ProductCode.Trim() &&
-                                            j.SerialNo == dgStageScanReq.AltSrno.Trim() &&
-                                            j.SrNoPartCode == dgStageScanReq.AltPartcode)
-                                .ToListAsync();
-
-                            if (jobCardDetails.Any())
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                            }
+                            catch (Exception)
                             {
-                                foreach (var jobCardDetail in jobCardDetails)
+                                throw;
+                            }
+                        }
+
+                        if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
+                        {
+                            try
+                            {
+                                var jobCardDetails = await _context.JobCardDetailsSubs
+                                    .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim() &&
+                                                j.PartCode == dgStageScanReq.ProductCode.Trim() &&
+                                                j.SerialNo == dgStageScanReq.AltSrno.Trim() &&
+                                                j.SrNoPartCode == dgStageScanReq.AltPartcode)
+                                    .ToListAsync();
+
+                                if (jobCardDetails.Any())
                                 {
-                                    jobCardDetail.Stage1StartStatus = "D";
-                                    jobCardDetail.Stage1StartPlay = dgStageScanReq.EngPlay?.Trim();
-                                    jobCardDetail.Stage1StartDate = DateTime.Now;
+                                    foreach (var jobCardDetail in jobCardDetails)
+                                    {
+                                        jobCardDetail.Stage1StartStatus = "D";
+                                        jobCardDetail.Stage1StartPlay = dgStageScanReq.EngPlay?.Trim();
+                                        jobCardDetail.Stage1StartDate = DateTime.Now;
+                                    }
+
+                                    await _context.SaveChangesAsync();
                                 }
-
-                                await _context.SaveChangesAsync();
+                                else
+                                {
+                                    Console.WriteLine("No matching JobCardDetailssub records found to update.");
+                                }
                             }
-                            else
+                            catch (Exception)
                             {
-                                Console.WriteLine("No matching JobCardDetailssub records found to update.");
+                                throw;
                             }
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
 
-                        try
-                        {
-                            var sqlQuery1 = "";
-                            sqlQuery1 = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                            try
+                            {
+                                var sqlQuery1 = "";
+                                sqlQuery1 = @"INSERT INTO StockWIP 
+                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                               VALUES
-                              (@PCCode, @AltPartCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                              (@FromPCCode_Old, @AltPartCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                            var parameters1 = new[]
-                            {
-                              new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                                var parameters1 = new[]
+                                {
+                              new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@AltPartCode", dgStageScanReq.AltPartcode?.Trim() ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"), // NVARCHAR
                               new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime }, // DATETIME with proper type
                               new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float }, // FLOAT
-                              new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value), // NVARCHAR
+                              new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value), // NVARCHAR
                               new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                               new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                              new SqlParameter("@StageName", "StageI") // VARCHAR
+                              new SqlParameter("@StageName", "StageI"), // VARCHAR
+                              new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                              new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                             };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
-                    }
-
-                    string ChkDGRate = "0";
-                    ChkDGRate = await GetTransName(dgStageScanReq.PCCode, dgStageScanReq.ProductCode, "StageI");
-
-                    if (ChkDGRate == "0")
-                    {
-                        _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode);
-
-                        try
-                        {
-                            var sqlQuery2 = @"Insert Into PCStageWiseRate(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
-
-                            var parameters2 = new[]
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                            }
+                            catch (Exception)
                             {
-                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
-                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
-                            new SqlParameter("@StageName","StageI"),
-                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
-                        };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery2, parameters2);
-                        }
-                        catch (Exception)
-                        {
-                            throw;
+                                throw;
+                            }
                         }
 
-                        try
-                        {
-                            var sqlQuery3 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
+                        string ChkDGRate = "0";
+                        ChkDGRate = await GetTransName(dgStageScanReq.PCCode_Act, dgStageScanReq.ProductCode, "StageI");
 
-                            var parameters3 = new[]
+                        if (ChkDGRate == "0")
+                        {
+                            _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode);
+
+                            try
                             {
-                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
-                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
-                            new SqlParameter("@StageName","StageI"),
-                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
-                        };
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery3, parameters3);
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
-                    }
-                    else
-                    {
-                        _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode);
+                                var sqlQuery2 = @"Insert Into PCStageWiseRate(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
 
-                        try
-                        {
-                            var PCStageWiseRateDetails = await _context.PcstageWiseRates
-                                .Where(p =>
-                                p.Pccode == dgStageScanReq.PCCode &&
-                                           p.PartCode == dgStageScanReq.ProductCode &&
-                                           p.StageName == "StageI")
-                                .ToListAsync();
-
-                            if (PCStageWiseRateDetails.Any())
-                            {
-                                foreach (var PCStageDetail in PCStageWiseRateDetails)
+                                var parameters2 = new[]
                                 {
-                                    PCStageDetail.Rate = double.Parse(_getDGRate);
-                                    PCStageDetail.Dt = DateTime.Now;
-                                    PCStageDetail.JobCode = dgStageScanReq.JBCode.Trim();
-                                }
-                                await _context.SaveChangesAsync();
-                            }
-                            else
-                            {
-                                Console.WriteLine("No Matching PCStageWiseRateDetails Found");
-                            }
-
-                        }
-                        catch (Exception)
-                        {
-                            throw;
-                        }
-
-                        try
-                        {
-                            var sqlQuery3 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
-
-                            var parameters3 = new[]
-                            {
                             new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
                             new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
                             new SqlParameter("@StageName","StageI"),
                             new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
+                        };
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery2, parameters2);
+                            }
+                            catch (Exception)
+                            {
+                                throw;
+                            }
+
+                            try
+                            {
+                                var sqlQuery3 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
+
+                                var parameters3 = new[]
+                                {
+                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
+                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
+                            new SqlParameter("@StageName","StageI"),
+                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
+                        };
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery3, parameters3);
+                            }
+                            catch (Exception)
+                            {
+                                throw;
+                            }
+                        }
+                        else
+                        {
+                            _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode);
+
+                            try
+                            {
+                                var PCStageWiseRateDetails = await _context.PcstageWiseRates
+                                    .Where(p =>
+                                    p.Pccode == dgStageScanReq.PCCode_Old &&
+                                               p.PartCode == dgStageScanReq.ProductCode &&
+                                               p.StageName == "StageI")
+                                    .ToListAsync();
+
+                                if (PCStageWiseRateDetails.Any())
+                                {
+                                    foreach (var PCStageDetail in PCStageWiseRateDetails)
+                                    {
+                                        PCStageDetail.Rate = double.Parse(_getDGRate);
+                                        PCStageDetail.Dt = DateTime.Now;
+                                        PCStageDetail.JobCode = dgStageScanReq.JBCode.Trim();
+                                    }
+                                    await _context.SaveChangesAsync();
+                                }
+                                else
+                                {
+                                    Console.WriteLine("No Matching PCStageWiseRateDetails Found");
+                                }
+
+                            }
+                            catch (Exception)
+                            {
+                                throw;
+                            }
+
+                            try
+                            {
+                                var sqlQuery3 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
+
+                                var parameters3 = new[]
+                                {
+                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
+                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
+                            new SqlParameter("@StageName","StageI"),
+                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Old)
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlQuery3, parameters3);
-                        }
-                        catch (Exception)
-                        {
-                            throw;
+                                await _context.Database.ExecuteSqlRawAsync(sqlQuery3, parameters3);
+                            }
+                            catch (Exception)
+                            {
+                                throw;
+                            }
                         }
                     }
-                }
-                else if (dgStageScanReq.StageNo == 1) //Stage1 End
-                {
-                    //method for save recorded audio and video path to DB
-                    await SaveRecordedFiles(dgStageScanReq);
-
-                    var sqlQuery = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
-
-                    var parameters = new[]
+                    else if (dgStageScanReq.StageNo == 1) //Stage1 End
                     {
-                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
-                       new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
-                       new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
-                       new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
-                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@StageName", "StageI")
-                    };
-                    await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                        //method for save recorded audio and video path to DB
+                        await SaveRecordedFiles(dgStageScanReq);
 
-                    var sqlQuery1 = "";
-                    sqlQuery1 = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                        //var sqlQuery = @"INSERT INTO StockWIP 
+                        //           (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                        //          VALUES
+                        //          (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                    var parameters1 = new[]
-                    {
-                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
-                       new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
-                       new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
-                       new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
-                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@StageName", "StageIII")
-                    };
-                    await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                        //var parameters = new[]
+                        //{
+                        //   new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
+                        //   new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
+                        //   new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                        //   new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
+                        //   new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@StageName", "StageI"),
+                        //   new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                        //};
+                        //await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
 
-                    if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
-                    {
-                        var jobCard = await _context.JobCardDetailsSubs
-                            .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                             && j.SerialNo == dgStageScanReq.EngSrNo.Trim()
-                             && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
-                             && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                            .FirstOrDefaultAsync();
+                        //var sqlQuery1 = "";
+                        //sqlQuery1 = @"INSERT INTO StockWIP 
+                        //           (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                        //          VALUES
+                        //          (@FromPCCode_Old, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                        //var parameters1 = new[]
+                        //{
+                        //   new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
+                        //   new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                        //   new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
+                        //   new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@StageName", "StageIII"),
+                        //   new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                        //};
+                        //await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+
+                        if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
                         {
-                            jobCard.Stage1Status = "D";
-                            jobCard.Stage1Date = DateTime.Now;
-                            jobCard.Stage2Status = "D";
-                            jobCard.Stage1EndPlay = dgStageScanReq.EngPlay.Trim();
-                            jobCard.Stage2Date = DateTime.Now;
-                        }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                        {
-                            jobCard.Stage1Status = "R";
-                        }
-                        await _context.SaveChangesAsync();
-                    }
-                    if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
-                    {
-                        var jobCard = await _context.JobCardDetailsSubs
-                           .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                            && j.SerialNo == dgStageScanReq.AltSrno.Trim()
-                            && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
-                            && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                           .FirstOrDefaultAsync();
+                            var jobCard = await _context.JobCardDetailsSubs
+                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                 && j.SerialNo == dgStageScanReq.EngSrNo.Trim()
+                                 && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
+                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                .FirstOrDefaultAsync();
 
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            jobCard.Stage1Status = "D";
-                            jobCard.Stage1Date = DateTime.Now;
-                            jobCard.Stage2Status = "D";
-                            jobCard.Stage2Date = DateTime.Now;
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                jobCard.Stage1Status = "D";
+                                jobCard.Stage1Date = DateTime.Now;
+                                jobCard.Stage2Status = "D";
+                                jobCard.Stage1EndPlay = dgStageScanReq.EngPlay.Trim();
+                                jobCard.Stage2Date = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard.Stage1Status = "R";
+                            }
+                            await _context.SaveChangesAsync();
                         }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                        if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
                         {
-                            jobCard.Stage1Status = "R";
-                            jobCard.Stage2Status = "R";
+                            var jobCard = await _context.JobCardDetailsSubs
+                               .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                && j.SerialNo == dgStageScanReq.AltSrno.Trim()
+                                && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
+                                && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                               .FirstOrDefaultAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                jobCard.Stage1Status = "D";
+                                jobCard.Stage1Date = DateTime.Now;
+                                jobCard.Stage2Status = "D";
+                                jobCard.Stage2Date = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard.Stage1Status = "R";
+                                jobCard.Stage2Status = "R";
+                            }
+                            await _context.SaveChangesAsync();
                         }
-                        await _context.SaveChangesAsync();
-                    }
 
-                    string _getDGStartTime = "";
-                    _getDGStartTime = await GetDGStartTime(dgStageScanReq.JBCode, dgStageScanReq.EngSrNo);
+                        string _getDGStartTime = "";
+                        _getDGStartTime = await GetDGStartTime(dgStageScanReq.JBCode, dgStageScanReq.EngSrNo);
 
-                    foreach (var chekpoint in dgStageScanReq.PrcChkDts)
-                    {
-                        var sqlquery = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
+                        foreach (var chekpoint in dgStageScanReq.PrcChkDts)
+                        {
+                            var sqlquery = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
                                       VALUES
                                        (@TransCode,@Date,@MainSerialNo,@PrcName,@ChkPointId,@PrcChkPoints,@PrcStatus,@DGStartTime,@QA6M)";
-                        var Parameters = new[]
-                        {
+                            var Parameters = new[]
+                            {
                            new SqlParameter("@TransCode",dgStageScanReq.JBCode.Trim()),
                            new SqlParameter("@Date",DateTime.Now),
                            new SqlParameter("@MainSerialNo",dgStageScanReq.EngSrNo),
@@ -1121,261 +1203,269 @@ namespace KalaGenset.ERP.Core.Services
                            new SqlParameter("@DGStartTime",_getDGStartTime),
                            new SqlParameter("@QA6M",dgStageScanReq.QA6M)
                         };
-                        await _context.Database.ExecuteSqlRawAsync(sqlquery, Parameters);
-                    }
-
-                    string cntStageStatus = "0";
-                    string query = @"select isnull(Count(Stage1Status),0) as Stage1Status from JobCardDetailssub where Stage1Status='P' and jobCode=@JobCode";
-                    cntStageStatus = await GetStageStatusCount(query, dgStageScanReq.JBCode);
-
-                    if (cntStageStatus == "0")
-                    {
-                        var jobcard = await _context.JobCards
-                             .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim())
-                             .FirstOrDefaultAsync();
-
-                        if (jobcard != null)
-                        {
-                            jobcard.Stage1Status = "D";
-                            jobcard.Stage2Status = "D";
+                            await _context.Database.ExecuteSqlRawAsync(sqlquery, Parameters);
                         }
-                        await _context.SaveChangesAsync();
-                    }
-                }
-                else if (dgStageScanReq.StageNo == 3)//stage two(2)
-                {
-                    var sqlQuery = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
 
-                    var parameters = new[]
-                    {
-                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
-                       new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
-                       new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
-                       new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
-                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@StageName", "StageIII")
-                    };
-                    await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+                        string cntStageStatus = "0";
+                        string query = @"select isnull(Count(Stage1Status),0) as Stage1Status from JobCardDetailssub where Stage1Status='P' and jobCode=@JobCode";
+                        cntStageStatus = await GetStageStatusCount(query, dgStageScanReq.JBCode);
 
-                        var sqlQuery1 = "";
-                        sqlQuery1 = @"INSERT INTO StockWIP 
-                               (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
-                              VALUES
-                              (@PCCode, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
-
-                        var parameters1 = new[]
+                        if (cntStageStatus == "0")
                         {
-                       new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
-                       new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
-                       new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
-                       new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
-                       new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
-                       new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                       new SqlParameter("@StageName", "StageIV  ")
-                    };
-                        await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
+                            var jobcard = await _context.JobCards
+                                 .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim())
+                                 .FirstOrDefaultAsync();
+
+                            if (jobcard != null)
+                            {
+                                jobcard.Stage1Status = "D";
+                                jobcard.Stage2Status = "D";
+                            }
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                    else if (dgStageScanReq.StageNo == 3)//stage two(2)
+                    {
+                        //var sqlQuery = @"INSERT INTO StockWIP 
+                        //           (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act,ToProfitCenterCode_Act)
+                        //          VALUES
+                        //          (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
+
+                        //var parameters = new[]
+                        //{
+                        //   new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
+                        //   new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
+                        //   new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                        //   new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
+                        //   new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //   new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //   new SqlParameter("@StageName", "StageIII"),
+                        //   new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                        //   new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                        //};
+                        //await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
+
+                        //    var sqlQuery1 = "";
+                        //    sqlQuery1 = @"INSERT INTO StockWIP 
+                        //           (FromProfitCenterCode, PartCode, ReceivedCode, ReceivedDate, ReceivedQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                        //          VALUES
+                        //          (@FromPCCode_Old, @ProductCode, @ReceivedCode, CAST(@ReceivedDate AS DATETIME), @ReceivedQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
+
+                        //    var parameters1 = new[]
+                        //    {
+                        //            new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //            new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
+                        //            new SqlParameter("@ReceivedCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
+                        //            new SqlParameter("@ReceivedDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
+                        //            new SqlParameter("@ReceivedQty", 1) { SqlDbType = SqlDbType.Float },
+                        //            new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
+                        //            new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //            new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
+                        //            new SqlParameter("@StageName", "StageIV  "),
+                        //            new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                        //            new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                        //    };
+                        //    await _context.Database.ExecuteSqlRawAsync(sqlQuery1, parameters1);
 
                         if (dgStageScanReq.EngPartCode.Trim().Substring(0, 3) == "001")
-                    {
-                        var jobCard1E = await _context.JobCardDetailsSubs
-                              .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                               && j.SerialNo == dgStageScanReq.EngSrNo.Trim()
-                               && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
-                               && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                              .FirstOrDefaultAsync();
+                        {
+                            var jobCard1E = await _context.JobCardDetailsSubs
+                                  .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                   && j.SerialNo == dgStageScanReq.EngSrNo.Trim()
+                                   && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
+                                   && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                  .FirstOrDefaultAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                jobCard1E.Stage3Status = "D";
+                                jobCard1E.Stage3Date = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard1E.Stage3Status = "R";
+                            }
+                            await _context.SaveChangesAsync();
+                        }
 
                         if (dgStageScanReq.PrcStatus == "Accepted(OK)")
                         {
-                            jobCard1E.Stage3Status = "D";
-                            jobCard1E.Stage3Date = DateTime.Now;
-                        }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                        {
-                            jobCard1E.Stage3Status = "R";
-                        }
-                        await _context.SaveChangesAsync();
-                    }
-
-                    if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                    {
-                        var jobcard2E = await _context.Jobcard2DetailsSubs
-                            .Where(j => j.SerialNo == dgStageScanReq.EngSrNo.Trim()
-                            && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
-                            && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                            .FirstOrDefaultAsync();
-
-                       if (jobcard2E != null)
-                       {
-                          jobcard2E.Stage3Status = "D";
-                          jobcard2E.JobCard1 = dgStageScanReq.JBCode;
-                       }
-
-                        await _context.SaveChangesAsync();
-                    }
-
-                    if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
-                    {
-                        var jobCard1A = await _context.JobCardDetailsSubs
-                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                                 && j.SerialNo == dgStageScanReq.AltSrno.Trim()
-                                 && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
-                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                .FirstOrDefaultAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            jobCard1A.Stage3Status = "D";
-                            jobCard1A.Stage3Date = DateTime.Now;
-                        }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                        {
-                            jobCard1A.Stage3Status = "R";
-                        }
-                        await _context.SaveChangesAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            var jobcard2A = await _context.Jobcard2DetailsSubs
-                                .Where(j => j.SerialNo == dgStageScanReq.AltSrno.Trim()
-                                && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
+                            var jobcard2E = await _context.Jobcard2DetailsSubs
+                                .Where(j => j.SerialNo == dgStageScanReq.EngSrNo.Trim()
+                                && j.SrNoPartCode == dgStageScanReq.EngPartCode.Trim()
                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
                                 .FirstOrDefaultAsync();
-                            if (jobcard2A != null)
+
+                            if (jobcard2E != null)
                             {
-                                jobcard2A.Stage3Status = "D";
-                                jobcard2A.JobCard1 = dgStageScanReq.JBCode;
-                            }
-
-                            await _context.SaveChangesAsync();
-                        }
-                    }
-
-                    if (dgStageScanReq.CpyPartcode.Trim().Substring(0, 2) == "40")
-                    {
-                        var jobCard1C = await _context.JobCardDetailsSubs
-                                 .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                                  && j.SerialNo == dgStageScanReq.CpySrno.Trim()
-                                  && j.SrNoPartCode == dgStageScanReq.CpyPartcode.Trim()
-                                  && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                 .FirstOrDefaultAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            jobCard1C.Stage3Status = "D";
-                            jobCard1C.Stage3Date = DateTime.Now;
-                        }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                        {
-                            jobCard1C.Stage3Status = "R";
-                        }
-
-                        await _context.SaveChangesAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            var jobcard2C = await _context.Jobcard2DetailsSubs
-                                 .Where(j => j.SerialNo == dgStageScanReq.CpySrno.Trim()
-                                 && j.SrNoPartCode == dgStageScanReq.CpyPartcode.Trim()
-                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                 .FirstOrDefaultAsync();
-
-                            if (jobcard2C != null)
-                            {
-                                jobcard2C.Stage3Status = "D";
-                                jobcard2C.JobCard1 = dgStageScanReq.JBCode; 
+                                jobcard2E.Stage3Status = "D";
+                                jobcard2E.JobCard1 = dgStageScanReq.JBCode;
                             }
 
                             await _context.SaveChangesAsync();
                         }
 
-                        var SqlQuerycpy = @"INSERT INTO StockWIP 
-                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                        if (dgStageScanReq.AltPartcode.Trim().Substring(0, 3) == "002")
+                        {
+                            var jobCard1A = await _context.JobCardDetailsSubs
+                                    .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                     && j.SerialNo == dgStageScanReq.AltSrno.Trim()
+                                     && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
+                                     && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                    .FirstOrDefaultAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                jobCard1A.Stage3Status = "D";
+                                jobCard1A.Stage3Date = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard1A.Stage3Status = "R";
+                            }
+                            await _context.SaveChangesAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                var jobcard2A = await _context.Jobcard2DetailsSubs
+                                    .Where(j => j.SerialNo == dgStageScanReq.AltSrno.Trim()
+                                    && j.SrNoPartCode == dgStageScanReq.AltPartcode.Trim()
+                                    && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                    .FirstOrDefaultAsync();
+                                if (jobcard2A != null)
+                                {
+                                    jobcard2A.Stage3Status = "D";
+                                    jobcard2A.JobCard1 = dgStageScanReq.JBCode;
+                                }
+
+                                await _context.SaveChangesAsync();
+                            }
+                        }
+
+                        if (dgStageScanReq.CpyPartcode.Trim().Substring(0, 2) == "40")
+                        {
+                            var jobCard1C = await _context.JobCardDetailsSubs
+                                     .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                      && j.SerialNo == dgStageScanReq.CpySrno.Trim()
+                                      && j.SrNoPartCode == dgStageScanReq.CpyPartcode.Trim()
+                                      && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                     .FirstOrDefaultAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                jobCard1C.Stage3Status = "D";
+                                jobCard1C.Stage3Date = DateTime.Now;
+                            }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard1C.Stage3Status = "R";
+                            }
+
+                            await _context.SaveChangesAsync();
+
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                var jobcard2C = await _context.Jobcard2DetailsSubs
+                                     .Where(j => j.SerialNo == dgStageScanReq.CpySrno.Trim()
+                                     && j.SrNoPartCode == dgStageScanReq.CpyPartcode.Trim()
+                                     && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                     .FirstOrDefaultAsync();
+
+                                if (jobcard2C != null)
+                                {
+                                    jobcard2C.Stage3Status = "D";
+                                    jobcard2C.JobCard1 = dgStageScanReq.JBCode;
+                                }
+
+                                await _context.SaveChangesAsync();
+                            }
+
+                            var SqlQuerycpy = @"INSERT INTO StockWIP 
+                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                                        VALUES
-                                       (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                                       (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                        var Parameterscpy = new[]
-                        {
-                             new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                            var Parameterscpy = new[]
+                            {
+                             new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
                              new SqlParameter("@ProductCode", dgStageScanReq.CpyPartcode?.Trim() ?? (object)DBNull.Value),
                              new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
                              new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
                              new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
-                             new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                             new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
                              new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                              new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                             new SqlParameter("@StageName", "StageIII")
+                             new SqlParameter("@StageName", "StageIII"),
+                             new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                             new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                           };
-                        await _context.Database.ExecuteSqlRawAsync(SqlQuerycpy, Parameterscpy);
-                    }
-
-                    if (dgStageScanReq.BatPartcode.Trim().Substring(0, 3) == "010")
-                    {
-                        var jobCard1B = await _context.JobCardDetailsSubs
-                                  .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                                   && j.SerialNo == dgStageScanReq.BatSrno.Trim()
-                                   && j.SrNoPartCode == dgStageScanReq.BatPartcode.Trim()
-                                   && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                  .FirstOrDefaultAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                        {
-                            jobCard1B.Stage3Status = "D";
-                            jobCard1B.Stage3Date = DateTime.Now;
-                        }
-                        else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
-                        {
-                            jobCard1B.Stage3Status = "R";
+                            await _context.Database.ExecuteSqlRawAsync(SqlQuerycpy, Parameterscpy);
                         }
 
-                        await _context.SaveChangesAsync();
-
-                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                        if (dgStageScanReq.BatPartcode.Trim().Substring(0, 3) == "010")
                         {
-                            var jobcard2B = await _context.Jobcard2DetailsSubs
-                                 .Where(j => j.SerialNo == dgStageScanReq.BatSrno.Trim()
-                                 && j.SrNoPartCode == dgStageScanReq.BatPartcode.Trim()
-                                 && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                                 .FirstOrDefaultAsync();
+                            var jobCard1B = await _context.JobCardDetailsSubs
+                                      .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                       && j.SerialNo == dgStageScanReq.BatSrno.Trim()
+                                       && j.SrNoPartCode == dgStageScanReq.BatPartcode.Trim()
+                                       && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                      .FirstOrDefaultAsync();
 
-                            if (jobcard2B != null)
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
                             {
-                                jobcard2B.Stage3Status = "D";
-                                jobcard2B.JobCard1 = dgStageScanReq.JBCode;
-
+                                jobCard1B.Stage3Status = "D";
+                                jobCard1B.Stage3Date = DateTime.Now;
                             }
+                            else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejection")
+                            {
+                                jobCard1B.Stage3Status = "R";
+                            }
+
                             await _context.SaveChangesAsync();
-                        }
 
-                        var SqlQueryEng = @"INSERT INTO StockWIP 
-                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName)
+                            if (dgStageScanReq.PrcStatus == "Accepted(OK)")
+                            {
+                                var jobcard2B = await _context.Jobcard2DetailsSubs
+                                     .Where(j => j.SerialNo == dgStageScanReq.BatSrno.Trim()
+                                     && j.SrNoPartCode == dgStageScanReq.BatPartcode.Trim()
+                                     && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                     .FirstOrDefaultAsync();
+
+                                if (jobcard2B != null)
+                                {
+                                    jobcard2B.Stage3Status = "D";
+                                    jobcard2B.JobCard1 = dgStageScanReq.JBCode;
+
+                                }
+                                await _context.SaveChangesAsync();
+                            }
+
+                            var SqlQueryEng = @"INSERT INTO StockWIP 
+                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, PanelTypeId, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                                        VALUES
-                                       (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @PanelTypeId, @StageName)";
+                                       (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @PanelTypeId, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                        var ParametersEng = new[]
-                        {
-                             new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                            var ParametersEng = new[]
+                            {
+                             new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
                              new SqlParameter("@ProductCode", dgStageScanReq.BatPartcode?.Trim() ?? (object)DBNull.Value),
                              new SqlParameter("@IssueCode", $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"),
                              new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
                              new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
-                             new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                             new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
                              new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
                              new SqlParameter("@PanelTypeId", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int }, // Force 0
-                             new SqlParameter("@StageName", "StageIII")
+                             new SqlParameter("@StageName", "StageIII"),
+                             new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                             new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                           };
-                        await _context.Database.ExecuteSqlRawAsync(SqlQueryEng, ParametersEng);
-                    }
+                            await _context.Database.ExecuteSqlRawAsync(SqlQueryEng, ParametersEng);
+                        }
 
-                    if (double.Parse(_getKVA) > 160)
-                    {
+                        if (double.Parse(_getKVA) > 160)
+                        {
                             var engineModel = await _context.Parts
                                               .Where(p => p.PartCode == dgStageScanReq.EngPartCode.Trim())
                                               .Select(p => p.Model)
@@ -1424,11 +1514,11 @@ namespace KalaGenset.ERP.Core.Services
                                         }
 
                                         var _stockWip = await _context.Stockwips
-                                            .Where(s => s.FromProfitCenterCode == dgStageScanReq.PCCode.Trim()
+                                            .Where(s => s.FromProfitCenterCodeAct == dgStageScanReq.PCCode_Act.Trim()
                                             && s.IssueCode == $"{dgStageScanReq.JBCode}-->{dgStageScanReq.EngSrNo}"
                                             && s.StageName == "StageIII"
                                             && s.PartCode == dgStageScanReq.BatPartcode.Trim()
-                                            && s.ToProfitCenterCode == dgStageScanReq.PCCode.Trim())
+                                            && s.ToProfitCenterCodeAct == dgStageScanReq.PCCode_Act.Trim())
                                             .FirstOrDefaultAsync();
 
                                         if (_stockWip != null)
@@ -1438,18 +1528,18 @@ namespace KalaGenset.ERP.Core.Services
 
                                         await _context.SaveChangesAsync();
                                     }
-                                } 
+                                }
                             }
 
-                    }
+                        }
 
-                    foreach (var chekpoint in dgStageScanReq.PrcChkDts)
-                    {
-                        var sqlqueryprc = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
+                        foreach (var chekpoint in dgStageScanReq.PrcChkDts)
+                        {
+                            var sqlqueryprc = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
                                       VALUES
                                        (@TransCode,@Date,@MainSerialNo,@PrcName,@ChkPointId,@PrcChkPoints,@PrcStatus,@DGStartTime,@QA6M)";
-                        var Parametersprc = new[]
-                        {
+                            var Parametersprc = new[]
+                            {
                            new SqlParameter("@TransCode",dgStageScanReq.JBCode.Trim()),
                            new SqlParameter("@Date",DateTime.Now),
                            new SqlParameter("@MainSerialNo",dgStageScanReq.EngSrNo),
@@ -1461,123 +1551,126 @@ namespace KalaGenset.ERP.Core.Services
                            new SqlParameter("@DGStartTime",DateTime.Now),
                            new SqlParameter("@QA6M",dgStageScanReq.QA6M)
                         };
-                        await _context.Database.ExecuteSqlRawAsync(sqlqueryprc, Parametersprc);
-                    }
-
-                    if (dgStageScanReq.PrcStatus == "Accepted(OK)")
-                    {
-                        var jobcardDetails = await _context.JobCardDetails
-                            .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
-                            && j.PartCode == dgStageScanReq.ProductCode.Trim())
-                            .FirstOrDefaultAsync();
-
-                        if (jobcardDetails != null)
-                        {
-                            jobcardDetails.Stage3Qty = jobcardDetails.Stage3Qty + 1;
+                            await _context.Database.ExecuteSqlRawAsync(sqlqueryprc, Parametersprc);
                         }
 
-                        await _context.SaveChangesAsync();
-                    }
-
-                    string cntStageStatus = "0";
-                    string query = @"select isnull(Count(Stage3Status),0) as Stage3Status from JobCardDetailssub where Stage3Status ='P' and jobCode=@JobCode";
-                    cntStageStatus = await GetStageStatusCount(query, dgStageScanReq.JBCode);
-                    if (cntStageStatus != "0")
-                    {
-                        var jobcards = await _context.JobCards
-                            .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim())
-                            .FirstOrDefaultAsync();
-
-                        if (jobcards != null)
+                        if (dgStageScanReq.PrcStatus == "Accepted(OK)")
                         {
-                            jobcards.Stage3Status = "D";
-                        }
+                            var jobcardDetails = await _context.JobCardDetails
+                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim()
+                                && j.PartCode == dgStageScanReq.ProductCode.Trim())
+                                .FirstOrDefaultAsync();
 
-                        await _context.SaveChangesAsync();
-                    }
-
-                    string chkDGRate = "0";
-                    chkDGRate = await GetTransName(dgStageScanReq.PCCode, dgStageScanReq.ProductCode, "StageIV");
-                    if (chkDGRate == "0")
-                    {
-                        _getDGRate = "0";
-                        _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode, dgStageScanReq.CpyPartcode);
-
-                        var SqlQueryDgrate = @"Insert Into PCStageWiseRate(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
-
-                        var ParametersDgrate = new[]
-                        {
-                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
-                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
-                            new SqlParameter("@StageName","StageIV"),
-                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
-                        };
-                        await _context.Database.ExecuteSqlRawAsync(SqlQueryDgrate, ParametersDgrate);
-
-                        var sqlQuery2 = "";
-                        sqlQuery2 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
-
-                        var Parameters1 = new[]
-                        {
-                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
-                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
-                            new SqlParameter("@StageName","StageIV"),
-                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
-                        };
-                        await _context.Database.ExecuteSqlRawAsync(sqlQuery2, Parameters1);
-                    }
-                    else
-                    {
-                        _getDGRate = "0";
-                        _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode, dgStageScanReq.CpyPartcode);
-
-                        var pcStageWiseRate = await _context.PcstageWiseRates
-                            .Where(p => p.Pccode == dgStageScanReq.PCCode.Trim()
-                            && p.PartCode == dgStageScanReq.ProductCode.Trim()
-                            && p.StageName == "StageIV")
-                            .FirstOrDefaultAsync();
-
-                        if (pcStageWiseRate != null)
-                        {
-                            pcStageWiseRate.Rate = double.Parse(_getDGRate.Trim());
+                            if (jobcardDetails != null)
+                            {
+                                jobcardDetails.Stage3Qty = jobcardDetails.Stage3Qty + 1;
+                            }
 
                             await _context.SaveChangesAsync();
                         }
 
-                        var SqlQuery1 = "";
-                        SqlQuery1 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate)
-                                          values(@Date,@PCCode,@ProductCode,@StageName,@JBCode,@Rate)";
-
-                        var Parameters1 = new[]
+                        string cntStageStatus = "0";
+                        string query = @"select isnull(Count(Stage3Status),0) as Stage3Status from JobCardDetailssub where Stage3Status ='P' and jobCode=@JobCode";
+                        cntStageStatus = await GetStageStatusCount(query, dgStageScanReq.JBCode);
+                        if (cntStageStatus != "0")
                         {
+                            var jobcards = await _context.JobCards
+                                .Where(j => j.JobCode == dgStageScanReq.JBCode.Trim())
+                                .FirstOrDefaultAsync();
+
+                            if (jobcards != null)
+                            {
+                                jobcards.Stage3Status = "D";
+                            }
+
+                            await _context.SaveChangesAsync();
+                        }
+
+                        string chkDGRate = "0";
+                        chkDGRate = await GetTransName(dgStageScanReq.PCCode_Act, dgStageScanReq.ProductCode, "StageIV");
+                        if (chkDGRate == "0")
+                        {
+                            _getDGRate = "0";
+                            _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode, dgStageScanReq.CpyPartcode);
+
+                            var SqlQueryDgrate = @"Insert Into PCStageWiseRate(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
+
+                            var ParametersDgrate = new[]
+                            {
                             new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
-                            new SqlParameter("@PCCode", dgStageScanReq.PCCode),
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
                             new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
                             new SqlParameter("@StageName","StageIV"),
                             new SqlParameter("@JBCode", dgStageScanReq.JBCode),
-                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim()))
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
                         };
-                        await _context.Database.ExecuteSqlRawAsync(SqlQuery1, Parameters1);
-                    }
-                }
+                            await _context.Database.ExecuteSqlRawAsync(SqlQueryDgrate, ParametersDgrate);
 
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                            var sqlQuery2 = "";
+                            sqlQuery2 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
+
+                            var Parameters1 = new[]
+                            {
+                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
+                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
+                            new SqlParameter("@StageName","StageIV"),
+                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
+                        };
+                            await _context.Database.ExecuteSqlRawAsync(sqlQuery2, Parameters1);
+                        }
+                        else
+                        {
+                            _getDGRate = "0";
+                            _getDGRate = await GetTotalSuppRateAsync(dgStageScanReq.ProductCode, dgStageScanReq.CpyPartcode);
+
+                            var pcStageWiseRate = await _context.PcstageWiseRates
+                                .Where(p => p.Pccode == dgStageScanReq.PCCode_Act.Trim()
+                                && p.PartCode == dgStageScanReq.ProductCode.Trim()
+                                && p.StageName == "StageIV")
+                                .FirstOrDefaultAsync();
+
+                            if (pcStageWiseRate != null)
+                            {
+                                pcStageWiseRate.Rate = double.Parse(_getDGRate.Trim());
+
+                                await _context.SaveChangesAsync();
+                            }
+
+                            var SqlQuery1 = "";
+                            SqlQuery1 = @"Insert Into PCStageWiseRateChange(Dt,PCCode,PartCode,StageName,JobCode,Rate,PCCode_Act)
+                                          values(@Date,@PCCode_Old,@ProductCode,@StageName,@JBCode,@Rate,@PCCode_Act)";
+
+                            var Parameters1 = new[]
+                            {
+                            new SqlParameter("@Date", DateTime.Now){ SqlDbType = SqlDbType.DateTime },
+                            new SqlParameter("@PCCode_Old", dgStageScanReq.PCCode_Old),
+                            new SqlParameter("@ProductCode",dgStageScanReq.ProductCode),
+                            new SqlParameter("@StageName","StageIV"),
+                            new SqlParameter("@JBCode", dgStageScanReq.JBCode),
+                            new SqlParameter("@Rate", double.Parse(_getDGRate.Trim())),
+                            new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
+                        };
+                            await _context.Database.ExecuteSqlRawAsync(SqlQuery1, Parameters1);
+                        }
+                    }
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             });
         }
 
-        public async Task<string> SubmitDGAssemblyStage4Details(DGAssemblySubmitRequest  dgStageScanReq)
+        public async Task<string> SubmitDGAssemblyStage4Details(DGAssemblySubmitRequest dgStageScanReq)
         {
             string? StrBOMCode = "", GetMaxValue = "", PrcNo = "", StrDGRate = "0", StrCPRate = "0", StrCP2Rate = "0", StrCRRate = "", StrHRRate = "0", DGCFM = "", DGNo = "";
 
@@ -1604,7 +1697,7 @@ namespace KalaGenset.ERP.Core.Services
                         CladdingRate = _context.SilCladdingRates
                             .Where(s => s.Kva == partDetails.Kva.ToString().Trim() &&
                                         s.Model == partDetails.Model &&
-                                        s.CompanyCode == dgStageScanReq.PCCode.Trim().Substring(0, 2) &&
+                                        s.CompanyCode == dgStageScanReq.PCCode_Old.Trim().Substring(0, 2) &&
                                         s.Active == true &&
                                         s.Discard == true &&
                                         s.Auth == true)
@@ -1677,7 +1770,7 @@ namespace KalaGenset.ERP.Core.Services
 
                     string[] ProdDts = StrBOMCode.Trim().Split(new[] { "-->" }, StringSplitOptions.None);
                     StrDGRate = _context.ProfitCenterPldetails
-                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode_Old.Trim() &&
                                p.PartCode == dgStageScanReq.ProductCode.Trim())
                                .Select(p => p.Rate)
                                .FirstOrDefault() // Retrieves the first matching record or null
@@ -1688,7 +1781,7 @@ namespace KalaGenset.ERP.Core.Services
                         if (dgStageScanReq.CPSrno.Trim() != "0")
                         {
                             StrCPRate = _context.ProfitCenterPldetails
-                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode_Old.Trim() &&
                                p.PartCode == dgStageScanReq.CPPartcode.Trim())
                                .Select(p => p.Rate)
                                .FirstOrDefault()
@@ -1697,24 +1790,45 @@ namespace KalaGenset.ERP.Core.Services
                         if (dgStageScanReq.CP2Srno.Trim() != "0")
                         {
                             StrCP2Rate = _context.ProfitCenterPldetails
-                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
+                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode_Old.Trim() &&
                                p.PartCode == dgStageScanReq.CP2Partcode.Trim())
                                .Select(p => p.Rate)
                                .FirstOrDefault()
                                .ToString();
                         }
                     }
+                    string CPProvider = "0";//control panel provider wheather its B or M
 
                     if (double.Parse(CPType[1].Trim()) == 0 && DGCFM.Trim() == "STD")
                     {
                         if (dgStageScanReq.CPSrno.Trim() != "0")
                         {
-                            StrCPRate = _context.ProfitCenterPldetails
-                               .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode.Trim() &&
-                               p.PartCode == dgStageScanReq.CPPartcode.Trim())
-                               .Select(p => p.Rate)
+                            CPProvider = _context.Bomdetails
+                                     .Where(b => b.Bomcode == ProdDts[0].Trim() &&
+                               b.PartCode == dgStageScanReq.CPPartcode.Trim() &&
+                               b.Kitcode == dgStageScanReq.ProductCode.Trim())
+                               .Select(p => p.Mob)
                                .FirstOrDefault()
                                .ToString();
+
+                            if (CPProvider == "M")
+                            {
+                                StrCPRate = _context.ProfitCenterPldetails
+                                   .Where(p => p.ProfitCenterCode == dgStageScanReq.PCCode_Old.Trim() &&
+                                   p.PartCode == dgStageScanReq.CPPartcode.Trim())
+                                   .Select(p => p.Rate)
+                                   .FirstOrDefault()
+                                   .ToString();
+                            }
+                            else
+                            {
+                                StrCPRate = _context.Bomdetails.Where(b => b.Bomcode == ProdDts[0].Trim() &&
+                                            b.PartCode == dgStageScanReq.CPPartcode.Trim() &&
+                                            b.Kitcode == dgStageScanReq.ProductCode.Trim())
+                                            .Select(p => p.SuppRate)
+                                           .FirstOrDefault()
+                                           .ToString();
+                            }
                         }
                     }
 
@@ -1786,26 +1900,26 @@ namespace KalaGenset.ERP.Core.Services
                                          .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
                                          .FirstOrDefault();
 
-                        DGNo = await GetDGNoAsync(dgStageScanReq.PCCode.Trim().Substring(0, 2), dgStageScanReq.PCCode.Trim(), yearEnd);
+                        DGNo = await GetDGNoAsync(dgStageScanReq.PCCode_Old.Trim().Substring(0, 2), dgStageScanReq.PCCode_Old.Trim(), yearEnd);
                         if (DGNo == "0")
                         {
                             PrcNo = "DG Serial No Creation Problem";
                             return;
                         }
-                        PrcNo = await GetMaxPrcAsync(yearEnd, dgStageScanReq.PCCode.Trim().Substring(0, 2));
+                        PrcNo = await GetMaxPrcAsync(yearEnd, dgStageScanReq.PCCode_Old.Trim().Substring(0, 2));
 
                         var SqlQuery = @"
                                     INSERT INTO processfeedback (
                                     GroupPFBCode, PFBCode, MaxSrNo, Dt, Yr, MachineCode, SerialNo, ProfitCenterCode, TurretKitCode,
                                     PartCode, PPWCode, MOFCode, VersionCode, ProcessQty, PKitQty, PLength, PWidth, PThickness, 
                                     NstWtPerUt, NstSqftPerUt, WtPerUt, SqftPerUt, CRWt, HRWt, CRRate, HRRate, CompanyCode,
-                                    PPDIRStatus, TRStatus, PFBType, PFBRate, SilCladdingRate, Remark, PrcBOMCode, QPCStatus
+                                    PPDIRStatus, TRStatus, PFBType, PFBRate, SilCladdingRate, Remark, PrcBOMCode, QPCStatus,PCCode_Act
                                     ) 
                                     VALUES (
                                     @PrcNo, @PrcNo, @MaxSrNo, @Date, @Year, @MachineCode, @SerialNo, @PCCode, '0', @ProductCode, '0', 
                                     'MOF', @CPType1, '1', '0', '0', '0', '0', @NstWtPerUt, @NstSqftPerUt, @WtPerUt, @SqftPerUt, 
                                     @CRWt, @HRWt, @CRRate, @HRRate, @CompanyCode, 'P', 'P', @PFBType, @PFBRate, @SilCladdingRate, 
-                                     @Remark, @PrcBOMCode, 'P')";
+                                     @Remark, @PrcBOMCode, 'P', @PCCode_Act)";
 
                         var Parameters = new[]
                         {
@@ -1815,7 +1929,7 @@ namespace KalaGenset.ERP.Core.Services
                           new SqlParameter("@Year", yearEnd.Trim()),
                           new SqlParameter("@MachineCode", DGNo.Trim()),
                           new SqlParameter("@SerialNo", DGNo.Substring(8, 4).Trim()),
-                          new SqlParameter("@PCCode", dgStageScanReq.PCCode.Trim()),
+                          new SqlParameter("@PCCode", dgStageScanReq.PCCode_Old.Trim()),
                           new SqlParameter("@ProductCode", dgStageScanReq.ProductCode.Trim()),
                           new SqlParameter("@CPType1", CPType[1].Trim()),
                           new SqlParameter("@NstWtPerUt", Convert.ToDouble(ProdDts[1].Trim())),
@@ -1826,12 +1940,13 @@ namespace KalaGenset.ERP.Core.Services
                           new SqlParameter("@HRWt", ProdDts[3].Trim()),
                           new SqlParameter("@CRRate", StrCRRate.Trim()),
                           new SqlParameter("@HRRate", StrCRRate.Trim()),
-                          new SqlParameter("@CompanyCode", dgStageScanReq.PCCode.Trim().Substring(0, 2)),
+                          new SqlParameter("@CompanyCode", dgStageScanReq.PCCode_Old.Trim().Substring(0, 2)),
                           new SqlParameter("@PFBRate", double.Parse(StrDGRate.Trim())),
                           new SqlParameter("@SilCladdingRate", (CladdingRate ?? "0").Trim()),
                           new SqlParameter("@Remark", dgStageScanReq.Remark.Trim()),
-                          new SqlParameter("@PrcBOMCode", ProdDts[0].Trim())
-                    };
+                          new SqlParameter("@PrcBOMCode", ProdDts[0].Trim()),
+                          new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                        };
 
                         // Conditional parameter for PFBType
                         if (double.Parse(CPType[1].Trim()) == 0)
@@ -1847,20 +1962,22 @@ namespace KalaGenset.ERP.Core.Services
                         await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
 
                         var sqlQuery = @"INSERT INTO StockWIP 
-                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, StageName)
+                                       (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, StageName, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
                                        VALUES
-                                       (@PCCode, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode, @StockType, @StageName)";
+                                       (@FromPCCode_Old, @ProductCode, @IssueCode, CAST(@IssueDate AS DATETIME), @IssueQty, @ToPCCode_Old, @StockType, @StageName, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
                         var parameters = new[]
                         {
-                             new SqlParameter("@PCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                             new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old ?? (object)DBNull.Value),
                              new SqlParameter("@ProductCode", dgStageScanReq.ProductCode?.Trim() ?? (object)DBNull.Value),
                              new SqlParameter("@IssueCode", PrcNo.Trim()),
                              new SqlParameter("@IssueDate", DateTime.Now) { SqlDbType = SqlDbType.DateTime },
                              new SqlParameter("@IssueQty", 1) { SqlDbType = SqlDbType.Float },
-                             new SqlParameter("@ToPCCode", dgStageScanReq.PCCode ?? (object)DBNull.Value),
+                             new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old ??(object) DBNull.Value),
                              new SqlParameter("@StockType", (object)0 ?? DBNull.Value) { SqlDbType = SqlDbType.Int },
-                             new SqlParameter("@StageName", "StageIV")
+                             new SqlParameter("@StageName", "StageIV"),
+                             new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                             new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                           };
                         await _context.Database.ExecuteSqlRawAsync(sqlQuery, parameters);
 
@@ -1882,13 +1999,14 @@ namespace KalaGenset.ERP.Core.Services
                             );
 
                             // Insert into StockWIP
-                            string stockWipQuery = @"INSERT INTO StockWIP (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
-                                                VALUES ({0}, {1}, {2}, GETDATE(), {3}, {4}, 0)";
+                            string stockWipQuery = @"INSERT INTO StockWIP (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
+                                                VALUES ({0}, {1}, {2}, GETDATE(), {3}, {4}, 0, {5}, {6})";
 
                             await _context.Database.ExecuteSqlRawAsync(
                                 stockWipQuery,
-                                dgStageScanReq.PCCode.Trim(), item.PartCode.Trim(), PrcNo.Trim(),
-                                double.Parse(item.TotalQty.Trim()), dgStageScanReq.PCCode.Trim()
+                                dgStageScanReq.PCCode_Old.Trim(), item.PartCode.Trim(), PrcNo.Trim(),
+                                double.Parse(item.TotalQty.Trim()), dgStageScanReq.PCCode_Old.Trim(),
+                                dgStageScanReq.PCCode_Act ?? (object)DBNull.Value, dgStageScanReq.PCCode_Act ?? (object)DBNull.Value
                             );
                         }
                         //For Engine
@@ -2033,18 +2151,20 @@ namespace KalaGenset.ERP.Core.Services
 
                             await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
 
-                            var sqlInsertQuery1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                            var sqlInsertQuery1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                              VALUES 
-                                             (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
+                                             (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
                             var sqlParams1 = new object[]
                             {
-                          new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
-                          new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
-                          new SqlParameter("@IssueCode", PrcNo.Trim()),
-                          new SqlParameter("@IssueQty", 1),
-                          new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
-                          new SqlParameter("@StockType", 0)
+                              new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
+                              new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
+                              new SqlParameter("@IssueCode", PrcNo.Trim()),
+                              new SqlParameter("@IssueQty", 1),
+                              new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode_Old.Trim()),
+                              new SqlParameter("@StockType", 0),
+                              new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                              new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                             };
 
                             await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery1, sqlParams1);
@@ -2118,19 +2238,21 @@ namespace KalaGenset.ERP.Core.Services
 
                             await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
-                            var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                            var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                                   VALUES 
-                                                  (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
+                                                  (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToPCCode_Old, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
                             var sqlParameter = new object[]
-                            {
-                                new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
+                           {
+                                new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
                                 new SqlParameter("@IssueQty", 1),
-                                new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
-                                new SqlParameter("@StockType",SqlDbType.Int) { Value = 0 }
-                            };
+                                new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
+                                new SqlParameter("@StockType",SqlDbType.Int) { Value = 0 },
+                                new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                                new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
+                           };
 
                             await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
 
@@ -2204,18 +2326,20 @@ namespace KalaGenset.ERP.Core.Services
 
                                 await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
-                                var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType) 
+                                var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                                   VALUES 
-                                                  (@FromProfitCenterCode, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType)";
+                                                  (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToPCCode_Old, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
                                 var sqlParameter = new object[]
                                 {
-                                new SqlParameter("@FromProfitCenterCode", dgStageScanReq.PCCode.Trim()),
+                                new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
                                 new SqlParameter("@IssueQty", 1),
-                                new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode.Trim()),
-                                new SqlParameter("@StockType", 0)
+                                new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
+                                new SqlParameter("@StockType", 0),
+                                new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
+                                new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                                 };
 
                                 await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
@@ -2350,7 +2474,7 @@ namespace KalaGenset.ERP.Core.Services
                         List<InternalTOCResult> dsKanBan = new List<InternalTOCResult>();
 
                         string strKanBan = "";
-                        dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode);
+                        dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode_Old);
 
                         if (dsKanBan.Count > 0)
                         {
@@ -2359,25 +2483,27 @@ namespace KalaGenset.ERP.Core.Services
                              AND Prefix = @Prefix 
                              AND Yr = @YearEnd";
 
-                            GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
+                            GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode_Old.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
                             strKanBan = GetMaxValue;
                             string? yearEnds = _context.YearEnds
                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
                                         .FirstOrDefault();
-                            string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, ToProfitCenterCode, ClassCode, CompanyCode, ActNo, 
-                                         REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode) 
-                                         VALUES (@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, @ClassCode, @CompanyCode, 
-                                         @ActNo, @REQStatus, @ReqType, @Remark, @Discard, @Active, @Auth, @SourceCode)";
+                            string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, @ToProfitCenterCode, @ProfitCenterCode_Act, @ToProfitCenterCode_Act, ClassCode, CompanyCode, ActNo, 
+                                         REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode, PCCode_Act) 
+                                         VALUES (@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ProfitCenterCode_Old, @ClassCode, @CompanyCode, 
+                                         @ActNo, @REQStatus, @ReqType, @Remark, @Discard, @Active, @Auth, @SourceCode, @PCCode_Act)";
 
                             await _context.Database.ExecuteSqlRawAsync(query,
                                 new SqlParameter("@REQCode", strKanBan.Trim()),
                                 new SqlParameter("@MaxSrNo", GetMaxValue.Substring(10, 8)),
                                 new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss tt")),
                                 new SqlParameter("@Yr", yearEnds),
-                                new SqlParameter("@ProfitCenterCode", dgStageScanReq.PCCode.Trim()),
+                                new SqlParameter("@ProfitCenterCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@ToProfitCenterCode", "23.001"),
+                                new SqlParameter("@ProfitCenterCode_Act", "23.001"),
+                                new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act),
                                 new SqlParameter("@ClassCode", dgStageScanReq.ProductCode),
-                                new SqlParameter("@CompanyCode", dgStageScanReq.PCCode.Substring(0, 2)),
+                                new SqlParameter("@CompanyCode", dgStageScanReq.PCCode_Old.Substring(0, 2)),
                                 new SqlParameter("@ActNo", "1"),
                                 new SqlParameter("@REQStatus", "P"),
                                 new SqlParameter("@ReqType", "WIP"),
@@ -2429,17 +2555,25 @@ namespace KalaGenset.ERP.Core.Services
                                     VALUES (@TransCode, @Dt, @MainSerialNo, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime, @QA6M)";
 
                             var parameters = new[]
-                            {
-                         new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
-                         new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
-                         new SqlParameter("@MainSerialNo", dgStageScanReq.EngSrNo.Trim()),
-                         new SqlParameter("@PrcName", "DG Stage4"),
-                         new SqlParameter("@ChkPointId", item.PrcId),
-                         new SqlParameter("@PrcChkPoints", item.Remark),
-                         new SqlParameter("@PrcStatus", dgStageScanReq.PrcStatus),
-                         new SqlParameter("@DGStartTime", _DGStartTime),
-                         new SqlParameter("@QA6M", dgStageScanReq.QA6M)
-                    };
+                             {
+    new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
+    new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
+    new SqlParameter("@MainSerialNo", dgStageScanReq.EngSrNo.Trim()),
+    new SqlParameter("@PrcName", "DG Stage4"),
+    new SqlParameter("@ChkPointId", item.PrcId),
+    new SqlParameter("@PrcChkPoints", item.Remark),
+    new SqlParameter("@PrcStatus", dgStageScanReq.PrcStatus),
+    new SqlParameter("@DGStartTime", SqlDbType.DateTime)
+    {
+        Value = string.IsNullOrEmpty(_DGStartTime)
+            ? (object)DBNull.Value
+            : DateTime.ParseExact(_DGStartTime.Trim(),
+                new[] { "yyyy-MM-dd HH.mm.ss", "yyyy-MM-dd HH:mm:ss.fff", "yyyy-MM-dd HH:mm:ss" },
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None)
+    },
+    new SqlParameter("@QA6M", dgStageScanReq.QA6M ?? 0)
+};
                             await _context.Database.ExecuteSqlRawAsync(query, parameters);
                         }
 
@@ -2493,64 +2627,64 @@ namespace KalaGenset.ERP.Core.Services
 
             var strategy = _context.Database.CreateExecutionStrategy();
 
-           await strategy.ExecuteAsync(async () =>
-           {
+            await strategy.ExecuteAsync(async () =>
+            {
                 await using var transaction = await _context.Database.BeginTransactionAsync();
 
-              try
-            {
-                if (testReportSubmitDetailsDTO.TRTime == "TRStart")
+                try
                 {
-                    int trCnt = _context.TestReports
-                                .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim() && tr.Active == true)
-                                .Count();
-
-                    if (trCnt > 0)
+                    if (testReportSubmitDetailsDTO.TRTime == "TRStart")
                     {
-                       StrTRCode = "TRStart For This Process Already Done";
-                       return;
+                        int trCnt = _context.TestReports
+                                   .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim() && tr.Active == true)
+                                   .Count();
+
+                        if (trCnt > 0)
+                        {
+                            StrTRCode = "TRStart For This Process Already Done";
+                            return;
+                        }
                     }
-                }
 
-                if (testReportSubmitDetailsDTO.TRCode != null)
-                {
-                    TRQAStatus = _context.TestReports
-                                         .Where(tr => tr.Trcode == testReportSubmitDetailsDTO.TRCode.Trim())
-                                         .Select(tr => tr.Qastatus)
-                                         .FirstOrDefault(); 
-                }
+                    if (testReportSubmitDetailsDTO.TRCode != null)
+                    {
+                        TRQAStatus = _context.TestReports
+                                            .Where(tr => tr.Trcode == testReportSubmitDetailsDTO.TRCode.Trim())
+                                            .Select(tr => tr.Qastatus)
+                                            .FirstOrDefault();
+                    }
 
-                if (testReportSubmitDetailsDTO.TRTime == "TRStart")
-                {
-                    strTimefield = "TRStartTime";
-                }
-                else if (testReportSubmitDetailsDTO.TRTime == "TREnd")
-                {
-                    strTimefield = "TREndTime";
-                }
-                else if (testReportSubmitDetailsDTO.TRTime == "DGStart")
-                {
-                    strTimefield = "DGStartTime";
-                }
-                else if (testReportSubmitDetailsDTO.TRTime == "DGEnd")
-                {
-                    strTimefield = "DGEndTime";
-                }
+                    if (testReportSubmitDetailsDTO.TRTime == "TRStart")
+                    {
+                        strTimefield = "TRStartTime";
+                    }
+                    else if (testReportSubmitDetailsDTO.TRTime == "TREnd")
+                    {
+                        strTimefield = "TREndTime";
+                    }
+                    else if (testReportSubmitDetailsDTO.TRTime == "DGStart")
+                    {
+                        strTimefield = "DGStartTime";
+                    }
+                    else if (testReportSubmitDetailsDTO.TRTime == "DGEnd")
+                    {
+                        strTimefield = "DGEndTime";
+                    }
 
-                if (strTimefield == "TRStartTime")
-                {
-                    string query1 = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
+                    if (strTimefield == "TRStartTime")
+                    {
+                        string query1 = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
                              WHERE TblName = @TableName AND CompCode = @CompCode 
                              AND Prefix = @Prefix 
                              AND Yr = @YearEnd";
 
-                    StrTRCode = await GetMaxNo("TRC", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2), query1, "TestReport");
+                        StrTRCode = await GetMaxNo("TRC", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2), query1, "TestReport");
 
-                    string yearEnd = _context.YearEnds
-                                             .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
-                                             .FirstOrDefault();
+                        string yearEnd = _context.YearEnds
+                                                .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
+                                                .FirstOrDefault();
 
-                    string SqlQuery = @"INSERT INTO TestReport (TRCode, Dt, Yr, MaxSrNo, ProcessCode, MachineNo, Remark,
+                        string SqlQuery = @"INSERT INTO TestReport (TRCode, Dt, Yr, MaxSrNo, ProcessCode, MachineNo, Remark,
                                 RevTRCode, BalQty, EngineModel, HP, KW, Speed, Alternator, RatedKVA, RatedVolt, RatedAMPS,
                                 Ph, PF, Frequency, AMBTemp, RY, YB, BR, VoltageRegulation, RoomTempreture, RPMRegulation,
                                 LLOP, HWT, HCT, OSD, DieselRate, PerUnitQty, PDIRStatus, CompanyCode, " + strTimefield + @")  
@@ -2559,10 +2693,10 @@ namespace KalaGenset.ERP.Core.Services
                                  '11', '12', '13', '14', @DieselRate, @PerUnitQty, 'P', @CompanyCode, @TimeFieldValue
                                 )";
 
-                    var Parameters = new[]
-                    {
+                        var Parameters = new[]
+                       {
                                 new SqlParameter("@TRCode", StrTRCode.Trim()),
-                                new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                                new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
                                 new SqlParameter("@Yr", yearEnd),
                                 new SqlParameter("@MaxSrNo", StrTRCode.Substring(10, 8)),
                                 new SqlParameter("@ProcessCode", testReportSubmitDetailsDTO.PFBCode.Trim()),
@@ -2571,174 +2705,180 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@DieselRate", testReportSubmitDetailsDTO.DieselRate),
                                 new SqlParameter("@PerUnitQty", testReportSubmitDetailsDTO.DieselQty),
                                 new SqlParameter("@CompanyCode", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2)),
-                                new SqlParameter("@TimeFieldValue", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
-                  };
+                                new SqlParameter("@TimeFieldValue", SqlDbType.DateTime) { Value = DateTime.Now }
+                   };
 
-                    await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
+                        await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
 
-                    int SrNo = 0;
-                    foreach (var item in testReportSubmitDetailsDTO.TRDGKitDetails)
-                    {
-                        SrNo += 1;
+                        int SrNo = 0;
+                        foreach (var item in testReportSubmitDetailsDTO.TRDGKitDetails)
+                        {
+                            SrNo += 1;
 
-                        string SqlQuery1 = @"INSERT INTO TestReportSerialNoDetails (TRCode, SrNo, PartCode, SerialNo, SerialStatus, Qty, GiirCode)
+                            string SqlQuery1 = @"INSERT INTO TestReportSerialNoDetails (TRCode, SrNo, PartCode, SerialNo, SerialStatus, Qty, GiirCode)
                                             VALUES (@TRCode, @SrNo, @PartCode, @SerialNo, 'D', 1, @GiirCode)";
 
-                        var parameters = new[]
-                        {
+                            var parameters = new[]
+                           {
                               new SqlParameter("@TRCode", StrTRCode.Trim()),
                               new SqlParameter("@SrNo", SrNo),
                               new SqlParameter("@PartCode", item.PartCode.Trim()),
                               new SqlParameter("@SerialNo", item.SerialNo.Trim()),
                               new SqlParameter("@GiirCode", testReportSubmitDetailsDTO.PFBCode.Trim())
-                        };
+                         };
 
-                        await _context.Database.ExecuteSqlRawAsync(SqlQuery1, parameters);
-                    }
-
-                    //TrserialStatus change for ProcessFeedbackDetailsSub Table
-                    var processFeedbackDetails = await _context.ProcessFeedbackDetailsSubs
-                                                    .Where(p => p.Pfbcode == testReportSubmitDetailsDTO.PFBCode.Trim())
-                                                    .ToListAsync();
-
-                    foreach (var record in processFeedbackDetails)
-                    {
-                        record.TrserialStatus = "D";
-                    }
-
-                    //Trstatus change for ProcessFeedBacks Table
-                    var processFeedback = await _context.ProcessFeedBacks
-                                                    .Where(p => p.Pfbcode == testReportSubmitDetailsDTO.PFBCode.Trim())
-                                                    .ToListAsync();
-
-                    foreach (var record in processFeedback)
-                    {
-                        record.Trstatus = "D";
-                    }
-
-                    await _context.SaveChangesAsync();
-                }
-                else
-                {
-
-                    if (strTimefield == "DGEndTime")
-                    {
-                        int SrNo = 0;
-                        var dgStartTime = await _context.TestReports
-                                         .Where(t => t.Trcode == testReportSubmitDetailsDTO.TRCode.Trim())
-                                         .Select(t => t.DgstartTime.HasValue ? t.DgstartTime.Value.ToString("yyyy-MM-dd HH:mm:ss") : null)
-                                         .FirstOrDefaultAsync();
-
-                        foreach (var item in testReportSubmitDetailsDTO.TRPrcChkDts)
-                        {
-                            SrNo += 1;
-                            string insertQuery = @"INSERT INTO PrcChkDetails(TransCode, Dt, MainSerialNo, QA6M, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime) 
-                                              VALUES(@TransCode, @Dt, @MainSerialNo, @QA6M, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime)";
-
-                            var parameters = new[]
-                            {
-                              new SqlParameter("@TransCode", testReportSubmitDetailsDTO.TRCode.Trim()),
-                              new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
-                              new SqlParameter("@MainSerialNo", testReportSubmitDetailsDTO.DGSrNo.Trim()),
-                              new SqlParameter("@QA6M", testReportSubmitDetailsDTO.QA6M),
-                              new SqlParameter("@PrcName", "DG TestReport"),
-                              new SqlParameter("@ChkPointId", item.PrcId),
-                              new SqlParameter("@PrcChkPoints", item.Remark.Trim()),
-                              new SqlParameter("@PrcStatus", testReportSubmitDetailsDTO.QAStatus),
-                              new SqlParameter("@DGStartTime", dgStartTime.Trim())
-                        };
-
-                            await _context.Database.ExecuteSqlRawAsync(insertQuery, parameters);
+                            await _context.Database.ExecuteSqlRawAsync(SqlQuery1, parameters);
                         }
 
-                        // Determine the records to update
-                        var testReport = await _context.TestReports
-                            .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim() && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim())
-                            .FirstOrDefaultAsync();
+                        //TrserialStatus change for ProcessFeedbackDetailsSub Table
+                        var processFeedbackDetails = await _context.ProcessFeedbackDetailsSubs
+                                                       .Where(p => p.Pfbcode == testReportSubmitDetailsDTO.PFBCode.Trim())
+                                                       .ToListAsync();
 
-                        if (testReport != null)
+                        foreach (var record in processFeedbackDetails)
                         {
-                            if (testReportSubmitDetailsDTO.QAStatus == "Rework")
-                            {
-                                // Set specified fields to NULL and QAStatus to 'P'
-                                typeof(TestReport).GetProperty(strTimefield)?.SetValue(testReport, null);
-                                testReport.DgstartTime = null;
-                                testReport.Qastatus = "P";
-                            }
-                            else
-                            {
-                                // Set dynamic time field to current datetime and QAStatus to 'D'
-                                typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
-                                ?.SetValue(testReport, DateTime.Now);
-                                testReport.Qastatus = "D";
-                            }
-
-                            if (double.TryParse(testReportSubmitDetailsDTO.DieselQty, out double perUnitQty))
-                            {
-                                testReport.PerUnitQty = perUnitQty;
-                            }
-                            else
-                            {
-                                testReport.PerUnitQty = 0;
-                            }
-
-                            await _context.SaveChangesAsync();
+                            record.TrserialStatus = "D";
                         }
 
+                        //Trstatus change for ProcessFeedBacks Table
+                        var processFeedback = await _context.ProcessFeedBacks
+                                                       .Where(p => p.Pfbcode == testReportSubmitDetailsDTO.PFBCode.Trim())
+                                                       .ToListAsync();
 
-                    }
-                    else if (strTimefield == "DGStartTime" && TRQAStatus.Trim() == "Rework")
-                    {
-                        var testReportDetails = await _context.TestReports
-                                                .FirstOrDefaultAsync(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim()
-                                                && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim());
-
-                        if (testReportDetails != null)
+                        foreach (var record in processFeedback)
                         {
-                            typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
-                           ?.SetValue(testReportDetails, DateTime.Now);
-
-
-                            testReportDetails.Qastatus = "P";
-
-                            await _context.SaveChangesAsync();
-                        }
-                    }
-                    else
-                    {
-                        var testReports = await _context.TestReports
-                                          .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim()
-                                          && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim()).ToListAsync();
-
-                        foreach (var report in testReports)
-                        {
-                            typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
-                            ?.SetValue(report, DateTime.Now);
-
+                            record.Trstatus = "D";
                         }
 
                         await _context.SaveChangesAsync();
                     }
-                }
+                    else
+                    {
 
-                if (strTimefield == "TRStartTime")
+                        if (strTimefield == "DGEndTime")
+                        {
+                            int SrNo = 0;
+                            var dgStartTime = await _context.TestReports
+                                            .Where(t => t.Trcode == testReportSubmitDetailsDTO.TRCode.Trim())
+                                            .Select(t => t.DgstartTime.HasValue ? t.DgstartTime.Value.ToString("yyyy-MM-dd HH:mm:ss") : null)
+                                            .FirstOrDefaultAsync();
+
+                            foreach (var item in testReportSubmitDetailsDTO.TRPrcChkDts)
+                            {
+                                SrNo += 1;
+                                string insertQuery = @"INSERT INTO PrcChkDetails(TransCode, Dt, MainSerialNo, QA6M, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime) 
+                                              VALUES(@TransCode, @Dt, @MainSerialNo, @QA6M, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime)";
+
+                                var parameters = new[]
+                                {
+                                   new SqlParameter("@TransCode", testReportSubmitDetailsDTO.TRCode.Trim()),
+                                   new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
+                                   new SqlParameter("@MainSerialNo", testReportSubmitDetailsDTO.DGSrNo.Trim()),
+                                   new SqlParameter("@QA6M", testReportSubmitDetailsDTO.QA6M ?? "0"),
+                                   new SqlParameter("@PrcName", "DG TestReport"),
+                                   new SqlParameter("@ChkPointId", item.PrcId),
+                                   new SqlParameter("@PrcChkPoints", item.Remark.Trim()),
+                                   new SqlParameter("@PrcStatus", testReportSubmitDetailsDTO.QAStatus),
+                                   new SqlParameter("@DGStartTime", SqlDbType.DateTime)
+                                   {
+                                      Value = string.IsNullOrEmpty(dgStartTime) ? (object)DBNull.Value : DateTime.ParseExact(dgStartTime.Trim(),
+                                      new[] { "yyyy-MM-dd HH.mm.ss", "yyyy-MM-dd HH:mm:ss.fff", "yyyy-MM-dd HH:mm:ss" },
+                                      System.Globalization.CultureInfo.InvariantCulture,
+                                      System.Globalization.DateTimeStyles.None)
+                                   }
+                                };
+
+                                await _context.Database.ExecuteSqlRawAsync(insertQuery, parameters);
+                            }
+
+                            // Determine the records to update
+                            var testReport = await _context.TestReports
+                               .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim() && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim())
+                               .FirstOrDefaultAsync();
+
+                            if (testReport != null)
+                            {
+                                if (testReportSubmitDetailsDTO.QAStatus == "Rework")
+                                {
+                                    // Set specified fields to NULL and QAStatus to 'P'
+                                    typeof(TestReport).GetProperty(strTimefield)?.SetValue(testReport, null);
+                                    testReport.DgstartTime = null;
+                                    testReport.Qastatus = "P";
+                                }
+                                else
+                                {
+                                    // Set dynamic time field to current datetime and QAStatus to 'D'
+                                    typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
+                                   ?.SetValue(testReport, DateTime.Now);
+                                    testReport.Qastatus = "D";
+                                }
+
+                                if (double.TryParse(testReportSubmitDetailsDTO.DieselQty, out double perUnitQty))
+                                {
+                                    testReport.PerUnitQty = perUnitQty;
+                                }
+                                else
+                                {
+                                    testReport.PerUnitQty = 0;
+                                }
+
+                                await _context.SaveChangesAsync();
+                            }
+
+
+                        }
+                        else if (strTimefield == "DGStartTime" && TRQAStatus.Trim() == "Rework")
+                        {
+                            var testReportDetails = await _context.TestReports
+                                                   .FirstOrDefaultAsync(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim()
+                                                   && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim());
+
+                            if (testReportDetails != null)
+                            {
+                                typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
+                              ?.SetValue(testReportDetails, DateTime.Now);
+
+
+                                testReportDetails.Qastatus = "P";
+
+                                await _context.SaveChangesAsync();
+                            }
+                        }
+                        else
+                        {
+                            var testReports = await _context.TestReports
+                                             .Where(tr => tr.ProcessCode == testReportSubmitDetailsDTO.PFBCode.Trim()
+                                             && tr.MachineNo == testReportSubmitDetailsDTO.DGSrNo.Trim()).ToListAsync();
+
+                            foreach (var report in testReports)
+                            {
+                                typeof(TestReport).GetProperty(strTimefield, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance)
+                               ?.SetValue(report, DateTime.Now);
+
+                            }
+
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+
+                    if (strTimefield == "TRStartTime")
+                    {
+                        StrTRCode = $"TestReport Code={StrTRCode}.";
+                    }
+                    else
+                    {
+                        StrTRCode = $"TestReport = {testReportSubmitDetailsDTO.TRCode.Trim()} Updated With {strTimefield} Timings";
+                    }
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
                 {
-                    StrTRCode = $"TestReport Code={StrTRCode}.";
-                }
-                else
-                {
-                    StrTRCode = $"TestReport = {testReportSubmitDetailsDTO.TRCode.Trim()} Updated With {strTimefield} Timings";
+                    await transaction.RollbackAsync();
+                    throw;
                 }
 
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-
-           });
+            });
             return StrTRCode;
         }
 
@@ -2770,7 +2910,7 @@ namespace KalaGenset.ERP.Core.Services
                         }
                         foreach (var item in packingSlipSubmitDetailsReq.MOFAddParts)
                         {
-                            if (item.Qty - item.WIPStock < 0)
+                            if (item.Qty > item.WIPStock)
                             {
                                 StrPSLCode = $"Insufficient Stock(Additional Part) For: {item.PartCode}";
                                 return;
@@ -2786,19 +2926,19 @@ namespace KalaGenset.ERP.Core.Services
 
                         if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "01" && StrTPSStatus.Trim() == "P")
                         {
-                            StrPCCodeStkIssue = "01.004";
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act; //01.004
                             StrPCCodeStkRecieved = "01.018";
                             PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
                         }
                         else if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "28" && StrTPSStatus.Trim() == "P")
                         {
-                            StrPCCodeStkIssue = "28.001";
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act; // 28.001
                             StrPCCodeStkRecieved = "28.005";
                             PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
                         }
                         else
                         {
-                            StrPCCodeStkIssue = "03.051";
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act;   //03.051
                             StrPCCodeStkRecieved = "03.019";
                             PC_CompanyCode = "03";
                         }
@@ -3057,8 +3197,8 @@ namespace KalaGenset.ERP.Core.Services
                             if (item.PartCode.Trim() != "0")
                             {
                                 SrNo += 1;
-                                string insertStockWipSql = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType)
-                                                            VALUES(@FromPC, @PartCode, @IssueCode, @IssueDate, @IssueQty, @ToPC, @StockType);";
+                                string insertStockWipSql = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act)
+                                                            VALUES(@FromPC, @PartCode, @IssueCode, @IssueDate, @IssueQty, @ToPC, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
                                 var parameters = new[]
                                 {
                                     new SqlParameter("@FromPC", StrPCCodeStkIssue.Trim()),
@@ -3067,7 +3207,9 @@ namespace KalaGenset.ERP.Core.Services
                                     new SqlParameter("@IssueDate", DateTime.Now),
                                     new SqlParameter("@IssueQty", item.Qty),
                                     new SqlParameter("@ToPC", StrPCCodeStkRecieved.Trim()),
-                                    new SqlParameter("@StockType", (object)0 ?? DBNull.Value){ SqlDbType = SqlDbType.Int }
+                                    new SqlParameter("@StockType", (object)0 ?? DBNull.Value){ SqlDbType = SqlDbType.Int },
+                                    new SqlParameter("@FromProfitCenterCode_Act", packingSlipSubmitDetailsReq.pccode_act.Trim()),
+                                    new SqlParameter("@ToProfitCenterCode_Act", packingSlipSubmitDetailsReq.pccode_act.Trim())
                                 };
                                 await _context.Database.ExecuteSqlRawAsync(insertStockWipSql, parameters);
 
@@ -3088,8 +3230,8 @@ namespace KalaGenset.ERP.Core.Services
 
                         await transaction.CommitAsync();
 
-                       StrPSLCode = $"PSStart Process Completed Successfully For = {StrPSLCode}";
-                       return;
+                        StrPSLCode = $"PSStart Process Completed Successfully For = {StrPSLCode}";
+                        return;
                     }
                     else if (packingSlipSubmitDetailsReq.PSTime == "PSEndTime")
                     {
@@ -3131,7 +3273,7 @@ namespace KalaGenset.ERP.Core.Services
 
                         var psCode = packingSlipSubmitDetailsReq.PSCode.Trim();
                         var columnName = packingSlipSubmitDetailsReq.PSTime.Trim();
-                        var dateTimeNow = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        var dateTimeNow = DateTime.Now;
                         string updateSqlQuery = $"UPDATE PackingSlip SET {columnName} = @p0 WHERE PSCode = @p1";
                         await _context.Database.ExecuteSqlRawAsync(updateSqlQuery, dateTimeNow, psCode);
 
@@ -3150,7 +3292,7 @@ namespace KalaGenset.ERP.Core.Services
                 }
             });
 
-             return StrPSLCode;        
+            return StrPSLCode;
         }
 
         public async Task<string> SubmitJobCard2Details(Jobcard2SubmitDetails jobcard2SubmitDetailsReq)
@@ -3224,8 +3366,8 @@ namespace KalaGenset.ERP.Core.Services
 
                     JobCardNo = await GetMaxNo("JCP", jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2), query, "JobCard2");
 
-                    string sqlJobCard2 = @"INSERT INTO JobCard2 (JobCode, Dt, Yr, MaxSrNo, PCCode, Remark, CompanyCode, Active, Auth) 
-                                     VALUES (@JobCode, GETDATE(), @Yr, @MaxSrNo, @PCCode, @Remark, @CompanyCode, @Active, @Auth)";
+                    string sqlJobCard2 = @"INSERT INTO JobCard2 (JobCode, Dt, Yr, MaxSrNo, PCCode, Remark, CompanyCode, Active, Auth, PCCode_Act) 
+                                     VALUES (@JobCode, GETDATE(), @Yr, @MaxSrNo, @PCCode, @Remark, @CompanyCode, @Active, @Auth, @PCCode_Act)";
                     var parameters = new[]
                     {
                         new SqlParameter("@JobCode", JobCardNo.Trim()),
@@ -3236,6 +3378,7 @@ namespace KalaGenset.ERP.Core.Services
                         new SqlParameter("@CompanyCode", jobcard2SubmitDetailsReq.PCCode.Trim().Substring(0, 2)),
                         new SqlParameter("@Active", 1),
                         new SqlParameter("@Auth", 1),
+                        new SqlParameter("@PCCode_Act", jobcard2SubmitDetailsReq.PCCode_Act),
                 };
                     await _context.Database.ExecuteSqlRawAsync(sqlJobCard2, parameters);
 
@@ -3286,7 +3429,7 @@ namespace KalaGenset.ERP.Core.Services
                                     .Select(pt => (int?)pt.PanelTypeId)
                                     .FirstOrDefaultAsync();
 
-                                panelTypeId = tempPanelTypeId?.ToString();
+                                panelTypeId = tempPanelTypeId?.ToString() ?? "0";
                             }
                         }
 
@@ -3324,6 +3467,7 @@ namespace KalaGenset.ERP.Core.Services
                             {
                                 string? jobCard1;
                                 string? j2Priority;
+                                SrNok += 1;
                                 if (dsdetail.SrNoPartcode.ToString().Trim().StartsWith("00002"))
                                 {
                                     // Fetch JobCard1
@@ -3408,7 +3552,7 @@ namespace KalaGenset.ERP.Core.Services
 
                             int requiredQty = int.TryParse(item.Jobcard2Qty?.Trim(), out var parsedQty) ? parsedQty : 0;
                             if (requiredQty > strEngQty)
-                            { JobCardNo = $"Engine SrNo Not available For DG {partDesc}"; return; }  
+                            { JobCardNo = $"Engine SrNo Not available For DG {partDesc}"; return; }
 
                             if (requiredQty > strAltQty)
                             { JobCardNo = $"Alternator SrNo Not available For DG {partDesc}"; return; }
@@ -3594,7 +3738,7 @@ namespace KalaGenset.ERP.Core.Services
                 }
             });
 
-             return JobCardNo;
+            return JobCardNo;
         }
 
         private async Task<List<PanelTypePartcodeDto>> GetCPPartcodeBangaloreAsync(string panelTypeId, string partCode, IDbContextTransaction transaction)
@@ -3651,48 +3795,60 @@ namespace KalaGenset.ERP.Core.Services
         {
             List<PanelTypePartcodeDto> cpPartcodeResult = new List<PanelTypePartcodeDto>();
 
-            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            try
             {
-                command.Transaction = transaction.GetDbTransaction();
-                command.CommandText = "GetCPPartcode";
-                command.CommandType = CommandType.StoredProcedure;
-
-                command.Parameters.Add(new SqlParameter("@PanelTypeId", SqlDbType.Int)
+                using (var command = _context.Database.GetDbConnection().CreateCommand())
                 {
-                    Value = double.Parse(panelTypeId) == 0 ? 0 : Convert.ToInt32(panelTypeId)
-                });
+                    command.Transaction = transaction.GetDbTransaction();
+                    command.CommandText = "GetCPPartcode";
+                    command.CommandType = CommandType.StoredProcedure;
 
-                command.Parameters.Add(new SqlParameter("@PartCode", SqlDbType.NVarChar, 20)
-                {
-                    Value = double.Parse(panelTypeId) == 0 ? partCode.Trim() : "0"
-                });
-
-                await _context.Database.OpenConnectionAsync();
-
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    while (await reader.ReadAsync())
+                    command.Parameters.Add(new SqlParameter("@PanelTypeId", SqlDbType.Int)
                     {
-                        if (double.Parse(panelTypeId) == 0)
+                        Value = double.Parse(panelTypeId) == 0 ? 0 : Convert.ToInt32(panelTypeId)
+                    });
+
+                    //command.Parameters.Add(new SqlParameter("@PartCode", SqlDbType.NVarChar, 20)
+                    //{
+                    //    Value = double.Parse(panelTypeId) == 0 ? partCode.Trim() : "0"
+                    //});
+                    command.Parameters.Add(new SqlParameter("@PartCode", SqlDbType.NVarChar, 20)
+                    {
+                        Value = partCode.Trim()
+                    });
+
+                    await _context.Database.OpenConnectionAsync();
+
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
                         {
-                            cpPartcodeResult.Add(new PanelTypePartcodeDto
+                            if (double.Parse(panelTypeId) == 0)
                             {
-                                PanelTypePartcode = reader["PanelTypePartcode"].ToString()
-                            });
-                        }
-                        else
-                        {
-                            cpPartcodeResult.Add(new PanelTypePartcodeDto
+                                cpPartcodeResult.Add(new PanelTypePartcodeDto
+                                {
+                                    PanelTypePartcode = reader["PanelTypePartcode"].ToString()
+                                });
+                            }
+                            else
                             {
-                                SerialNo = reader["SerialNo"].ToString(),
-                                GCode = reader["GCode"].ToString(),
-                                PartCode = reader["PartCode"].ToString(),
-                                QDt = reader["QDt"] != DBNull.Value ? Convert.ToDateTime(reader["QDt"]) : (DateTime?)null,
-                                TRFStatus = reader["TRFStatus"].ToString()
-                            });
+                                cpPartcodeResult.Add(new PanelTypePartcodeDto
+                                {
+                                    SerialNo = reader["SerialNo"].ToString(),
+                                    GCode = reader["GCode"].ToString(),
+                                    PartCode = reader["PartCode"].ToString(),
+                                    QDt = reader["QDt"] != DBNull.Value ? Convert.ToDateTime(reader["QDt"]) : (DateTime?)null,
+                                    TRFStatus = reader["TRFStatus"].ToString()
+                                });
+                            }
                         }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+
+                throw ex;
             }
 
             return cpPartcodeResult;
@@ -3707,78 +3863,7 @@ namespace KalaGenset.ERP.Core.Services
             return batPartCount > 0;
         }
 
-        public async Task<string> GetMaxNo(string prefix, string compCode, string query, string tblName)
-        {
-            string strmax = "";
-            string NewTransCode = "";
-            int intmax = 0;
-            string? yearEnd = _context.YearEnds
-                                     .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
-                                     .FirstOrDefault();
 
-            //string query = @"SELECT ISNULL(MaxValue, 0) AS MXNO FROM GetMaxCode 
-            //                 WHERE TblName = @TableName AND CompCode = @CompCode 
-            //                 AND Prefix = @Prefix 
-            //                 AND Yr = @YearEnd";
-
-            var connection = _context.Database.GetDbConnection();
-            if (connection.State != ConnectionState.Open)
-                await connection.OpenAsync();
-
-
-            using (var cmd = connection.CreateCommand())
-            {
-                cmd.CommandText = query;
-                cmd.CommandType = CommandType.Text;
-
-                cmd.Parameters.Add(new SqlParameter("@CompCode", compCode));
-                cmd.Parameters.Add(new SqlParameter("@Prefix", prefix));
-                cmd.Parameters.Add(new SqlParameter("@YearEnd", yearEnd));
-                cmd.Parameters.Add(new SqlParameter("@TableName", tblName));
-
-                // Attach existing EF Core transaction if exists
-                var currentTransaction = _context.Database.CurrentTransaction;
-                if (currentTransaction != null)
-                    cmd.Transaction = currentTransaction.GetDbTransaction();
-
-                var result = await cmd.ExecuteScalarAsync();
-                if (result != null && result != DBNull.Value)
-                {
-                    intmax = Convert.ToInt32(result);
-                }
-            }
-
-            if (intmax == 0)
-                strmax = "000001";
-            else if (intmax < 9)
-                strmax = "00000" + (intmax + 1);
-            else if (intmax < 99)
-                strmax = "0000" + (intmax + 1);
-            else if (intmax < 999)
-                strmax = "000" + (intmax + 1);
-            else if (intmax < 9999)
-                strmax = "00" + (intmax + 1);
-            else if (intmax < 99999)
-                strmax = "0" + (intmax + 1);
-            else
-                strmax = Convert.ToString(intmax + 1);
-
-            NewTransCode = $"{prefix}/{yearEnd}/{compCode}{strmax}";
-
-            var record = _context.GetMaxCodes
-                        .FirstOrDefault(g => g.Prefix == prefix
-                         && g.TblName == tblName
-                         && g.CompCode == compCode
-                         && g.Yr == yearEnd);
-
-            if (record != null)
-            {
-                record.MaxValue = Convert.ToInt32(strmax); // Update the MaxValue
-                _context.SaveChanges();   // Commit changes to the database
-            }
-
-            return NewTransCode;
-        }
         public async Task<string> GetDGNoAsync(string companyCode, string profitCenterCode, string year)
         {
             string query = @"SELECT CAST(YEAR(GETDATE()) AS CHAR(4)) + '.' +
@@ -3807,7 +3892,7 @@ namespace KalaGenset.ERP.Core.Services
                            WHERE Yr = @Yr AND CompanyCode = @CompCode";
 
             var connection = _context.Database.GetDbConnection();
-           
+
 
             var dbTransaction = _context.Database.CurrentTransaction?.GetDbTransaction();
 
@@ -3849,6 +3934,65 @@ namespace KalaGenset.ERP.Core.Services
             return PartCnt.ToString();
         }
 
+        public async Task<string> GetMaxNo(string prefix, string compCode, string query, string tblName)
+        {
+            try
+            {
+                string NewTransCode = "";
+                int intmax = 0;
+
+                string? yearEnd = await _context.YearEnds
+                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
+                                         .FirstOrDefaultAsync();
+
+                var connection = _context.Database.GetDbConnection();
+                if (connection.State != ConnectionState.Open)
+                    await connection.OpenAsync();
+
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = query;
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.Add(new SqlParameter("@CompCode", compCode));
+                    cmd.Parameters.Add(new SqlParameter("@Prefix", prefix));
+                    cmd.Parameters.Add(new SqlParameter("@YearEnd", yearEnd));
+                    cmd.Parameters.Add(new SqlParameter("@TableName", tblName));
+
+                    var currentTransaction = _context.Database.CurrentTransaction;
+                    if (currentTransaction != null)
+                        cmd.Transaction = currentTransaction.GetDbTransaction();
+
+                    var result = await cmd.ExecuteScalarAsync();
+                    if (result != null && result != DBNull.Value)
+                    {
+                        intmax = Convert.ToInt32(result);
+                    }
+                }
+
+                string strmax = (intmax + 1).ToString("D6");
+
+                NewTransCode = $"{prefix}/{yearEnd}/{compCode}{strmax}";
+
+                var record = await _context.GetMaxCodes
+                            .FirstOrDefaultAsync(g => g.Prefix == prefix
+                             && g.TblName == tblName
+                             && g.CompCode == compCode
+                             && g.Yr == yearEnd);
+
+                if (record != null)
+                {
+                    record.MaxValue = Convert.ToInt32(strmax);
+                    await _context.SaveChangesAsync();
+                }
+
+                return NewTransCode;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
         public async Task<string> GetTotalSuppRateAsync(string productCode, string cpyPartCode)
         {
             string query = @"SELECT ISNULL(ROUND(SUM(Rate), 0), 0) AS Rate 
@@ -3877,7 +4021,7 @@ namespace KalaGenset.ERP.Core.Services
                 command.Parameters.Add(new SqlParameter("@productCode", productCode));
                 command.Parameters.Add(new SqlParameter("@cpyPartCode", cpyPartCode));
 
-               // await _context.Database.OpenConnectionAsync();
+                // await _context.Database.OpenConnectionAsync();
 
                 var currentTransaction = _context.Database.CurrentTransaction;
                 if (currentTransaction != null)
@@ -4020,7 +4164,6 @@ namespace KalaGenset.ERP.Core.Services
             return (audioFilePath, videoFilePath);
         }
 
-
         public async Task<string> UploadVideoAndPDFAsync(UploadVideopdfDGAssemblyRequest uploadVideopdfDGAssemblyReq)
 
         {
@@ -4119,9 +4262,9 @@ namespace KalaGenset.ERP.Core.Services
                 {
                       new SqlParameter("@save_type", SqlDbType.VarChar, 5) { Value = saveType },
                       new SqlParameter("@video_id", SqlDbType.VarChar, 10) { Value = videoId },
-                      new SqlParameter("@tr_video_type", SqlDbType.VarChar, 10) { Value = trVideoType },       
-                      new SqlParameter("@pdir_video_type", SqlDbType.VarChar, 10) { Value = pdirVideoType },  
-                      new SqlParameter("@eng_sr_no", SqlDbType.VarChar, 50) { Value = uploadVideopdfDGAssemblyReq.EngSrNo.Trim() },  
+                      new SqlParameter("@tr_video_type", SqlDbType.VarChar, 10) { Value = trVideoType },
+                      new SqlParameter("@pdir_video_type", SqlDbType.VarChar, 10) { Value = pdirVideoType },
+                      new SqlParameter("@eng_sr_no", SqlDbType.VarChar, 50) { Value = uploadVideopdfDGAssemblyReq.EngSrNo.Trim() },
                       new SqlParameter("@tr_video_name", SqlDbType.VarChar, 50) { Value = trVideoName },
                       new SqlParameter("@pdir_video_name", SqlDbType.VarChar, 50) { Value = pdirVideoName },
                       new SqlParameter("@video_path", SqlDbType.VarChar, 100) { Value = location },
@@ -4138,7 +4281,7 @@ namespace KalaGenset.ERP.Core.Services
                 // Commit transaction
                 await transaction.CommitAsync();
 
-                return $"{uploadVideopdfDGAssemblyReq.UploadFor} File uploaded successfully for EngSrNo: {uploadVideopdfDGAssemblyReq.EngSrNo}"; 
+                return $"{uploadVideopdfDGAssemblyReq.UploadFor} File uploaded successfully for EngSrNo: {uploadVideopdfDGAssemblyReq.EngSrNo}";
             }
             catch (Exception ex)
             {

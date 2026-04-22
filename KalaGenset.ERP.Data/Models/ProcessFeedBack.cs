@@ -113,4 +113,6 @@ public partial class ProcessFeedBack
     public bool Auth { get; set; }
 
     public string? CatId { get; set; }
+
+    public string? PccodeAct { get; set; }
 }

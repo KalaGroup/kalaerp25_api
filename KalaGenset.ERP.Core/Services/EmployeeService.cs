@@ -47,7 +47,7 @@ namespace KalaGenset.ERP.Core.Services
                             UserId = login.Id,
                             LoginType = login.LoginType,
                             Ename = emp.Fname + " " + emp.Lname,
-                            PCCode_Old = emp.ProfitCenterOld ?? "",
+                            PCCode_Old = emp.ProfitCenter ?? "",
                             PCCode = emp.ProfitCenterAct ?? "",
                             CompanyId = emp.CompanyCodeAct ?? "",
                             CompanyName = comp != null ? comp.Cname : "",

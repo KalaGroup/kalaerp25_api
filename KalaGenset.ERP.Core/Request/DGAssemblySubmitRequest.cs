@@ -30,7 +30,8 @@ namespace KalaGenset.ERP.Core.RequestDTO
         public string? PrcStatus { get; set; }
         //public string? PrcChkDts { get; set; }
         public string? EngPlay { get; set; }
-        public string? PCCode { get; set; }
+        public string? PCCode_Old { get; set; }
+        public string? PCCode_Act { get; set; }
         public IFormFile? RecordedAudioFile { get; set; }
         public IFormFile? RecordedVideoFile { get; set; }
         public List<ProcessCheckpointDTO>? PrcChkDts { get; set; }

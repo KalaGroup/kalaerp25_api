@@ -8,6 +8,8 @@ namespace KalaGenset.ERP.Core.RequestDTO
 {
     public class PackingSlipSubmitDetails
     {
+        public string? pccode_old { get; set; }
+        public string? pccode_act { get; set; }
         public string? PSTime { get; set; }
         public string? PSStartTime { get; set; }
         public string? PSEndTime { get; set; }
