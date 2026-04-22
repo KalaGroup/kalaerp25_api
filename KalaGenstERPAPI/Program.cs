@@ -26,18 +26,32 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
     });
 
-// Configure Kestrel server limits (100MB)
+//// Configure Kestrel server limits (100MB)
+//builder.WebHost.ConfigureKestrel(serverOptions =>
+//{
+//    serverOptions.Limits.MaxRequestBodySize = 104857600; // 100MB in bytes
+//});
+
+//// Configure Form Options (100MB)
+//builder.Services.Configure<FormOptions>(options =>
+//{
+//    options.MultipartBodyLengthLimit = 104857600;
+//    options.ValueLengthLimit = 104857600;
+//    options.MultipartHeadersLengthLimit = 104857600;
+//});
+
+// Configure Kestrel server limits (500MB)
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.Limits.MaxRequestBodySize = 104857600; // 100MB in bytes
+    serverOptions.Limits.MaxRequestBodySize = 524288000; // 500MB in bytes
 });
 
-// Configure Form Options (100MB)
+// Configure Form Options (500MB)
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 104857600;
-    options.ValueLengthLimit = 104857600;
-    options.MultipartHeadersLengthLimit = 104857600;
+    options.MultipartBodyLengthLimit = 524288000;
+    options.ValueLengthLimit = 524288000;
+    options.MultipartHeadersLengthLimit = 524288000;
 });
 
 // ✅ FIX 1: Persist Data Protection keys to disk so auth cookies survive restarts
