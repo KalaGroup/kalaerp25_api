@@ -781,7 +781,8 @@ namespace KalaGenset.ERP.Core.Services
 
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "InternalTOCReq";
+                    //cmd.CommandText = "InternalTOCReq";
+                    cmd.CommandText = "InternalTOCReq_Checker_Maker";
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.Parameters.Add(new SqlParameter("@PCCode", PCCode.Trim()));
 
@@ -2483,6 +2484,25 @@ namespace KalaGenset.ERP.Core.Services
                              AND Prefix = @Prefix 
                              AND Yr = @YearEnd";
 
+                            string profitCenterCodeAct = "";
+                            string toprofitCenterCode = "";
+
+                            if (dgStageScanReq.PCCode_Act == "01.106")
+                            {
+                                profitCenterCodeAct = "01.137";
+                                toprofitCenterCode = "01.137";
+                            }
+                            else if (dgStageScanReq.PCCode_Act == "03.092" || dgStageScanReq.PCCode_Act == "03.123")
+                            {
+                                profitCenterCodeAct = "03.129";
+                                toprofitCenterCode = "03.129";
+                            }
+                            else if (dgStageScanReq.PCCode_Act == "28.037" || dgStageScanReq.PCCode_Act == "28.040" || dgStageScanReq.PCCode_Act == "28.117")
+                            {
+                                profitCenterCodeAct = "28.020";
+                                toprofitCenterCode = "28.020";
+                            }
+
                             GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode_Old.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
                             strKanBan = GetMaxValue;
                             string? yearEnds = _context.YearEnds
@@ -2496,12 +2516,12 @@ namespace KalaGenset.ERP.Core.Services
                             await _context.Database.ExecuteSqlRawAsync(query,
                                 new SqlParameter("@REQCode", strKanBan.Trim()),
                                 new SqlParameter("@MaxSrNo", GetMaxValue.Substring(10, 8)),
-                                new SqlParameter("@Dt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss tt")),
+                                new SqlParameter("@Dt", DateTime.Now),
                                 new SqlParameter("@Yr", yearEnds),
                                 new SqlParameter("@ProfitCenterCode_Old", dgStageScanReq.PCCode_Old.Trim()),
-                                new SqlParameter("@ToProfitCenterCode", "23.001"),
-                                new SqlParameter("@ProfitCenterCode_Act", "23.001"),
-                                new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act),
+                                new SqlParameter("@ToProfitCenterCode", toprofitCenterCode),
+                                new SqlParameter("@ProfitCenterCode_Act", dgStageScanReq.PCCode_Act),
+                                new SqlParameter("@ToProfitCenterCode_Act", profitCenterCodeAct),
                                 new SqlParameter("@ClassCode", dgStageScanReq.ProductCode),
                                 new SqlParameter("@CompanyCode", dgStageScanReq.PCCode_Old.Substring(0, 2)),
                                 new SqlParameter("@ActNo", "1"),
@@ -2555,25 +2575,23 @@ namespace KalaGenset.ERP.Core.Services
                                     VALUES (@TransCode, @Dt, @MainSerialNo, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime, @QA6M)";
 
                             var parameters = new[]
-                             {
-    new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
-    new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
-    new SqlParameter("@MainSerialNo", dgStageScanReq.EngSrNo.Trim()),
-    new SqlParameter("@PrcName", "DG Stage4"),
-    new SqlParameter("@ChkPointId", item.PrcId),
-    new SqlParameter("@PrcChkPoints", item.Remark),
-    new SqlParameter("@PrcStatus", dgStageScanReq.PrcStatus),
-    new SqlParameter("@DGStartTime", SqlDbType.DateTime)
-    {
-        Value = string.IsNullOrEmpty(_DGStartTime)
-            ? (object)DBNull.Value
-            : DateTime.ParseExact(_DGStartTime.Trim(),
-                new[] { "yyyy-MM-dd HH.mm.ss", "yyyy-MM-dd HH:mm:ss.fff", "yyyy-MM-dd HH:mm:ss" },
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None)
-    },
-    new SqlParameter("@QA6M", dgStageScanReq.QA6M ?? 0)
-};
+                            {
+                                 new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
+                                 new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
+                                 new SqlParameter("@MainSerialNo", dgStageScanReq.EngSrNo.Trim()),
+                                 new SqlParameter("@PrcName", "DG Stage4"),
+                                 new SqlParameter("@ChkPointId", item.PrcId),
+                                 new SqlParameter("@PrcChkPoints", item.Remark),
+                                 new SqlParameter("@PrcStatus", dgStageScanReq.PrcStatus),
+                                 new SqlParameter("@DGStartTime", SqlDbType.DateTime)
+                                 {
+                                   Value = string.IsNullOrEmpty(_DGStartTime)? (object)DBNull.Value: DateTime.ParseExact(_DGStartTime.Trim(),
+                                   new[] { "yyyy-MM-dd HH.mm.ss", "yyyy-MM-dd HH:mm:ss.fff", "yyyy-MM-dd HH:mm:ss" },
+                                   System.Globalization.CultureInfo.InvariantCulture,
+                                   System.Globalization.DateTimeStyles.None)
+                                 },
+                                 new SqlParameter("@QA6M", dgStageScanReq.QA6M ?? 0)
+                            };
                             await _context.Database.ExecuteSqlRawAsync(query, parameters);
                         }
 
@@ -2926,19 +2944,19 @@ namespace KalaGenset.ERP.Core.Services
 
                         if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "01" && StrTPSStatus.Trim() == "P")
                         {
-                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act; //01.004
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_old; //01.004
                             StrPCCodeStkRecieved = "01.018";
                             PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
                         }
                         else if (packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim() == "28" && StrTPSStatus.Trim() == "P")
                         {
-                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act; // 28.001
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_old; // 28.001
                             StrPCCodeStkRecieved = "28.005";
                             PC_CompanyCode = packingSlipSubmitDetailsReq.TRCode.Trim().Substring(10, 2).Trim();
                         }
                         else
                         {
-                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_act;   //03.051
+                            StrPCCodeStkIssue = packingSlipSubmitDetailsReq.pccode_old;   //03.051
                             StrPCCodeStkRecieved = "03.019";
                             PC_CompanyCode = "03";
                         }
@@ -2954,11 +2972,11 @@ namespace KalaGenset.ERP.Core.Services
                         StrPSLCode = await GetMaxNo("PSL", PC_CompanyCode, query, "Packingslip");
 
                         string insertSql = @"INSERT INTO Packingslip(PSCode, Dt, Yr, MaxSrNo, PCCode, SOFCode, PSStartTime, PDICode, SrNo, Remark,
-                                           PCCodeStkIssue, BatteryTerminals, BatteryLead, ExhaustPipe, DCBulb, CanopyKey, FuelCapKey, Rate, RubberPad, FunnelPad, PrdManual, CompanyCode)
+                                           PCCodeStkIssue, BatteryTerminals, BatteryLead, ExhaustPipe, DCBulb, CanopyKey, FuelCapKey, Rate, RubberPad, FunnelPad, PrdManual, CompanyCode, PCCodeStkIssue_Act)
                                            VALUES
                                           (@PSCode, @Dt, @Yr, @MaxSrNo, @PCCode, @SOFCode, @PSStartTime, @PDICode, @SrNo, @Remark,
                                            @PCCodeStkIssue, @BatteryTerminals, @BatteryLead, @ExhaustPipe, @DCBulb,
-                                           @CanopyKey, @FuelCapKey, @Rate, @RubberPad, @FunnelPad, @PrdManual, @CompanyCode)";
+                                           @CanopyKey, @FuelCapKey, @Rate, @RubberPad, @FunnelPad, @PrdManual, @CompanyCode, @PCCodeStkIssue_Act)";
 
                         var sqlParams = new[]
                         {
@@ -2972,7 +2990,7 @@ namespace KalaGenset.ERP.Core.Services
                                new SqlParameter("@PDICode",           packingSlipSubmitDetailsReq.PDICode.Trim()),
                                new SqlParameter("@SrNo",              packingSlipSubmitDetailsReq.DGSrNo.Trim()),
                                new SqlParameter("@Remark",            packingSlipSubmitDetailsReq.Remark.Trim()),
-                               new SqlParameter("@PCCodeStkIssue",    StrPCCodeStkIssue.Trim()),
+                               new SqlParameter("@PCCodeStkIssue",    StrPCCodeStkIssue.Trim()),                          
                                new SqlParameter("@BatteryTerminals",  Convert.ToInt32(packingSlipSubmitDetailsReq.BatTer.Trim())),
                                new SqlParameter("@BatteryLead",       Convert.ToInt32(packingSlipSubmitDetailsReq.BatLead.Trim())),
                                new SqlParameter("@ExhaustPipe",       Convert.ToInt32(packingSlipSubmitDetailsReq.ExhPipe.Trim())),
@@ -2983,7 +3001,8 @@ namespace KalaGenset.ERP.Core.Services
                                new SqlParameter("@RubberPad",         Convert.ToInt32(packingSlipSubmitDetailsReq.RubberPad.Trim())),
                                new SqlParameter("@FunnelPad",         Convert.ToInt32(packingSlipSubmitDetailsReq.FunnelPad.Trim())),
                                new SqlParameter("@PrdManual",         Convert.ToInt32(packingSlipSubmitDetailsReq.PrdManual.Trim())),
-                               new SqlParameter("@CompanyCode",       PC_CompanyCode.Trim())
+                               new SqlParameter("@CompanyCode",       PC_CompanyCode.Trim()),
+                               new SqlParameter("@PCCodeStkIssue_Act", packingSlipSubmitDetailsReq.pccode_act.Trim())                             
                         };
                         await _context.Database.ExecuteSqlRawAsync(insertSql, sqlParams);
 

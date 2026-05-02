@@ -48,6 +48,10 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<GetMaxCode> GetMaxCodes { get; set; }
 
+    public virtual DbSet<Giir> Giirs { get; set; }
+
+    public virtual DbSet<Giirdetail> Giirdetails { get; set; }
+
     public virtual DbSet<GiirdetailsSub> GiirdetailsSubs { get; set; }
 
     public virtual DbSet<InvoiceDealer> InvoiceDealers { get; set; }
@@ -95,6 +99,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<ProcessFeedBack> ProcessFeedBacks { get; set; }
 
     public virtual DbSet<ProcessFeedbackDetailsSub> ProcessFeedbackDetailsSubs { get; set; }
+
+    public virtual DbSet<ProcessWithKit> ProcessWithKits { get; set; }
 
     public virtual DbSet<ProductWip> ProductWips { get; set; }
 
@@ -1503,6 +1509,120 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.Yr).HasMaxLength(50);
         });
 
+        modelBuilder.Entity<Giir>(entity =>
+        {
+            entity.HasKey(e => e.Giircode);
+
+            entity.ToTable("GIIR");
+
+            entity.HasIndex(e => e.Active, "_dta_index_GIIR_12_204735982__K16_6").HasFillFactor(80);
+
+            entity.Property(e => e.Giircode)
+                .HasMaxLength(50)
+                .HasColumnName("GIIRCode");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.ChallanCode)
+                .HasMaxLength(50)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.ChallanDate).HasColumnType("datetime");
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.GateReceiptCode).HasMaxLength(50);
+            entity.Property(e => e.GateTime).HasColumnType("datetime");
+            entity.Property(e => e.Giirstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasComment("P- Pending Q - Quality C- PV I - INvoice D - Done")
+                .HasColumnName("GIIRStatus");
+            entity.Property(e => e.Grade)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.LotNo)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.Pocode)
+                .HasMaxLength(50)
+                .HasColumnName("POCode");
+            entity.Property(e => e.Qdt)
+                .HasColumnType("datetime")
+                .HasColumnName("QDt");
+            entity.Property(e => e.QualityRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.Rdiscard)
+                .HasDefaultValue(true)
+                .HasColumnName("RDiscard");
+            entity.Property(e => e.ReverseRemark)
+                .HasMaxLength(1000)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.StoreRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.VehicleNo)
+                .HasMaxLength(50)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.Yr)
+                .HasMaxLength(50)
+                .HasDefaultValue("10-11");
+        });
+
+        modelBuilder.Entity<Giirdetail>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("GIIRDetails");
+
+            entity.HasIndex(e => e.Giircode, "_dta_index_GIIRDetails_12_689697805__K1_3").HasFillFactor(80);
+
+            entity.Property(e => e.DefectRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("-");
+            entity.Property(e => e.Dgtype)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("None")
+                .IsFixedLength()
+                .HasComment("N=Normal Process,A= Assly")
+                .HasColumnName("DGType");
+            entity.Property(e => e.DgversionCode)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("DGVersionCode");
+            entity.Property(e => e.Giircode)
+                .HasMaxLength(50)
+                .HasColumnName("GIIRCode");
+            entity.Property(e => e.Giirstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("GIIRStatus");
+            entity.Property(e => e.Girdpocode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("GIRDPOCode");
+            entity.Property(e => e.MaterialType).HasDefaultValueSql("('0')");
+            entity.Property(e => e.PartCode).HasMaxLength(50);
+            entity.Property(e => e.QualityRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.RwdefectRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL")
+                .HasColumnName("RWDefectRemark");
+            entity.Property(e => e.Rwqty)
+                .HasComment("For Rework qty of giir")
+                .HasColumnName("RWQty");
+            entity.Property(e => e.StoreRemark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+        });
+
         modelBuilder.Entity<GiirdetailsSub>(entity =>
         {
             entity
@@ -2577,6 +2697,10 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValueSql("((0))")
                 .HasColumnName("POFCode");
             entity.Property(e => e.ProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.ProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("ProfitCenterCode_Act");
             entity.Property(e => e.Remark)
                 .HasMaxLength(300)
                 .HasDefaultValue("NIL");
@@ -2599,6 +2723,10 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValueSql("((0))");
             entity.Property(e => e.ToProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.ToProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("ToProfitCenterCode_Act");
             entity.Property(e => e.Yr)
                 .HasMaxLength(50)
                 .HasDefaultValue("10-11");
@@ -2648,6 +2776,10 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValue("P")
                 .IsFixedLength();
             entity.Property(e => e.FromProfitCenter).HasMaxLength(50);
+            entity.Property(e => e.FromProfitCenterAct)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("FromProfitCenter_Act");
             entity.Property(e => e.MaxSrNo).HasMaxLength(50);
             entity.Property(e => e.Mestatus)
                 .HasMaxLength(10)
@@ -2707,6 +2839,10 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("TMcode");
             entity.Property(e => e.ToProfitCenter).HasMaxLength(50);
+            entity.Property(e => e.ToProfitCenterAct)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("ToProfitCenter_Act");
             entity.Property(e => e.TransportRoute)
                 .HasMaxLength(300)
                 .HasDefaultValue("NIL");
@@ -3400,7 +3536,7 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<PartTocdetailsSupplier>(entity =>
         {
-            entity.HasKey(e => new { e.CompanyCode, e.PartCode, e.SuppCode, e.ForPccode, e.Product });
+            entity.HasKey(e => new { e.CompanyCode, e.PartCode, e.SuppCode, e.ForPccode, e.Product, e.Active });
 
             entity.ToTable("PartTOCDetailsSupplier");
 
@@ -3430,6 +3566,11 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.Dt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.ForPccodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("ForPCCode_Act");
             entity.Property(e => e.Fos).HasColumnName("FOS");
             entity.Property(e => e.Id)
                 .ValueGeneratedOnAdd()
@@ -3463,6 +3604,11 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("Nil");
             entity.Property(e => e.Rlt).HasColumnName("RLT");
+            entity.Property(e => e.SuppCodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("SuppCode_Act");
             entity.Property(e => e.TmatType)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -3893,6 +4039,56 @@ public partial class KalaDbContext : DbContext
                 .HasDefaultValue("P")
                 .IsFixedLength()
                 .HasColumnName("TRSerialStatus");
+        });
+
+        modelBuilder.Entity<ProcessWithKit>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("ProcessWithKit");
+
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.Auth).HasDefaultValue(true);
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.Mtfstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("MTFStatus");
+            entity.Property(e => e.PartCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.Pfbrate).HasColumnName("PFBRate");
+            entity.Property(e => e.PkitQty).HasColumnName("PKitQty");
+            entity.Property(e => e.PrcBomcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("PrcBOMCode");
+            entity.Property(e => e.PrcBomdt)
+                .HasColumnType("datetime")
+                .HasColumnName("PrcBOMDt");
+            entity.Property(e => e.ProcessKitCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.ProcessType)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.ProfitCenterCode).HasMaxLength(50);
+            entity.Property(e => e.Pwkcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("PWKCode");
+            entity.Property(e => e.Rdiscard)
+                .HasDefaultValue(true)
+                .HasColumnName("RDiscard");
+            entity.Property(e => e.Remark).HasMaxLength(300);
+            entity.Property(e => e.Yr)
+                .HasMaxLength(50)
+                .HasDefaultValue("10-11");
         });
 
         modelBuilder.Entity<ProductWip>(entity =>

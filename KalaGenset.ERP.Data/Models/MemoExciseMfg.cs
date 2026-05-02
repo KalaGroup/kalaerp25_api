@@ -96,4 +96,8 @@ public partial class MemoExciseMfg
     public string Mmtfcode { get; set; } = null!;
 
     public string MtfscanStatus { get; set; } = null!;
+
+    public string FromProfitCenterAct { get; set; } = null!;
+
+    public string ToProfitCenterAct { get; set; } = null!;
 }
