@@ -1113,7 +1113,7 @@ namespace KalaGenset.ERP.Core.Services
             if (activeRows == null || !activeRows.Any())
                 return "No Job Card rows provided.";
 
-            string compCode = request.pcCode_Old.Trim().Substring(0, 2);
+            string compCode = request.pcCode_Act.Trim().Substring(0, 2);
             string result = "";
 
             // Financial year computed in C# — Apr to Mar cycle e.g. "25-26"
@@ -1620,14 +1620,14 @@ namespace KalaGenset.ERP.Core.Services
                                     new SqlParameter("@Status", "AUTH"));
                             }
 
-                            if (compCode == "28")
-                            {
-                                await transaction.CommitAsync();
-                                result = $"{jobcard1CheckerSubmitReq.JobCode} authorized. No requisition required for this company.";
-                                return;
-                            }
+                            //if (compCode == "28")
+                            //{
+                            //    await transaction.CommitAsync();
+                            //    result = $"{jobcard1CheckerSubmitReq.JobCode} authorized. No requisition required for this company.";
+                            //    return;
+                            //}
 
-                            string pcCode = jobCard.Pccode?.Trim() ?? "";
+                            string pcCode = jobCard.PccodeAct?.Trim() ?? "";
 
                             var jobCard1Details = await _context.JobCardDetails
                                 .Where(d => d.JobCode == jobcard1CheckerSubmitReq.JobCode)
@@ -1651,6 +1651,24 @@ namespace KalaGenset.ERP.Core.Services
 
                             var reqCodes = new List<string>();
 
+                            string profitCenterCodeAct = "";
+                            string toprofitCenterCode = "";
+
+                            if (jobcard1CheckerSubmitReq.PCCode_Act == "01.106"
+                                || jobcard1CheckerSubmitReq.PCCode_Act == "03.092"
+                                || jobcard1CheckerSubmitReq.PCCode_Act == "03.123")
+                            {
+                                profitCenterCodeAct = "23.001";
+                                toprofitCenterCode = "23.001";
+                            }
+                            else if (jobcard1CheckerSubmitReq.PCCode_Act == "28.037"
+                                || jobcard1CheckerSubmitReq.PCCode_Act == "28.040"
+                                || jobcard1CheckerSubmitReq.PCCode_Act == "28.117")
+                            {
+                                profitCenterCodeAct = "28.020";
+                                toprofitCenterCode = "28.020";
+                            }
+
                             foreach (var detail in jobCard1Details)
                             {
                                 string partCode = detail.PartCode?.Trim() ?? "";
@@ -1663,24 +1681,24 @@ namespace KalaGenset.ERP.Core.Services
 
                                 await _context.Database.ExecuteSqlRawAsync(
                                     "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
-                                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, @ProfitCenterCode_Act, @ToProfitCenterCode_Act " +
+                                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, @ProfitCenterCode_Act, @ToProfitCenterCode_Act, " +
                                     "@ClassCode, @ActNo, @SourceCode, @CompanyCode, @REQStatus, @REQType, " +
                                     "@Remark, @Discard, @Active, @Auth",
                                     new SqlParameter("@REQCode", reqCode),
                                     new SqlParameter("@MaxSrNo", reqCode.Substring(10, 8)),
                                     new SqlParameter("@Dt", DateTime.Now),
                                     new SqlParameter("@Yr", yr),
-                                    new SqlParameter("@ProfitCenterCode", pcCode),
-                                    new SqlParameter("@ToProfitCenterCode", "23.001"),
-                                    new SqlParameter("@ProfitCenterCode_Act", "23.001"),
-                                    new SqlParameter("@ToProfitCenterCode_Act", jobcard1CheckerSubmitReq.PCCode_Act),
+                                    new SqlParameter("@ProfitCenterCode", jobcard1CheckerSubmitReq.PCCode_Old),
+                                    new SqlParameter("@ToProfitCenterCode", toprofitCenterCode),
+                                    new SqlParameter("@ProfitCenterCode_Act", jobcard1CheckerSubmitReq.PCCode_Act),
+                                    new SqlParameter("@ToProfitCenterCode_Act", profitCenterCodeAct),
                                     new SqlParameter("@ClassCode", partCode),
                                     new SqlParameter("@ActNo", qty.ToString()),
                                     new SqlParameter("@SourceCode", jobcard1CheckerSubmitReq.JobCode),
                                     new SqlParameter("@CompanyCode", compCode),
                                     new SqlParameter("@REQStatus", "P"),
                                     new SqlParameter("@REQType", "WIP"),
-                                    new SqlParameter("@Remark", $"Auto Req For Plan No {jobcard1CheckerSubmitReq.JobCode}"),
+                                    new SqlParameter("@Remark", $"After Done Authorization Of Jobcard,Auto Req Raised For Plan No {jobcard1CheckerSubmitReq.JobCode}"),
                                     new SqlParameter("@Discard", 1),
                                     new SqlParameter("@Active", 1),
                                     new SqlParameter("@Auth", 1));                               
@@ -1700,9 +1718,7 @@ namespace KalaGenset.ERP.Core.Services
                                 int reqSrNo = 0;
                                 foreach (var (bomPartCode, bomQty) in bomRows)
                                 {
-                                    reqSrNo++;
-                                    Console.WriteLine($"[AUTH-DETAIL] ReqCode: {reqCode}, SrNo: {reqSrNo}, BomPartCode: {bomPartCode}, BomQty: {bomQty}, FinalQty: {bomQty * qty}");
-
+                                    reqSrNo++;                                   
                                     await _context.Database.ExecuteSqlRawAsync(
                                         "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus",
                                         new SqlParameter("@REQCode", reqCode),
@@ -1870,8 +1886,7 @@ namespace KalaGenset.ERP.Core.Services
                         await transaction.CommitAsync();                        
                     }
                     catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Rolling back for JobCode: {jobcard1CheckerSubmitReq.JobCode}, Error: {ex.Message}");
+                    {                       
                         await transaction.RollbackAsync();
                         throw;
                     }

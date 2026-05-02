@@ -20,6 +20,10 @@ public partial class MaterialRequisitionWithOutPlan
 
     public string ToProfitCenterCode { get; set; } = null!;
 
+    public string ProfitCenterCodeAct { get; set; } = null!;
+
+    public string ToProfitCenterCodeAct { get; set; } = null!;
+
     public string ClassCode { get; set; } = null!;
 
     public string CompanyCode { get; set; } = null!;

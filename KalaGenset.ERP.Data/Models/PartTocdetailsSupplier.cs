@@ -54,4 +54,8 @@ public partial class PartTocdetailsSupplier
     public bool Active { get; set; }
 
     public bool Auth { get; set; }
+
+    public string SuppCodeAct { get; set; } = null!;
+
+    public string ForPccodeAct { get; set; } = null!;
 }
