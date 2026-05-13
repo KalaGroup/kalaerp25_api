@@ -56,48 +56,11 @@ namespace KalaGenset.ERP.API.Controllers
             }
         }
 
-        [HttpGet("GetActivePartKvaList")]
-        public async Task<IActionResult> GetActivePartKvaList()
-        {
-            try
-            {
-                var result = await _dgStageChecker.GetActivePartKvaListAsync();
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
-        }
+        // GetActivePartKvaList, SaveStageWiseQualityCheckList, and
+        // CheckDuplicateQualityCheckList have been moved to QualityController.
 
-        [HttpPost("SaveStageWiseQualityCheckList")]
-        public async Task<IActionResult> SaveStageWiseQualityCheckList([FromBody] StageWiseQualityCheckListRequest request)
-        {
-            try
-            {
-                await _dgStageChecker.SaveStageWiseQualityCheckListAsync(request);
-                return Ok();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
-        }
-
-
-        [HttpGet("CheckDuplicateQualityCheckList/{pcCode}/{stageName}/{fromKva}/{toKva}")]
-        public async Task<IActionResult> CheckDuplicateQualityCheckList(string pcCode, string stageName, string fromKva, string toKva)
-        {
-            try
-            {
-                var exists = await _dgStageChecker.CheckDuplicateQualityCheckListAsync(pcCode, stageName, fromKva, toKva);
-                return Ok(new { isDuplicate = exists });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
-        }
+        // UpdateStageWiseQualityCheckList, SoftDeleteStageWiseQualityCheckList,
+        // and GetAllQualityCheckLists have been moved to QualityController.
 
         [HttpGet("GetAllPendingAuthQualityList")]
         public async Task<IActionResult> GetAllPendingAuthQualityList()

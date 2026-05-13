@@ -835,7 +835,7 @@ namespace KalaGenset.ERP.Core.Services
                         using (var c = conn.CreateCommand())
                         {
                             c.Transaction = sqlTran;
-                            c.CommandText = "InsertMemoExciseMfg_DG";
+                            c.CommandText = "InsertMemoExciseMfg_DG_Maker_Checker";
                             c.CommandType = CommandType.StoredProcedure;
                             c.Parameters.AddWithValue("@MECode", memoCode);
                             c.Parameters.AddWithValue("@MaxSrNo", memoSerial);
@@ -855,6 +855,8 @@ namespace KalaGenset.ERP.Core.Services
                             c.Parameters.AddWithValue("@Auth", 0);
                             c.Parameters.AddWithValue("@MMTFCode", mtfCode);
                             c.Parameters.AddWithValue("@MTFScanStatus", anyEmpty ? "D" : "P");
+                            c.Parameters.AddWithValue("@FromProfitCenter_Act", req.FromPCCode);
+                            c.Parameters.AddWithValue("@ToProfitCenter_Act", req.ToPCCode);
                             await c.ExecuteNonQueryAsync();
                         }
 

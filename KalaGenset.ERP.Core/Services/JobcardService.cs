@@ -59,1054 +59,6 @@ namespace KalaGenset.ERP.Core.Services
             return data;
         }
 
-        //public async Task<string> SubmitJobCardAsync(JobCardSubmitRequest request)
-        //{
-        //    var activeRows = request.Plans?.Where(r => r.Qty > 0).ToList();
-        //    if (activeRows == null || !activeRows.Any())
-        //        return "No Job Card rows provided.";
-
-        //    string compCode = request.PCCode.Trim().Substring(0, 2);
-        //    string jobCardNo = "";
-        //    string result = "";
-
-        //    // Financial year computed in C# — Apr to Mar cycle e.g. "25-26"
-        //    string yr = DateTime.Now.Month >= 4
-        //        ? $"{DateTime.Now:yy}-{DateTime.Now.AddYears(1):yy}"
-        //        : $"{DateTime.Now.AddYears(-1):yy}-{DateTime.Now:yy}";
-
-        //    try
-        //    {
-        //        #region STEP 1 — PRE-VALIDATION (before transaction)
-        //        // Validates serial availability for all rows before opening transaction.
-        //        // Mirrors original outer loop — fail fast with clear message.
-        //        foreach (var row in activeRows)
-        //        {
-        //            var preSerials = new List<(string PartCode, string SerialNo, string Gcode)>();
-
-        //            var preConn = (SqlConnection)_context.Database.GetDbConnection();
-        //            if (preConn.State == ConnectionState.Closed)
-        //                await preConn.OpenAsync();
-
-        //            using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
-        //            {
-        //                srCmd.CommandType = CommandType.StoredProcedure;
-        //                srCmd.CommandTimeout = 0;
-        //                srCmd.Parameters.AddWithValue("@JobCodeType", "DGWOP");
-        //                srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
-        //                srCmd.Parameters.AddWithValue("@Qty", row.Qty);
-        //                srCmd.Parameters.AddWithValue("@CompCode", compCode);
-        //                using var r = await srCmd.ExecuteReaderAsync();
-        //                while (await r.ReadAsync())
-        //                    preSerials.Add((
-        //                        r["PartCode"]?.ToString()?.Trim() ?? "",
-        //                        r["SerialNo"]?.ToString()?.Trim() ?? "",
-        //                        r["Gcode"]?.ToString()?.Trim() ?? ""));
-        //            }
-
-        //            if (!preSerials.Any()) return "Job Card Details not available";
-
-        //            int preEng = 0, preAlt = 0, preBat = 0, preCpy = 0;
-        //            foreach (var s in preSerials)
-        //            {
-        //                if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "001") preEng++;
-        //                else if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "002") preAlt++;
-        //                else if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "010") preBat++;
-        //                else if (s.PartCode.Length >= 2 && s.PartCode.Substring(0, 2) == "40") preCpy++;
-        //            }
-
-        //            // Fetch part description via LINQ for error message
-        //            string preDesc = await _context.Parts
-        //                .Where(p => p.PartCode == row.PartCode)
-        //                .Select(p => p.PartDesc)
-        //                .FirstOrDefaultAsync() ?? row.PartCode;
-
-        //            if (row.Qty > preEng) return $"Engine SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preAlt) return $"Alternator SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preBat && await checkTranBOMForBat(row.PartCode))
-        //                return $"Battery SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preCpy) return $"Canopy SrNo Not available For DG {preDesc}";
-        //        }
-        //        #endregion
-        //    }
-        //    catch (Exception ex)
-        //    {
-
-        //        throw;
-        //    }
-
-        //    var strategy = _context.Database.CreateExecutionStrategy();
-        //    await strategy.ExecuteAsync(async () =>
-        //    {
-        //        await using var transaction = await _context.Database.BeginTransactionAsync();
-        //        try
-        //        {
-        //            var sqlConn = (SqlConnection)_context.Database.GetDbConnection();
-        //            var sqlTran = (SqlTransaction)_context.Database.CurrentTransaction.GetDbTransaction();
-
-        //            #region STEP 2 — GETMAXNO INLINE — Generate JobCard number e.g. JCD/25-26/03000124
-        //            var maxJcRecord = await _context.GetMaxCodes
-        //                .Where(g => g.TblName == "JobCard" && g.CompCode == compCode
-        //                         && g.Prefix == "JCD" && g.Yr == yr)
-        //                .FirstOrDefaultAsync();
-
-        //            int intMaxJC = maxJcRecord != null ? Convert.ToInt32(maxJcRecord.MaxValue) : 0;
-        //            string strMaxJC = intMaxJC switch
-        //            {
-        //                0 => "000001",
-        //                < 9 => "00000" + (intMaxJC + 1),
-        //                < 99 => "0000" + (intMaxJC + 1),
-        //                < 999 => "000" + (intMaxJC + 1),
-        //                < 9999 => "00" + (intMaxJC + 1),
-        //                < 99999 => "0" + (intMaxJC + 1),
-        //                _ => Convert.ToString(intMaxJC + 1)
-        //            };
-        //            jobCardNo = $"JCD/{yr}/{compCode}{strMaxJC}";
-
-        //            // Update GetMaxCode via LINQ (update operation)
-        //            if (maxJcRecord != null)
-        //            {
-        //                maxJcRecord.MaxValue = int.Parse(strMaxJC);
-        //                await _context.SaveChangesAsync();
-        //            }
-        //            #endregion
-
-        //            #region STEP 3 — INSERT JobCard master header
-        //            await _context.Database.ExecuteSqlRawAsync(
-        //                "INSERT INTO JobCard(JobCode,Dt,Yr,MaxSrNo,PCCode,Remark,CompanyCode,Active,Auth) " +
-        //                "VALUES(@JobCode,@Dt,@Yr,@MaxSrNo,@PCCode,@Remark,@CompCode,'1','0')",
-        //                new SqlParameter("@JobCode", jobCardNo),
-        //                new SqlParameter("@Dt", DateTime.Now),
-        //                new SqlParameter("@Yr", yr),
-        //                new SqlParameter("@MaxSrNo", jobCardNo.Substring(10, 8)),
-        //                new SqlParameter("@PCCode", request.PCCode.Trim()),
-        //                new SqlParameter("@Remark", request.Remark?.Trim() ?? ""),
-        //                new SqlParameter("@CompCode", compCode));
-        //            #endregion
-
-        //            int globalSrNo = 0;
-        //            int detailSrNo = 0;
-
-        //            foreach (var row in activeRows)
-        //            {
-        //                detailSrNo++;
-
-        //                #region STEP 4 — INSERT JobCardDetails (one per DG model row)
-        //                // Links back to monthly plan via PlanCode + PlanDate.
-        //                // SP recalculates PenPQty = DayPlanQty - SUM(Qty here) on next search.
-        //                await _context.Database.ExecuteSqlRawAsync(
-        //                    "INSERT INTO JobCardDetails" +
-        //                    "(JobCode,SrNo,BOMCode,PartCode,Qty,PlanCode,PlanDate,DayPlanQty," +
-        //                    " Stage1Status,Stage2Status,Stage3Status) " +
-        //                    "VALUES(@JobCode,@SrNo,@BOMCode,@PartCode,@Qty,@PlanCode,@PlanDate,@DayPlanQty,'P','P','P')",
-        //                    new SqlParameter("@JobCode", jobCardNo),
-        //                    new SqlParameter("@SrNo", detailSrNo),
-        //                    new SqlParameter("@BOMCode", row.BOMCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@PartCode", row.PartCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@Qty", row.Qty),
-        //                    new SqlParameter("@PlanCode", row.PlanCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@PlanDate", row.PlanDate?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@DayPlanQty", row.DayPlanQty ?? 0));
-        //                #endregion
-
-        //                // KVA from row object — already fetched by SP, avoids extra DB call.
-        //                // Drives dual-battery logic: >200 KVA needs 2 batteries per DG unit.
-        //                double kva = row.KVA ?? 0;
-
-        //                #region STEP 5 — FETCH SERIAL NUMBERS within transaction
-        //                // Calls GetJobCardSrNo SP inside transaction so serials are locked to this scope.
-        //                var serials = new List<(string PartCode, string SerialNo, string Gcode)>();
-        //                using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
-        //                {
-        //                    srCmd.CommandType = CommandType.StoredProcedure;
-        //                    srCmd.CommandTimeout = 0;
-        //                    srCmd.Parameters.AddWithValue("@JobCodeType", "DGWOP");
-        //                    srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
-        //                    srCmd.Parameters.AddWithValue("@Qty", row.Qty);
-        //                    srCmd.Parameters.AddWithValue("@CompCode", compCode);
-        //                    using var srReader = await srCmd.ExecuteReaderAsync();
-        //                    while (await srReader.ReadAsync())
-        //                        serials.Add((
-        //                            srReader["PartCode"]?.ToString()?.Trim() ?? "",
-        //                            srReader["SerialNo"]?.ToString()?.Trim() ?? "",
-        //                            srReader["Gcode"]?.ToString()?.Trim() ?? ""));
-        //                }
-        //                if (!serials.Any()) continue;
-        //                #endregion
-
-        //                // JPriority counters — reset per DG row
-        //                // Ensures Engine 1 always pairs with Alternator 1, Battery 1, Canopy 1
-        //                int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
-        //                int batCnt = 0; // 0/1 toggle for >200KVA — both batteries share same JPriority
-
-        //                // Post-insert counters for qty verification
-        //                int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
-
-        //                foreach (var serial in serials)
-        //                {
-        //                    string pc3 = serial.PartCode.Length >= 3 ? serial.PartCode.Substring(0, 3) : "";
-        //                    string pc2 = serial.PartCode.Length >= 2 ? serial.PartCode.Substring(0, 2) : "";
-        //                    string gc3 = serial.Gcode.Length >= 3 ? serial.Gcode.Substring(0, 3) : "";
-
-        //                    #region STEP 6 — CALCULATE JPRIORITY
-        //                    // Each component type has its own sequential counter.
-        //                    // >200KVA battery: batCnt toggle keeps both batteries on same JPriority.
-        //                    int jPriority = 0;
-        //                    if (pc3 == "001") { jpEng++; jPriority = jpEng; }
-        //                    else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
-        //                    else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
-        //                    else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
-        //                    else if (pc3 == "010" && kva > 200)
-        //                    {
-        //                        if (batCnt == 0) { jpBat++; batCnt = 1; }
-        //                        else { batCnt = 0; }
-        //                        jPriority = jpBat;
-        //                    }
-        //                    #endregion
-
-        //                    #region STEP 7 — DETERMINE TRANSFERSTATUS (D=Direct, P=Pending)
-        //                    // D = component already at this assembly profit center
-        //                    // P = component needs to be transferred to this PC before assembly
-        //                    string transferStatus;
-        //                    if (gc3 == "MTF" || gc3 == "CNS")
-        //                    {
-        //                        transferStatus = "D";
-        //                    }
-        //                    else if (gc3 == "GIR" && compCode == "01"
-        //                             && serial.Gcode.Length >= 12
-        //                             && serial.Gcode.Substring(10, 2) == "01")
-        //                    {
-        //                        transferStatus = "D";
-        //                    }
-        //                    else if (gc3 == "GIR")
-        //                    {
-        //                        string poPcCode = await GetPOPCcode(serial.Gcode, sqlConn, sqlTran);
-        //                        transferStatus = poPcCode == request.PCCode.Trim() ? "D" : "P";
-        //                    }
-        //                    else { transferStatus = "P"; }
-        //                    #endregion
-
-        //                    // Bat(010) and Cpy(401) = D — directly usable, no assembly work needed
-        //                    // Eng(001) and Alt(002) = P — requires Stage1 assembly process
-        //                    string stage = (pc3 == "401" || pc3 == "010") ? "D" : "P";
-
-        //                    #region STEP 8 — INSERT JobCardDetailsSub (one row per serial number)
-        //                    globalSrNo++;
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "INSERT INTO JobCardDetailsSub" +
-        //                        "(JobCode,SrNo,PartCode,SrNoPartCode,SerialNo,JPriority," +
-        //                        " TransferCode,Transferstatus,stage1Status,stage2Status) " +
-        //                        "VALUES(@JobCode,@SrNo,@PartCode,@SrNoPartCode,@SerialNo," +
-        //                        "@JPriority,@TransferCode,@Transferstatus,@Stage1,@Stage2)",
-        //                        new SqlParameter("@JobCode", jobCardNo),
-        //                        new SqlParameter("@SrNo", globalSrNo),
-        //                        new SqlParameter("@PartCode", row.PartCode?.Trim()),
-        //                        new SqlParameter("@SrNoPartCode", serial.PartCode),
-        //                        new SqlParameter("@SerialNo", serial.SerialNo),
-        //                        new SqlParameter("@JPriority", jPriority),
-        //                        new SqlParameter("@TransferCode", serial.Gcode),
-        //                        new SqlParameter("@Transferstatus", transferStatus),
-        //                        new SqlParameter("@Stage1", stage),
-        //                        new SqlParameter("@Stage2", stage));
-        //                    #endregion
-
-        //                    #region STEP 9 — LOCK SOURCE DOCUMENTS via LINQ (JobCardStatus = J)
-        //                    // Prevents this serial from being picked again by GetJobCardSrNo.
-        //                    // Different source tables updated based on Gcode prefix.
-        //                    if (pc3 == "001" || pc3 == "002" || pc3 == "010")
-        //                    {
-        //                        if (gc3 == "GIR")
-        //                        {
-        //                            // Lock Gate Inward Inspection Receipt
-        //                            var giirRows = await _context.GiirdetailsSubs
-        //                                .Where(g => g.Giircode == serial.Gcode
-        //                                         && g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in giirRows) g.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "GRI")
-        //                        {
-        //                            // Lock Gate Receipt Internal
-        //                            var griRows = await _context.GatereceiptInternalDetailsSubs
-        //                                .Where(g => g.Gricode == serial.Gcode
-        //                                         && g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in griRows) g.JobcardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "CNS")
-        //                        {
-        //                           // Lock Convert Serial document
-        //                            var cnsRows = await _context.ConvertSerialNoDetails
-        //                                .Where(c => c.Cnvcode == serial.Gcode
-        //                                         && c.SerialNo == serial.SerialNo)
-        //                                .ToListAsync();
-        //                            foreach (var c in cnsRows) c.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock the original GIIR this CNS was converted from
-        //                            string origGiir = await _context.ConvertSerialNoDetails
-        //                                .Where(c => c.Cnvcode == serial.Gcode
-        //                                         && c.SerialNo == serial.SerialNo)
-        //                                .Select(c => c.Giircode)
-        //                                .FirstOrDefaultAsync() ?? "";
-
-        //                            if (!string.IsNullOrEmpty(origGiir))
-        //                            {
-        //                                var origGiirRows = await _context.GiirdetailsSubs
-        //                                    .Where(g => g.Giircode == origGiir
-        //                                             && g.SerialNo == serial.SerialNo
-        //                                             && g.PartCode == serial.PartCode)
-        //                                    .ToListAsync();
-        //                                foreach (var g in origGiirRows) g.JobCardStatus = "J";
-        //                                await _context.SaveChangesAsync();
-        //                            }
-        //                        }
-        //                        else if (gc3 == "MTF")
-        //                        {
-        //                            // Lock Material Transfer Form
-        //                            var mtfRows = await _context.MtfdetailsSubs
-        //                                .Where(m => m.Mtfcode == serial.Gcode
-        //                                         && m.SerialNo == serial.SerialNo
-        //                                         && m.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var m in mtfRows) m.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock original GIIR linked to this MTF
-        //                            var giirMtfRows = await _context.GiirdetailsSubs
-        //                                .Where(g => g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in giirMtfRows) g.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                    }
-        //                    else if (pc3 == "401") // Canopy — different source documents
-        //                    {
-        //                        if (gc3 == "PSH")
-        //                        {
-        //                            // Lock Process Feedback (canopy assembly output document)
-        //                            var pshRows = await _context.ProcessFeedbackDetailsSubs
-        //                                .Where(p => p.Pfbcode == serial.Gcode
-        //                                         && p.SerialNo == serial.SerialNo
-        //                                         && p.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var p in pshRows) p.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "MTF")
-        //                        {
-        //                            // Lock ProcessFeedback via TRFCode
-        //                            var pfbRows = await _context.ProcessFeedbackDetailsSubs
-        //                                .Where(p => p.Trfcode == serial.Gcode
-        //                                         && p.SerialNo == serial.SerialNo
-        //                                         && p.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var p in pfbRows) p.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock MTF record
-        //                            var mtfCpyRows = await _context.MtfdetailsSubs
-        //                                .Where(m => m.Mtfcode == serial.Gcode
-        //                                         && m.SerialNo == serial.SerialNo
-        //                                         && m.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var m in mtfCpyRows) m.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                    }
-        //                    #endregion
-
-        //                    if (pc3 == "001") cntEng++;
-        //                    else if (pc3 == "002") cntAlt++;
-        //                    else if (pc3 == "010") cntBat++;
-        //                    else if (pc2 == "40") cntCpy++;
-        //                }
-
-        //                #region STEP 10 — POST-INSERT SERIAL COUNT VALIDATION (within transaction)
-        //                // Mirrors original "checked SrNo To JobCardqty" region.
-        //                // Verifies that inserted serial count matches the requested Qty.
-        //                string descVal = await _context.Parts
-        //                    .Where(p => p.PartCode == row.PartCode)
-        //                    .Select(p => p.PartDesc)
-        //                    .FirstOrDefaultAsync() ?? row.PartCode;
-
-        //                if (row.Qty > cntEng)
-        //                {
-        //                    result = $"Engine SrNo Not available For DG {descVal}";
-        //                    return; // await using disposes + rolls back transaction
-        //                }
-        //                else if (row.Qty > cntAlt)
-        //                {
-        //                    result = $"Alternator SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                else if (row.Qty > cntBat && await checkTranBOMForBat(row.PartCode))
-        //                {
-        //                    result = $"Battery SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                else if (row.Qty > cntCpy)
-        //                {
-        //                    result = $"Canopy SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                #endregion
-        //            }
-
-        //            #region STEP 11 — AUTO MATERIAL REQUISITION
-        //            // Raises REQ to logistics (23.001) for each DG row.
-        //            // Skipped for CompCode 28 (Bangalore) — business rule added 21/11/2025.
-        //            var reqCodes = new List<string>();
-
-        //            if (compCode != "28")
-        //            {
-        //                foreach (var row in activeRows)
-        //                {
-        //                    // GETMAXNO INLINE — MaterialRequisitionWithOutPlan
-        //                    var maxReqRecord = await _context.GetMaxCodes
-        //                        .Where(g => g.TblName == "MaterialRequisitionWithOutPlan"
-        //                                 && g.CompCode == compCode
-        //                                 && g.Prefix == "REQ"
-        //                                 && g.Yr == yr)
-        //                        .FirstOrDefaultAsync();
-
-        //                    int intMaxReq = maxReqRecord != null ? Convert.ToInt32(maxReqRecord.MaxValue) : 0;
-        //                    string strMaxReq = intMaxReq switch
-        //                    {
-        //                        0 => "000001",
-        //                        < 9 => "00000" + (intMaxReq + 1),
-        //                        < 99 => "0000" + (intMaxReq + 1),
-        //                        < 999 => "000" + (intMaxReq + 1),
-        //                        < 9999 => "00" + (intMaxReq + 1),
-        //                        < 99999 => "0" + (intMaxReq + 1),
-        //                        _ => Convert.ToString(intMaxReq + 1)
-        //                    };
-        //                    string reqCode = $"REQ/{yr}/{compCode}{strMaxReq}";
-
-        //                    // Update GetMaxCode via LINQ (update operation)
-        //                    if (maxReqRecord != null)
-        //                    {
-        //                        maxReqRecord.MaxValue = int.Parse(strMaxReq);
-        //                        await _context.SaveChangesAsync();
-        //                    }
-
-        //                    reqCodes.Add(reqCode);
-
-        //                    // INSERT Requisition master header via SP
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
-        //                        "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
-        //                        "@ClassCode, @ActNo, @SourceCode, @CompanyCode, @REQStatus, @REQType, " +
-        //                        "@Remark, @Discard, @Active, @Auth",
-        //                        new SqlParameter("@REQCode", reqCode),
-        //                        new SqlParameter("@MaxSrNo", reqCode.Substring(10, 8)),
-        //                        new SqlParameter("@Dt", DateTime.Now),
-        //                        new SqlParameter("@Yr", yr),
-        //                        new SqlParameter("@ProfitCenterCode", request.PCCode.Trim()),
-        //                        new SqlParameter("@ToProfitCenterCode", "23.001"),
-        //                        new SqlParameter("@ClassCode", row.PartCode?.Trim()),
-        //                        new SqlParameter("@ActNo", row.Qty.ToString()),
-        //                        new SqlParameter("@SourceCode", jobCardNo),
-        //                        new SqlParameter("@CompanyCode", compCode),
-        //                        new SqlParameter("@REQStatus", "P"),
-        //                        new SqlParameter("@REQType", "WIP"),
-        //                        new SqlParameter("@Remark", $"Auto Req For Plan No {jobCardNo}"),
-        //                        new SqlParameter("@Discard", 1),
-        //                        new SqlParameter("@Active", 1),
-        //                        new SqlParameter("@Auth", 1));
-
-        //                    // Fetch BOM component list via SP — data returning, use connection
-        //                    // Qty = BOM qty per unit × number of DGs in this row
-        //                    var bomRows = new List<(string PartCode, double Qty)>();
-        //                    using (var bomCmd = new SqlCommand(
-        //                        $"EXEC InternalReqLogisticsdetailsDG '{row.PartCode?.Trim()}'",
-        //                        sqlConn, sqlTran))
-        //                    {
-        //                        using var bomReader = await bomCmd.ExecuteReaderAsync();
-        //                        while (await bomReader.ReadAsync())
-        //                            bomRows.Add((
-        //                                bomReader["Partcode"]?.ToString()?.Trim() ?? "",
-        //                                double.Parse(bomReader["RaiseReqQty"]?.ToString() ?? "0")));
-        //                    }
-
-        //                    // INSERT one detail line per BOM component
-        //                    int reqSrNo = 0;
-        //                    foreach (var (bomPartCode, bomQty) in bomRows)
-        //                    {
-        //                        reqSrNo++;
-        //                        await _context.Database.ExecuteSqlRawAsync(
-        //                            "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus",
-        //                            new SqlParameter("@REQCode", reqCode),
-        //                            new SqlParameter("@SrNo", reqSrNo),
-        //                            new SqlParameter("@PartCode", bomPartCode),
-        //                            new SqlParameter("@Qty", bomQty * row.Qty),
-        //                            new SqlParameter("@REQStatus", "P"));
-        //                    }
-
-        //                    // INSERT audit log entry per requisition
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
-        //                        new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
-        //                        new SqlParameter("@EmpID", "Auto Against Plan"),
-        //                        new SqlParameter("@TransactionType", "S"),
-        //                        new SqlParameter("@TransactionFrom", "MaterialRequisitionWithoutPlan"),
-        //                        new SqlParameter("@TransactionNo", reqCode),
-        //                        new SqlParameter("@CompanyCode", compCode));
-        //                }
-        //            }
-        //            #endregion
-
-        //            await transaction.CommitAsync();
-
-        //            string reqAll = string.Join("#", reqCodes);
-        //            result = string.IsNullOrEmpty(reqAll)
-        //                ? jobCardNo
-        //                : $"{jobCardNo} With Requisition No: {reqAll}";
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            await transaction.RollbackAsync();
-        //            result = $"StackTrace {ex.StackTrace} Message {ex.Message}";
-        //        }
-        //    });
-
-        //    return result;
-        //}
-
-
-        // ══════════════════════════════════════════════════════════════════
-        // METHOD 2 — GetPOPCcode
-        // Fetches the ProfitCenterCode from the Purchase Order linked to a
-        // GIIR document. Used to determine TransferStatus D or P.
-        // Returns "0" if not exactly one matching PC found.
-        // ══════════════════════════════════════════════════════════════════
-
-
-        //public async Task<string> SubmitJobCardAsync(JobCardSubmitRequest request)
-        //{
-        //    var activeRows = request.Plans?.Where(r => r.Qty > 0).ToList();
-        //    if (activeRows == null || !activeRows.Any())
-        //        return "No Job Card rows provided.";
-
-        //    string compCode = request.PCCode.Trim().Substring(0, 2);
-        //    string result = "";
-
-        //    // Financial year computed in C# — Apr to Mar cycle e.g. "25-26"
-        //    string yr = DateTime.Now.Month >= 4
-        //        ? $"{DateTime.Now:yy}-{DateTime.Now.AddYears(1):yy}"
-        //        : $"{DateTime.Now.AddYears(-1):yy}-{DateTime.Now:yy}";
-
-        //    try
-        //    {
-        //        #region STEP 1 — PRE-VALIDATION (before transaction)
-        //        // Validates serial availability for all rows before opening transaction.
-        //        // Mirrors original outer loop — fail fast with clear message.
-        //        foreach (var row in activeRows)
-        //        {
-        //            var preSerials = new List<(string PartCode, string SerialNo, string Gcode)>();
-
-        //            var preConn = (SqlConnection)_context.Database.GetDbConnection();
-        //            if (preConn.State == ConnectionState.Closed)
-        //                await preConn.OpenAsync();
-
-        //            using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
-        //            {
-        //                srCmd.CommandType = CommandType.StoredProcedure;
-        //                srCmd.CommandTimeout = 0;
-        //                srCmd.Parameters.AddWithValue("@JobCodeType", "DGWOP");
-        //                srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
-        //                srCmd.Parameters.AddWithValue("@Qty", row.Qty);
-        //                srCmd.Parameters.AddWithValue("@CompCode", compCode);
-        //                using var r = await srCmd.ExecuteReaderAsync();
-        //                while (await r.ReadAsync())
-        //                    preSerials.Add((
-        //                        r["PartCode"]?.ToString()?.Trim() ?? "",
-        //                        r["SerialNo"]?.ToString()?.Trim() ?? "",
-        //                        r["Gcode"]?.ToString()?.Trim() ?? ""));
-        //            }
-
-        //            if (!preSerials.Any()) return "Job Card Details not available";
-
-        //            int preEng = 0, preAlt = 0, preBat = 0, preCpy = 0;
-        //            foreach (var s in preSerials)
-        //            {
-        //                if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "001") preEng++;
-        //                else if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "002") preAlt++;
-        //                else if (s.PartCode.Length >= 3 && s.PartCode.Substring(0, 3) == "010") preBat++;
-        //                else if (s.PartCode.Length >= 2 && s.PartCode.Substring(0, 2) == "40") preCpy++;
-        //            }
-
-        //            // Fetch part description via LINQ for error message
-        //            string preDesc = await _context.Parts
-        //                .Where(p => p.PartCode == row.PartCode)
-        //                .Select(p => p.PartDesc)
-        //                .FirstOrDefaultAsync() ?? row.PartCode;
-
-        //            if (row.Qty > preEng) return $"Engine SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preAlt) return $"Alternator SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preBat && await checkTranBOMForBat(row.PartCode))
-        //                return $"Battery SrNo Not available For DG {preDesc}";
-        //            else if (row.Qty > preCpy) return $"Canopy SrNo Not available For DG {preDesc}";
-        //        }
-        //        #endregion
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        throw;
-        //    }
-
-        //    // ── Collect all generated job card numbers + their requisition codes ──
-        //    var allJobCards = new List<string>();
-
-        //    var strategy = _context.Database.CreateExecutionStrategy();
-        //    await strategy.ExecuteAsync(async () =>
-        //    {
-        //        await using var transaction = await _context.Database.BeginTransactionAsync();
-        //        try
-        //        {
-        //            var sqlConn = (SqlConnection)_context.Database.GetDbConnection();
-        //            var sqlTran = (SqlTransaction)_context.Database.CurrentTransaction.GetDbTransaction();
-
-        //            // ════════════════════════════════════════════════════════════════
-        //            // EACH PLAN ROW GETS ITS OWN UNIQUE JOB CARD — full end-to-end
-        //            // ════════════════════════════════════════════════════════════════
-        //            foreach (var row in activeRows)
-        //            {
-        //                #region STEP 2 — GETMAXNO INLINE — Generate unique JobCard number per row
-        //                // e.g. JCD/25-26/03000124, JCD/25-26/03000125.... for multiple rows
-        //                var maxJcRecord = await _context.GetMaxCodes
-        //                    .Where(g => g.TblName == "JobCard" && g.CompCode == compCode
-        //                             && g.Prefix == "JCD" && g.Yr == yr)
-        //                    .FirstOrDefaultAsync();
-
-        //                int intMaxJC = maxJcRecord != null ? Convert.ToInt32(maxJcRecord.MaxValue) : 0;
-        //                string strMaxJC = intMaxJC switch
-        //                {
-        //                    0 => "000001",
-        //                    < 9 => "00000" + (intMaxJC + 1),
-        //                    < 99 => "0000" + (intMaxJC + 1),
-        //                    < 999 => "000" + (intMaxJC + 1),
-        //                    < 9999 => "00" + (intMaxJC + 1),
-        //                    < 99999 => "0" + (intMaxJC + 1),
-        //                    _ => Convert.ToString(intMaxJC + 1)
-        //                };
-        //                string jobCardNo = $"JCD/{yr}/{compCode}{strMaxJC}";
-
-        //                // Update GetMaxCode via LINQ (update operation)
-        //                if (maxJcRecord != null)
-        //                {
-        //                    maxJcRecord.MaxValue = int.Parse(strMaxJC);
-        //                    await _context.SaveChangesAsync();
-        //                }
-        //                #endregion
-
-        //                #region STEP 3 — INSERT JobCard master header (one per plan row)
-        //                await _context.Database.ExecuteSqlRawAsync(
-        //                    "INSERT INTO JobCard(JobCode,Dt,Yr,MaxSrNo,PCCode,Remark,CompanyCode,Active,Auth) " +
-        //                    "VALUES(@JobCode,@Dt,@Yr,@MaxSrNo,@PCCode,@Remark,@CompCode,'1','0')",
-        //                    new SqlParameter("@JobCode", jobCardNo),
-        //                    new SqlParameter("@Dt", DateTime.Now),
-        //                    new SqlParameter("@Yr", yr),
-        //                    new SqlParameter("@MaxSrNo", jobCardNo.Substring(10, 8)),
-        //                    new SqlParameter("@PCCode", request.PCCode.Trim()),
-        //                    new SqlParameter("@Remark", request.Remark?.Trim() ?? ""),
-        //                    new SqlParameter("@CompCode", compCode));
-        //                #endregion
-
-        //                // ── Per-job-card counters — reset for each job card ──
-        //                int globalSrNo = 0;
-
-        //                #region STEP 4 — INSERT JobCardDetails (always SrNo=1, one detail per job card)
-        //                // Each job card now has exactly one DG model row.
-        //                // Links back to monthly plan via PlanCode + PlanDate.
-        //                await _context.Database.ExecuteSqlRawAsync(
-        //                    "INSERT INTO JobCardDetails" +
-        //                    "(JobCode,SrNo,BOMCode,PartCode,Qty,PlanCode,PlanDate,DayPlanQty," +
-        //                    " Stage1Status,Stage2Status,Stage3Status) " +
-        //                    "VALUES(@JobCode,@SrNo,@BOMCode,@PartCode,@Qty,@PlanCode,@PlanDate,@DayPlanQty,'P','P','P')",
-        //                    new SqlParameter("@JobCode", jobCardNo),
-        //                    new SqlParameter("@SrNo", 1),
-        //                    new SqlParameter("@BOMCode", row.BOMCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@PartCode", row.PartCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@Qty", row.Qty),
-        //                    new SqlParameter("@PlanCode", row.PlanCode?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@PlanDate", row.PlanDate?.Trim() ?? (object)DBNull.Value),
-        //                    new SqlParameter("@DayPlanQty", row.DayPlanQty ?? 0));
-        //                #endregion
-
-        //                // KVA from row object — already fetched by SP, avoids extra DB call.
-        //                // Drives dual-battery logic: >200 KVA needs 2 batteries per DG unit.
-        //                double kva = row.KVA ?? 0;
-
-        //                #region STEP 5 — FETCH SERIAL NUMBERS within transaction
-        //                // Calls GetJobCardSrNo SP inside transaction so serials are locked to this scope.
-        //                var serials = new List<(string PartCode, string SerialNo, string Gcode)>();
-        //                using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
-        //                {
-        //                    srCmd.CommandType = CommandType.StoredProcedure;
-        //                    srCmd.CommandTimeout = 0;
-        //                    srCmd.Parameters.AddWithValue("@JobCodeType", "DGWOP");
-        //                    srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
-        //                    srCmd.Parameters.AddWithValue("@Qty", row.Qty);
-        //                    srCmd.Parameters.AddWithValue("@CompCode", compCode);
-        //                    using var srReader = await srCmd.ExecuteReaderAsync();
-        //                    while (await srReader.ReadAsync())
-        //                        serials.Add((
-        //                            srReader["PartCode"]?.ToString()?.Trim() ?? "",
-        //                            srReader["SerialNo"]?.ToString()?.Trim() ?? "",
-        //                            srReader["Gcode"]?.ToString()?.Trim() ?? ""));
-        //                }
-        //                if (!serials.Any()) continue;
-        //                #endregion
-
-        //                // JPriority counters — reset per DG row (per job card now)
-        //                // Ensures Engine 1 always pairs with Alternator 1, Battery 1, Canopy 1
-        //                int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
-        //                int batCnt = 0; // 0/1 toggle for >200KVA — both batteries share same JPriority
-
-        //                // Post-insert counters for qty verification
-        //                int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
-
-        //                foreach (var serial in serials)
-        //                {
-        //                    string pc3 = serial.PartCode.Length >= 3 ? serial.PartCode.Substring(0, 3) : "";
-        //                    string pc2 = serial.PartCode.Length >= 2 ? serial.PartCode.Substring(0, 2) : "";
-        //                    string gc3 = serial.Gcode.Length >= 3 ? serial.Gcode.Substring(0, 3) : "";
-
-        //                    #region STEP 6 — CALCULATE JPRIORITY
-        //                    // Each component type has its own sequential counter.
-        //                    // >200KVA battery: batCnt toggle keeps both batteries on same JPriority.
-        //                    int jPriority = 0;
-        //                    if (pc3 == "001") { jpEng++; jPriority = jpEng; }
-        //                    else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
-        //                    else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
-        //                    else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
-        //                    else if (pc3 == "010" && kva > 200)
-        //                    {
-        //                        if (batCnt == 0) { jpBat++; batCnt = 1; }
-        //                        else { batCnt = 0; }
-        //                        jPriority = jpBat;
-        //                    }
-        //                    #endregion
-
-        //                    #region STEP 7 — DETERMINE TRANSFERSTATUS (D=Direct, P=Pending)
-        //                    // D = component already at this assembly profit center
-        //                    // P = component needs to be transferred to this PC before assembly
-        //                    string transferStatus;
-        //                    if (gc3 == "MTF" || gc3 == "CNS")
-        //                    {
-        //                        transferStatus = "D";
-        //                    }
-        //                    else if (gc3 == "GIR" && compCode == "01"
-        //                             && serial.Gcode.Length >= 12
-        //                             && serial.Gcode.Substring(10, 2) == "01")
-        //                    {
-        //                        transferStatus = "D";
-        //                    }
-        //                    else if (gc3 == "GIR")
-        //                    {
-        //                        string poPcCode = await GetPOPCcode(serial.Gcode, sqlConn, sqlTran);
-        //                        transferStatus = poPcCode == request.PCCode.Trim() ? "D" : "P";
-        //                    }
-        //                    else { transferStatus = "P"; }
-        //                    #endregion
-
-        //                    // Bat(010) and Cpy(401) = D — directly usable, no assembly work needed
-        //                    // Eng(001) and Alt(002) = P — requires Stage1 assembly process
-        //                    string stage = (pc3 == "401" || pc3 == "010") ? "D" : "P";
-
-        //                    #region STEP 8 — INSERT JobCardDetailsSub (one row per serial number)
-        //                    globalSrNo++;
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "INSERT INTO JobCardDetailsSub" +
-        //                        "(JobCode,SrNo,PartCode,SrNoPartCode,SerialNo,JPriority," +
-        //                        " TransferCode,Transferstatus,stage1Status,stage2Status) " +
-        //                        "VALUES(@JobCode,@SrNo,@PartCode,@SrNoPartCode,@SerialNo," +
-        //                        "@JPriority,@TransferCode,@Transferstatus,@Stage1,@Stage2)",
-        //                        new SqlParameter("@JobCode", jobCardNo),
-        //                        new SqlParameter("@SrNo", globalSrNo),
-        //                        new SqlParameter("@PartCode", row.PartCode?.Trim()),
-        //                        new SqlParameter("@SrNoPartCode", serial.PartCode),
-        //                        new SqlParameter("@SerialNo", serial.SerialNo),
-        //                        new SqlParameter("@JPriority", jPriority),
-        //                        new SqlParameter("@TransferCode", serial.Gcode),
-        //                        new SqlParameter("@Transferstatus", transferStatus),
-        //                        new SqlParameter("@Stage1", stage),
-        //                        new SqlParameter("@Stage2", stage));
-        //                    #endregion
-
-        //                    #region STEP 9 — LOCK SOURCE DOCUMENTS via LINQ (JobCardStatus = J)
-        //                    // Prevents this serial from being picked again by GetJobCardSrNo.
-        //                    // Different source tables updated based on Gcode prefix.
-        //                    if (pc3 == "001" || pc3 == "002" || pc3 == "010")
-        //                    {
-        //                        if (gc3 == "GIR")
-        //                        {
-        //                            // Lock Gate Inward Inspection Receipt
-        //                            var giirRows = await _context.GiirdetailsSubs
-        //                                .Where(g => g.Giircode == serial.Gcode
-        //                                         && g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in giirRows) g.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "GRI")
-        //                        {
-        //                            // Lock Gate Receipt Internal
-        //                            var griRows = await _context.GatereceiptInternalDetailsSubs
-        //                                .Where(g => g.Gricode == serial.Gcode
-        //                                         && g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in griRows) g.JobcardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "CNS")
-        //                        {
-        //                            // Lock Convert Serial document
-        //                            var cnsRows = await _context.ConvertSerialNoDetails
-        //                                .Where(c => c.Cnvcode == serial.Gcode
-        //                                         && c.SerialNo == serial.SerialNo)
-        //                                .ToListAsync();
-        //                            foreach (var c in cnsRows) c.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock the original GIIR this CNS was converted from
-        //                            string origGiir = await _context.ConvertSerialNoDetails
-        //                                .Where(c => c.Cnvcode == serial.Gcode
-        //                                         && c.SerialNo == serial.SerialNo)
-        //                                .Select(c => c.Giircode)
-        //                                .FirstOrDefaultAsync() ?? "";
-
-        //                            if (!string.IsNullOrEmpty(origGiir))
-        //                            {
-        //                                var origGiirRows = await _context.GiirdetailsSubs
-        //                                    .Where(g => g.Giircode == origGiir
-        //                                             && g.SerialNo == serial.SerialNo
-        //                                             && g.PartCode == serial.PartCode)
-        //                                    .ToListAsync();
-        //                                foreach (var g in origGiirRows) g.JobCardStatus = "J";
-        //                                await _context.SaveChangesAsync();
-        //                            }
-        //                        }
-        //                        else if (gc3 == "MTF")
-        //                        {
-        //                            // Lock Material Transfer Form
-        //                            var mtfRows = await _context.MtfdetailsSubs
-        //                                .Where(m => m.Mtfcode == serial.Gcode
-        //                                         && m.SerialNo == serial.SerialNo
-        //                                         && m.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var m in mtfRows) m.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock original GIIR linked to this MTF
-        //                            var giirMtfRows = await _context.GiirdetailsSubs
-        //                                .Where(g => g.SerialNo == serial.SerialNo
-        //                                         && g.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var g in giirMtfRows) g.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                    }
-        //                    else if (pc3 == "401") // Canopy — different source documents
-        //                    {
-        //                        if (gc3 == "PSH")
-        //                        {
-        //                            // Lock Process Feedback (canopy assembly output document)
-        //                            var pshRows = await _context.ProcessFeedbackDetailsSubs
-        //                                .Where(p => p.Pfbcode == serial.Gcode
-        //                                         && p.SerialNo == serial.SerialNo
-        //                                         && p.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var p in pshRows) p.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                        else if (gc3 == "MTF")
-        //                        {
-        //                            // Lock ProcessFeedback via TRFCode
-        //                            var pfbRows = await _context.ProcessFeedbackDetailsSubs
-        //                                .Where(p => p.Trfcode == serial.Gcode
-        //                                         && p.SerialNo == serial.SerialNo
-        //                                         && p.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var p in pfbRows) p.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-
-        //                            // Also lock MTF record
-        //                            var mtfCpyRows = await _context.MtfdetailsSubs
-        //                                .Where(m => m.Mtfcode == serial.Gcode
-        //                                         && m.SerialNo == serial.SerialNo
-        //                                         && m.PartCode == serial.PartCode)
-        //                                .ToListAsync();
-        //                            foreach (var m in mtfCpyRows) m.JobCardStatus = "J";
-        //                            await _context.SaveChangesAsync();
-        //                        }
-        //                    }
-        //                    #endregion
-
-        //                    if (pc3 == "001") cntEng++;
-        //                    else if (pc3 == "002") cntAlt++;
-        //                    else if (pc3 == "010") cntBat++;
-        //                    else if (pc2 == "40") cntCpy++;
-        //                }
-
-        //                #region STEP 10 — POST-INSERT SERIAL COUNT VALIDATION (within transaction)
-        //                // Mirrors original "checked SrNo To JobCardqty" region.
-        //                // Verifies that inserted serial count matches the requested Qty.
-        //                string descVal = await _context.Parts
-        //                    .Where(p => p.PartCode == row.PartCode)
-        //                    .Select(p => p.PartDesc)
-        //                    .FirstOrDefaultAsync() ?? row.PartCode;
-
-        //                if (row.Qty > cntEng)
-        //                {
-        //                    result = $"Engine SrNo Not available For DG {descVal}";
-        //                    return; // await using disposes + rolls back transaction
-        //                }
-        //                else if (row.Qty > cntAlt)
-        //                {
-        //                    result = $"Alternator SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                else if (row.Qty > cntBat && await checkTranBOMForBat(row.PartCode))
-        //                {
-        //                    result = $"Battery SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                else if (row.Qty > cntCpy)
-        //                {
-        //                    result = $"Canopy SrNo Not available For DG {descVal}";
-        //                    return;
-        //                }
-        //                #endregion
-
-        //                #region STEP 11 — AUTO MATERIAL REQUISITION (per job card)
-        //                // Raises REQ to logistics (23.001) for this DG row's own job card.
-        //                // Skipped for CompCode 28 (Bangalore) — business rule added 21/11/2025.
-        //                string reqCode = "";
-
-        //                if (compCode != "28")
-        //                {
-        //                    // GETMAXNO INLINE — MaterialRequisitionWithOutPlan
-        //                    var maxReqRecord = await _context.GetMaxCodes
-        //                        .Where(g => g.TblName == "MaterialRequisitionWithOutPlan"
-        //                                 && g.CompCode == compCode
-        //                                 && g.Prefix == "REQ"
-        //                                 && g.Yr == yr)
-        //                        .FirstOrDefaultAsync();
-
-        //                    int intMaxReq = maxReqRecord != null ? Convert.ToInt32(maxReqRecord.MaxValue) : 0;
-        //                    string strMaxReq = intMaxReq switch
-        //                    {
-        //                        0 => "000001",
-        //                        < 9 => "00000" + (intMaxReq + 1),
-        //                        < 99 => "0000" + (intMaxReq + 1),
-        //                        < 999 => "000" + (intMaxReq + 1),
-        //                        < 9999 => "00" + (intMaxReq + 1),
-        //                        < 99999 => "0" + (intMaxReq + 1),
-        //                        _ => Convert.ToString(intMaxReq + 1)
-        //                    };
-        //                    reqCode = $"REQ/{yr}/{compCode}{strMaxReq}";
-
-        //                    // Update GetMaxCode via LINQ (update operation)
-        //                    if (maxReqRecord != null)
-        //                    {
-        //                        maxReqRecord.MaxValue = int.Parse(strMaxReq);
-        //                        await _context.SaveChangesAsync();
-        //                    }
-
-        //                    // INSERT Requisition master header via SP
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
-        //                        "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
-        //                        "@ClassCode, @ActNo, @SourceCode, @CompanyCode, @REQStatus, @REQType, " +
-        //                        "@Remark, @Discard, @Active, @Auth",
-        //                        new SqlParameter("@REQCode", reqCode),
-        //                        new SqlParameter("@MaxSrNo", reqCode.Substring(10, 8)),
-        //                        new SqlParameter("@Dt", DateTime.Now),
-        //                        new SqlParameter("@Yr", yr),
-        //                        new SqlParameter("@ProfitCenterCode", request.PCCode.Trim()),
-        //                        new SqlParameter("@ToProfitCenterCode", "23.001"),
-        //                        new SqlParameter("@ClassCode", row.PartCode?.Trim()),
-        //                        new SqlParameter("@ActNo", row.Qty.ToString()),
-        //                        new SqlParameter("@SourceCode", jobCardNo),
-        //                        new SqlParameter("@CompanyCode", compCode),
-        //                        new SqlParameter("@REQStatus", "P"),
-        //                        new SqlParameter("@REQType", "WIP"),
-        //                        new SqlParameter("@Remark", $"Auto Req For Plan No {jobCardNo}"),
-        //                        new SqlParameter("@Discard", 1),
-        //                        new SqlParameter("@Active", 1),
-        //                        new SqlParameter("@Auth", 1));
-
-        //                    // Fetch BOM component list via SP — data returning, use connection
-        //                    // Qty = BOM qty per unit × number of DGs in this row
-        //                    var bomRows = new List<(string PartCode, double Qty)>();
-        //                    using (var bomCmd = new SqlCommand(
-        //                        $"EXEC InternalReqLogisticsdetailsDG '{row.PartCode?.Trim()}'",
-        //                        sqlConn, sqlTran))
-        //                    {
-        //                        using var bomReader = await bomCmd.ExecuteReaderAsync();
-        //                        while (await bomReader.ReadAsync())
-        //                            bomRows.Add((
-        //                                bomReader["Partcode"]?.ToString()?.Trim() ?? "",
-        //                                double.Parse(bomReader["RaiseReqQty"]?.ToString() ?? "0")));
-        //                    }
-
-        //                    // INSERT one detail line per BOM component
-        //                    int reqSrNo = 0;
-        //                    foreach (var (bomPartCode, bomQty) in bomRows)
-        //                    {
-        //                        reqSrNo++;
-        //                        await _context.Database.ExecuteSqlRawAsync(
-        //                            "EXEC insertMaterialRequisitionWithOutPlanDetails @REQCode, @SrNo, @PartCode, @Qty, @REQStatus",
-        //                            new SqlParameter("@REQCode", reqCode),
-        //                            new SqlParameter("@SrNo", reqSrNo),
-        //                            new SqlParameter("@PartCode", bomPartCode),
-        //                            new SqlParameter("@Qty", bomQty * row.Qty),
-        //                            new SqlParameter("@REQStatus", "P"));
-        //                    }
-
-        //                    // INSERT audit log entry per requisition
-        //                    await _context.Database.ExecuteSqlRawAsync(
-        //                        "EXEC insertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
-        //                        new SqlParameter("@TransactionDtTime", DateTime.Now.ToString("yyyy-MM-dd")),
-        //                        new SqlParameter("@EmpID", "Auto Against Plan"),
-        //                        new SqlParameter("@TransactionType", "S"),
-        //                        new SqlParameter("@TransactionFrom", "MaterialRequisitionWithoutPlan"),
-        //                        new SqlParameter("@TransactionNo", reqCode),
-        //                        new SqlParameter("@CompanyCode", compCode));
-        //                }
-        //                #endregion
-
-        //                // ── Collect this job card + its requisition into result list ──
-        //                if (!string.IsNullOrEmpty(reqCode))
-        //                    allJobCards.Add($"{jobCardNo} With Requisition No: {reqCode}");
-        //                else
-        //                    allJobCards.Add(jobCardNo);
-
-        //            } // ── END foreach row — each row now has its own complete job card ──
-
-        //            await transaction.CommitAsync();
-
-        //            // ── Build final result: all job cards separated by # ──
-        //            result = string.Join("#", allJobCards);
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            await transaction.RollbackAsync();
-        //            result = $"StackTrace {ex.StackTrace} Message {ex.Message}";
-        //        }
-        //    });
-
-        //    return result;
-        //}
-
         public async Task<string> SubmitJobCardAsync(JobCardSubmitRequest request)
         {
             var activeRows = request.Plans?.Where(r => r.Qty > 0).ToList();
@@ -1132,7 +84,8 @@ namespace KalaGenset.ERP.Core.Services
                     if (preConn.State == ConnectionState.Closed)
                         await preConn.OpenAsync();
 
-                    using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
+                    //using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
+                    using (var srCmd = new SqlCommand("GetJobCardSrNo_Cheker_Maker", preConn))
                     {
                         srCmd.CommandType = CommandType.StoredProcedure;
                         srCmd.CommandTimeout = 0;
@@ -1140,6 +93,7 @@ namespace KalaGenset.ERP.Core.Services
                         srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
                         srCmd.Parameters.AddWithValue("@Qty", row.Qty);
                         srCmd.Parameters.AddWithValue("@CompCode", compCode);
+                        srCmd.Parameters.AddWithValue("@AssemblyLine", request.pcCode_Act); //no need for GetJobCardSrNo sp
                         using var r = await srCmd.ExecuteReaderAsync();
                         while (await r.ReadAsync())
                             preSerials.Add((
@@ -1244,7 +198,8 @@ namespace KalaGenset.ERP.Core.Services
 
                         #region STEP 5 — FETCH SERIAL NUMBERS within transaction
                         var serials = new List<(string PartCode, string SerialNo, string Gcode)>();
-                        using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
+                        //using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
+                        using (var srCmd = new SqlCommand("GetJobCardSrNo_Cheker_Maker", sqlConn, sqlTran))
                         {
                             srCmd.CommandType = CommandType.StoredProcedure;
                             srCmd.CommandTimeout = 0;
@@ -1252,6 +207,7 @@ namespace KalaGenset.ERP.Core.Services
                             srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
                             srCmd.Parameters.AddWithValue("@Qty", row.Qty);
                             srCmd.Parameters.AddWithValue("@CompCode", compCode);
+                            srCmd.Parameters.AddWithValue("@AssemblyLine", request.pcCode_Act); // no need for GetJobCardSrNo sp
                             using var srReader = await srCmd.ExecuteReaderAsync();
                             while (await srReader.ReadAsync())
                                 serials.Add((
@@ -1259,12 +215,46 @@ namespace KalaGenset.ERP.Core.Services
                                     srReader["SerialNo"]?.ToString()?.Trim() ?? "",
                                     srReader["Gcode"]?.ToString()?.Trim() ?? ""));
                         }
+
+                        // === LOG 1: GetJobCardSrNo output ===
+                        Console.WriteLine($"[JC-LOG] === GetJobCardSrNo output for JobCode={jobCardNo}, PartCode={row.PartCode}, Qty={row.Qty}, KVA={kva} ===");
+                        Console.WriteLine($"[JC-LOG] Total rows returned: {serials.Count}");
+                        for (int i = 0; i < serials.Count; i++)
+                        {
+                            var s = serials[i];
+                            Console.WriteLine($"[JC-LOG] Row {i + 1}: PartCode={s.PartCode}, SerialNo={s.SerialNo}, Gcode={s.Gcode}");
+                        }
+                        // === END LOG 1 ===
+
                         if (!serials.Any()) continue;
                         #endregion
 
+                        //int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
+                        //int batCnt = 0;
+                        //int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
+
                         int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
+                        int jpBatRaw = 0;          // raw battery group counter — increments every 2 batteries, never wraps
                         int batCnt = 0;
                         int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
+
+                        // Fetch batteriesPerDG from BOM (same source GetJobCardSrNo uses)
+                        int batteriesPerDG = 1;
+                        using (var bomCmd = new SqlCommand(@"SELECT TOP 1 CAST(Bd.Qty AS INT)
+                               FROM BOM B 
+                               INNER JOIN BOMDetails Bd ON B.BOMCode = Bd.BomCode
+                               INNER JOIN Part P ON B.Partcode = P.Partcode
+                               WHERE B.Active = '1' AND B.Discard = '1' 
+                               AND P.Active = '1' AND P.Discard = '1' 
+                               AND Bd.KITCode = @KitCode 
+                               AND SUBSTRING(Bd.partcode, 1, 3) = '010'", sqlConn, sqlTran))
+                        {
+                            bomCmd.Parameters.AddWithValue("@KitCode", row.PartCode);
+                            var bomResult = await bomCmd.ExecuteScalarAsync();
+                            if (bomResult != null && bomResult != DBNull.Value)
+                                batteriesPerDG = Convert.ToInt32(bomResult);
+                        }
+                        Console.WriteLine($"[JC-LOG] BOM batteriesPerDG for {row.PartCode}: {batteriesPerDG}");
 
                         foreach (var serial in serials)
                         {
@@ -1272,18 +262,68 @@ namespace KalaGenset.ERP.Core.Services
                             string pc2 = serial.PartCode.Length >= 2 ? serial.PartCode.Substring(0, 2) : "";
                             string gc3 = serial.Gcode.Length >= 3 ? serial.Gcode.Substring(0, 3) : "";
 
+                            //#region STEP 6 — CALCULATE JPRIORITY
+                            //int jPriority = 0;
+                            //int batCntBefore = batCnt;     // capture state before
+                            //int jpBatBefore = jpBat;
+                            //if (pc3 == "001") { jpEng++; jPriority = jpEng; }
+                            //else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
+                            //else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
+                            //else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
+                            //else if (pc3 == "010" && kva > 200)
+                            //{
+                            //    if (batCnt == 0) { jpBat++; batCnt = 1; }
+                            //    else { batCnt = 0; }
+                            //    jPriority = jpBat;
+                            //}
+
+                            //// === LOG 2: JPriority assignment per serial ===
+                            //Console.WriteLine(
+                            //    $"[JC-LOG] JPRI: SerialNo={serial.SerialNo}, SrNoPartCode={serial.PartCode}, pc3={pc3}, kva={kva}, " +
+                            //    $"batCntBefore={batCntBefore}, batCntAfter={batCnt}, jpBatBefore={jpBatBefore}, jpBatAfter={jpBat}, " +
+                            //    $"=> JPriority={jPriority}");
+                            //// === END LOG 2 ===
+                            //#endregion
+
                             #region STEP 6 — CALCULATE JPRIORITY
                             int jPriority = 0;
+                            int batCntBefore = batCnt;
+                            int jpBatRawBefore = jpBatRaw;
+
                             if (pc3 == "001") { jpEng++; jPriority = jpEng; }
                             else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
                             else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
-                            else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
-                            else if (pc3 == "010" && kva > 200)
+                            else if (pc3 == "010")
                             {
-                                if (batCnt == 0) { jpBat++; batCnt = 1; }
-                                else { batCnt = 0; }
-                                jPriority = jpBat;
+                                // Increment jpBatRaw every batteriesPerDG batteries (1 → every battery, 2 → every 2nd, 4 → every 2nd pair)
+                                // The "every 2 batteries" toggle stays for >1 batteries-per-DG; for 1 battery-per-DG, increment every time.
+                                if (batteriesPerDG <= 1)
+                                {
+                                    jpBatRaw++;
+                                }
+                                else
+                                {
+                                    if (batCnt == 0) { jpBatRaw++; batCnt = 1; }
+                                    else { batCnt = 0; }
+                                }
+
+                                // Wrap JPriority back to plan range using row.Qty
+                                // Examples (Qty=2, batteriesPerDG=4):
+                                //   Batteries 1-2 → jpBatRaw=1 → JP=1
+                                //   Batteries 3-4 → jpBatRaw=2 → JP=2
+                                //   Batteries 5-6 → jpBatRaw=3 → JP=1 (wraps back)
+                                //   Batteries 7-8 → jpBatRaw=4 → JP=2 (wraps back)
+                                int qty = row.Qty;
+                                jPriority = qty > 0 ? ((jpBatRaw - 1) % qty) + 1 : jpBatRaw;
+                                jpBat = jPriority;   // keep jpBat in sync for any downstream code/validation
                             }
+
+                            // === LOG 2: JPriority assignment per serial ===
+                            Console.WriteLine(
+                                $"[JC-LOG] JPRI: SerialNo={serial.SerialNo}, SrNoPartCode={serial.PartCode}, pc3={pc3}, kva={kva}, " +
+                                $"batCntBefore={batCntBefore}, batCntAfter={batCnt}, jpBatRawBefore={jpBatRawBefore}, jpBatRawAfter={jpBatRaw}, " +
+                                $"batteriesPerDG={batteriesPerDG}, qty={row.Qty}, => JPriority={jPriority}");
+                            // === END LOG 2 ===
                             #endregion
 
                             #region STEP 7 — DETERMINE TRANSFERSTATUS (D=Direct, P=Pending)
@@ -1432,6 +472,15 @@ namespace KalaGenset.ERP.Core.Services
                             else if (pc3 == "002") cntAlt++;
                             else if (pc3 == "010") cntBat++;
                             else if (pc2 == "40") cntCpy++;
+
+                            // === LOG 3: Final counters per JobCard ===
+                            Console.WriteLine(
+                                $"[JC-LOG] === SUMMARY for JobCode={jobCardNo}, PartCode={row.PartCode}, Qty={row.Qty}, KVA={kva} ===");
+                            Console.WriteLine(
+                                $"[JC-LOG] Counts: Eng={cntEng}, Alt={cntAlt}, Bat={cntBat}, Cpy={cntCpy}");
+                            Console.WriteLine(
+                                $"[JC-LOG] JPriority maxes: jpEng={jpEng}, jpAlt={jpAlt}, jpBat={jpBat}, jpCpy={jpCpy}");
+                            // === END LOG 3 ===
                         }
 
                         #region STEP 10 — POST-INSERT SERIAL COUNT VALIDATION
@@ -1472,10 +521,10 @@ namespace KalaGenset.ERP.Core.Services
 
                     result = string.Join("#", allJobCards);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     await transaction.RollbackAsync();
-                    result = $"StackTrace {ex.StackTrace} Message {ex.Message}";
+                    throw;
                 }
             });
 
@@ -1559,7 +608,7 @@ namespace KalaGenset.ERP.Core.Services
             {
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "GetPlanDetails";
+                    cmd.CommandText = "GetPlanDetails_Checker_Maker";
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.CommandTimeout = 0;
                     cmd.Parameters.Add(new SqlParameter("@JobCode", SqlDbType.VarChar) { Value = jobCode.Trim() });
@@ -1757,6 +806,7 @@ namespace KalaGenset.ERP.Core.Services
                         }
                         else
                         {
+                            jobCard.Auth = false;
                             int intMaxReq = await _context.GetMaxCodes
                                 .Where(g => g.TblName == "CorporateRequisition"
                                          && g.CompCode == compCode
@@ -2011,6 +1061,92 @@ namespace KalaGenset.ERP.Core.Services
                 cpStk = cpStk + "-->0";
 
             return cpStk;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // METHOD — GetJobCard2ReportAsync
+        // Calls stored proc: JobCard2Report
+        // Example: EXEC JobCard2Report '03', '03.123', '2026-02-01', '2026-02-28';
+        // Params: @CompanyCode, @AssemblyLine, @FromDate, @ToDate
+        // ══════════════════════════════════════════════════════════════════
+        public async Task<List<Dictionary<string, object>>> GetJobCard2ReportAsync(
+            string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate)
+        {
+            var data = new List<Dictionary<string, object>>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "JobCard2Report";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@CompanyCode",  SqlDbType.VarChar, 10) { Value = companyCode  ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.VarChar, 10) { Value = assemblyLine ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@FromDate",     SqlDbType.DateTime)    { Value = fromDate });
+                    cmd.Parameters.Add(new SqlParameter("@ToDate",       SqlDbType.DateTime)    { Value = toDate });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                            data.Add(row);
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // METHOD — GetJobCard1ReportAsync
+        // Calls stored proc: JobCard1Report
+        // Params: @CompanyCode, @AssemblyLine, @FromDate, @ToDate
+        // Returns one row per JobCard plan with stage progress.
+        // ══════════════════════════════════════════════════════════════════
+        public async Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(
+            string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate)
+        {
+            var data = new List<Dictionary<string, object>>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "JobCard1Report";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@CompanyCode",  SqlDbType.VarChar, 10) { Value = companyCode  ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.VarChar, 10) { Value = assemblyLine ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@FromDate",     SqlDbType.DateTime)    { Value = fromDate });
+                    cmd.Parameters.Add(new SqlParameter("@ToDate",       SqlDbType.DateTime)    { Value = toDate });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                            data.Add(row);
+                        }
+                    }
+                }
+            }
+
+            return data;
         }
     }
 }

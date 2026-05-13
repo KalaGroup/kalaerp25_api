@@ -26,5 +26,9 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<List<Dictionary<string, object?>>> GetJobCard2CPAsync();
 
         public Task<string> GetCPStkAsync(string strKVA, string ph, string panelType, string compId, string assemblyLine);
+
+        public Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
+
+        public Task<List<Dictionary<string, object>>> GetJobCard2ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
     }
 }

@@ -491,6 +491,280 @@ namespace KalaGenset.ERP.Core.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        //   DG QUALITY MASTER FORM (moved from DgStageCheckerService)
+        // ══════════════════════════════════════════════════════════════════
+
+        public async Task<List<PartKvaDto>> GetActivePartKvaListAsync()
+        {
+            try
+            {
+                return await _context.Database
+                    .SqlQueryRaw<PartKvaDto>("EXEC GetActivePartKVAList")
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error fetching Part KVA list", ex);
+            }
+        }
+
+        public async Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var master = new StageWiseQualityCheckList
+                {
+                    Pccode = request.pcCode,
+                    StageName = request.stageName,
+                    FromKva = request.fromKVA,
+                    ToKva = request.toKVA,
+                    IsActive = true,
+                    MakerRemark = request.makerRemark,
+                };
+
+                _context.StageWiseQualityCheckLists.Add(master);
+                await _context.SaveChangesAsync();
+
+                int stageWiseQCId = master.StageWiseQcid;
+
+                var details = request.checkpointItems.Select(item =>
+                    new StageWiseQualityCheckListDetail
+                    {
+                        StageWiseQcid            = stageWiseQCId,
+                        SrNo                     = item.srNo,
+                        SubAssemblyPart          = item.subAssemblyPart,
+                        QualityProcessCheckpoint = item.qualityProcessCheckpoint,
+                        Specification            = item.specification,
+                        Observation              = item.observation,
+                        OkNok                    = item.ok_nok
+                    }).ToList();
+
+                _context.StageWiseQualityCheckListDetails.AddRange(details);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new Exception("Error saving Stage Wise Quality Check List", ex);
+            }
+        }
+
+        public async Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva)
+        {
+            try
+            {
+                if (!decimal.TryParse(fromKva, out decimal fromKvaDecimal))
+                    throw new Exception("Invalid FromKVA value");
+                if (!decimal.TryParse(toKva, out decimal toKvaDecimal))
+                    throw new Exception("Invalid ToKVA value");
+
+                return await _context.StageWiseQualityCheckLists
+                    .AnyAsync(x => x.Pccode == pcCode
+                                && x.StageName == stageName
+                                && x.FromKva == fromKvaDecimal
+                                && x.ToKva == toKvaDecimal);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error checking duplicate Quality Check List", ex);
+            }
+        }
+
+        /// <summary>
+        /// Returns every saved StageWiseQualityCheckList (skipping soft-deleted/inactive)
+        /// joined to ProfitCenters for the PC name, plus the checkpoint-detail count
+        /// AND the per-master detail rows (Items).
+        /// </summary>
+        public async Task<List<QualityCheckListReportDto>> GetAllQualityCheckListsAsync()
+        {
+            try
+            {
+                var raw = await (
+                    from q in _context.StageWiseQualityCheckLists
+                    join pc in _context.ProfitCenters
+                        on q.Pccode equals pc.Pccode into pcJoin
+                    from pc in pcJoin.DefaultIfEmpty()
+                    where q.IsActive == true && q.IsDiscard == false
+                    orderby q.StageWiseQcid descending
+                    select new
+                    {
+                        q.StageWiseQcid,
+                        q.Pccode,
+                        PCName = pc != null ? pc.Pcname : "",
+                        q.StageName,
+                        q.FromKva,
+                        q.ToKva,
+                        q.MakerRemark,
+                        q.CheckerAuthRemark,
+                        q.IsActive,
+                        q.IsAuth,
+                        q.IsDiscard,
+                        ItemCount = q.StageWiseQualityCheckListDetails.Count(),
+                        Items = q.StageWiseQualityCheckListDetails
+                                  .OrderBy(d => d.SrNo)
+                                  .Select(d => new QualityCheckListItemDto
+                                  {
+                                      StageWiseQcdetailId      = d.StageWiseQcdetailId,
+                                      SrNo                     = d.SrNo,
+                                      SubAssemblyPart          = d.SubAssemblyPart,
+                                      QualityProcessCheckpoint = d.QualityProcessCheckpoint,
+                                      Specification            = d.Specification,
+                                      Observation              = d.Observation,
+                                      OkNok                    = d.OkNok
+                                  }).ToList()
+                    }
+                ).ToListAsync();
+
+                return raw.Select(r => new QualityCheckListReportDto
+                {
+                    StageWiseQcid     = r.StageWiseQcid,
+                    Pccode            = r.Pccode,
+                    PCName            = r.PCName,
+                    StageName         = r.StageName,
+                    FromKva           = r.FromKva,
+                    ToKva             = r.ToKva,
+                    MakerRemark       = r.MakerRemark,
+                    CheckerAuthRemark = r.CheckerAuthRemark,
+                    IsActive          = r.IsActive,
+                    IsAuth            = r.IsAuth,
+                    IsDiscard         = r.IsDiscard,
+                    ItemCount         = r.ItemCount,
+                    AuthStatus        = r.IsDiscard ? "Discarded"
+                                       : !r.IsActive ? "Inactive"
+                                       : r.IsAuth    ? "Authorized"
+                                                     : "Pending",
+                    Items             = r.Items
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error fetching all Quality Check Lists", ex);
+            }
+        }
+
+        /// <summary>
+        /// Updates an existing Quality Check List: master remark + reconcile detail rows
+        /// (insert new, update changed, hard-delete removed). If no details remain,
+        /// the master is soft-deleted (IsActive = false).
+        /// </summary>
+        public async Task UpdateStageWiseQualityCheckListAsync(UpdateStageWiseQualityCheckListRequest request)
+        {
+            if (request == null || request.stageWiseQcid <= 0)
+                throw new ArgumentException("stageWiseQcid is required.");
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var master = await _context.StageWiseQualityCheckLists
+                    .FirstOrDefaultAsync(m => m.StageWiseQcid == request.stageWiseQcid);
+
+                if (master == null)
+                    throw new Exception($"Quality Check List #{request.stageWiseQcid} not found.");
+
+                master.MakerRemark = request.makerRemark;
+
+                var incomingIds = (request.checkpointItems ?? new())
+                    .Where(i => i.stageWiseQcdetailId.HasValue && i.stageWiseQcdetailId.Value > 0)
+                    .Select(i => i.stageWiseQcdetailId!.Value)
+                    .ToHashSet();
+
+                var existing = await _context.StageWiseQualityCheckListDetails
+                    .Where(d => d.StageWiseQcid == request.stageWiseQcid)
+                    .ToListAsync();
+
+                var toDelete = existing
+                    .Where(d => request.deletedItemIds.Contains(d.StageWiseQcdetailId)
+                             || !incomingIds.Contains(d.StageWiseQcdetailId))
+                    .ToList();
+
+                if (toDelete.Any())
+                    _context.StageWiseQualityCheckListDetails.RemoveRange(toDelete);
+
+                foreach (var item in request.checkpointItems ?? new())
+                {
+                    if (item.stageWiseQcdetailId.HasValue && item.stageWiseQcdetailId.Value > 0)
+                    {
+                        var row = existing.FirstOrDefault(d => d.StageWiseQcdetailId == item.stageWiseQcdetailId.Value);
+                        if (row == null) continue;
+                        row.SrNo                     = item.srNo;
+                        row.SubAssemblyPart          = item.subAssemblyPart;
+                        row.QualityProcessCheckpoint = item.qualityProcessCheckpoint;
+                        row.Specification            = item.specification;
+                        row.Observation              = item.observation;
+                        row.OkNok                    = item.ok_nok;
+                    }
+                    else
+                    {
+                        _context.StageWiseQualityCheckListDetails.Add(new StageWiseQualityCheckListDetail
+                        {
+                            StageWiseQcid            = request.stageWiseQcid,
+                            SrNo                     = item.srNo,
+                            SubAssemblyPart          = item.subAssemblyPart,
+                            QualityProcessCheckpoint = item.qualityProcessCheckpoint,
+                            Specification            = item.specification,
+                            Observation              = item.observation,
+                            OkNok                    = item.ok_nok
+                        });
+                    }
+                }
+
+                if ((request.checkpointItems == null || request.checkpointItems.Count == 0) && toDelete.Count == existing.Count)
+                    master.IsActive = false;
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new Exception("Error updating Stage Wise Quality Check List", ex);
+            }
+        }
+
+        public async Task<bool> SoftDeleteStageWiseQualityCheckListAsync(int stageWiseQcid)
+        {
+            var master = await _context.StageWiseQualityCheckLists
+                .FirstOrDefaultAsync(m => m.StageWiseQcid == stageWiseQcid);
+            if (master == null) return false;
+            master.IsActive = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        /// <summary>
+        /// Checker authorization — marks IsAuth = true and stores the optional
+        /// checker remark. Returns false if the master id was not found.
+        /// </summary>
+        public async Task<bool> AuthorizeStageWiseQualityCheckListAsync(int stageWiseQcid, string? checkerRemark)
+        {
+            var master = await _context.StageWiseQualityCheckLists
+                .FirstOrDefaultAsync(m => m.StageWiseQcid == stageWiseQcid);
+            if (master == null) return false;
+            master.IsAuth = true;
+            if (!string.IsNullOrWhiteSpace(checkerRemark))
+                master.CheckerAuthRemark = checkerRemark;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        /// <summary>
+        /// Reverts a previously authorized checklist back to Pending state.
+        /// Clears the checker remark so the next authorize starts fresh.
+        /// </summary>
+        public async Task<bool> RevertAuthorizationStageWiseQualityCheckListAsync(int stageWiseQcid)
+        {
+            var master = await _context.StageWiseQualityCheckLists
+                .FirstOrDefaultAsync(m => m.StageWiseQcid == stageWiseQcid);
+            if (master == null) return false;
+            master.IsAuth = false;
+            master.CheckerAuthRemark = null;
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }
  
