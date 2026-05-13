@@ -248,5 +248,135 @@ namespace KalaGenset.ERP.API.Controllers
                 return StatusCode(500, new { message = "Failed to authorize.", error = ex.Message });
             }
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        //   DG QUALITY MASTER FORM (moved from DgStageCheckerController)
+        // ══════════════════════════════════════════════════════════════════
+
+        [HttpGet("GetActivePartKvaList")]
+        public async Task<IActionResult> GetActivePartKvaList()
+        {
+            try
+            {
+                var result = await _qualityService.GetActivePartKvaListAsync();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPost("SaveStageWiseQualityCheckList")]
+        public async Task<IActionResult> SaveStageWiseQualityCheckList([FromBody] StageWiseQualityCheckListRequest request)
+        {
+            try
+            {
+                await _qualityService.SaveStageWiseQualityCheckListAsync(request);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpGet("CheckDuplicateQualityCheckList/{pcCode}/{stageName}/{fromKva}/{toKva}")]
+        public async Task<IActionResult> CheckDuplicateQualityCheckList(string pcCode, string stageName, string fromKva, string toKva)
+        {
+            try
+            {
+                var exists = await _qualityService.CheckDuplicateQualityCheckListAsync(pcCode, stageName, fromKva, toKva);
+                return Ok(new { isDuplicate = exists });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpGet("GetAllQualityCheckLists")]
+        public async Task<IActionResult> GetAllQualityCheckLists()
+        {
+            try
+            {
+                var result = await _qualityService.GetAllQualityCheckListsAsync();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPost("UpdateStageWiseQualityCheckList")]
+        public async Task<IActionResult> UpdateStageWiseQualityCheckList([FromBody] UpdateStageWiseQualityCheckListRequest request)
+        {
+            try
+            {
+                if (request == null || request.stageWiseQcid <= 0)
+                    return BadRequest("stageWiseQcid is required.");
+                await _qualityService.UpdateStageWiseQualityCheckListAsync(request);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPost("SoftDeleteStageWiseQualityCheckList/{id:int}")]
+        public async Task<IActionResult> SoftDeleteStageWiseQualityCheckList(int id)
+        {
+            try
+            {
+                var ok = await _qualityService.SoftDeleteStageWiseQualityCheckListAsync(id);
+                if (!ok) return NotFound("Record not found.");
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        public class AuthorizeQualityCheckListBody
+        {
+            public string? checkerRemark { get; set; }
+        }
+
+        // POST api/Quality/AuthorizeStageWiseQualityCheckList/{id}
+        // Body: { "checkerRemark": "optional remark" }
+        [HttpPost("AuthorizeStageWiseQualityCheckList/{id:int}")]
+        public async Task<IActionResult> AuthorizeStageWiseQualityCheckList(int id, [FromBody] AuthorizeQualityCheckListBody body)
+        {
+            try
+            {
+                var ok = await _qualityService.AuthorizeStageWiseQualityCheckListAsync(id, body?.checkerRemark);
+                if (!ok) return NotFound("Record not found.");
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        // POST api/Quality/RevertAuthorizationStageWiseQualityCheckList/{id}
+        // Rolls IsAuth back to false and clears CheckerAuthRemark.
+        [HttpPost("RevertAuthorizationStageWiseQualityCheckList/{id:int}")]
+        public async Task<IActionResult> RevertAuthorizationStageWiseQualityCheckList(int id)
+        {
+            try
+            {
+                var ok = await _qualityService.RevertAuthorizationStageWiseQualityCheckListAsync(id);
+                if (!ok) return NotFound("Record not found.");
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
     }
 }

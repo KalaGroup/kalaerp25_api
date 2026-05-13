@@ -19,5 +19,7 @@ public partial class StageWiseQualityCheckListDetail
 
     public string? OkNok { get; set; }
 
+    public int StageWiseQcdetailId { get; set; }
+
     public virtual StageWiseQualityCheckList StageWiseQc { get; set; } = null!;
 }

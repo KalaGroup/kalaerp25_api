@@ -29,5 +29,24 @@ namespace KalaGenset.ERP.Core.Interface
         Task<bool> DeleteKaizenSheet(int id);
         Task<string> UpdateKaizenSheet(int id, CreateKaizenSheetRequest request);
         public Task<bool> AuthorizeKaizenSheet(int id);
+
+        // ── DG Quality Master form endpoints (moved from IDgStageChecker) ─────
+        Task<List<PartKvaDto>> GetActivePartKvaListAsync();
+
+        Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
+
+        Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
+
+        Task<List<QualityCheckListReportDto>> GetAllQualityCheckListsAsync();
+
+        Task UpdateStageWiseQualityCheckListAsync(UpdateStageWiseQualityCheckListRequest request);
+
+        Task<bool> SoftDeleteStageWiseQualityCheckListAsync(int stageWiseQcid);
+
+        // Checker action — sets IsAuth = true and stores the optional checker remark
+        Task<bool> AuthorizeStageWiseQualityCheckListAsync(int stageWiseQcid, string? checkerRemark);
+
+        // Checker action — rolls a previously authorized checklist back to Pending
+        Task<bool> RevertAuthorizationStageWiseQualityCheckListAsync(int stageWiseQcid);
     }
 }
