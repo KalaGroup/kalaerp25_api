@@ -435,7 +435,7 @@ namespace KalaGenset.ERP.Core.Services
                             c2.CommandText = "SELECT partdesc FROM Part WHERE Partcode = @pc";
                             c2.Parameters.Add(new SqlParameter("@pc", p.PartCode));
                             var name = (await c2.ExecuteScalarAsync())?.ToString() ?? "0";
-                            return $"{diff} - Giir Qty not aviable For Product {name}";
+                            return $"{diff} - Giir Qty not available For Product {name}";
                         }
                     }
                     if (!anyRow)
@@ -445,7 +445,7 @@ namespace KalaGenset.ERP.Core.Services
                         c2.CommandText = "SELECT partdesc FROM Part WHERE Partcode = @pc";
                         c2.Parameters.Add(new SqlParameter("@pc", p.PartCode));
                         var name = (await c2.ExecuteScalarAsync())?.ToString() ?? "0";
-                        return $"{p.PartCode} - Giir Qty not aviable For Product {name}";
+                        return $"{p.PartCode} - Giir Qty not available For Product {name}";
                     }
                 }
             }

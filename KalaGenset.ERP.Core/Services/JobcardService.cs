@@ -136,6 +136,8 @@ namespace KalaGenset.ERP.Core.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
+                allJobCards.Clear();   // ← reset on every (re)try
+                result = "";           // ← reset error result too, same reason
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
@@ -215,16 +217,7 @@ namespace KalaGenset.ERP.Core.Services
                                     srReader["SerialNo"]?.ToString()?.Trim() ?? "",
                                     srReader["Gcode"]?.ToString()?.Trim() ?? ""));
                         }
-
-                        // === LOG 1: GetJobCardSrNo output ===
-                        Console.WriteLine($"[JC-LOG] === GetJobCardSrNo output for JobCode={jobCardNo}, PartCode={row.PartCode}, Qty={row.Qty}, KVA={kva} ===");
-                        Console.WriteLine($"[JC-LOG] Total rows returned: {serials.Count}");
-                        for (int i = 0; i < serials.Count; i++)
-                        {
-                            var s = serials[i];
-                            Console.WriteLine($"[JC-LOG] Row {i + 1}: PartCode={s.PartCode}, SerialNo={s.SerialNo}, Gcode={s.Gcode}");
-                        }
-                        // === END LOG 1 ===
+                   
 
                         if (!serials.Any()) continue;
                         #endregion
@@ -254,7 +247,6 @@ namespace KalaGenset.ERP.Core.Services
                             if (bomResult != null && bomResult != DBNull.Value)
                                 batteriesPerDG = Convert.ToInt32(bomResult);
                         }
-                        Console.WriteLine($"[JC-LOG] BOM batteriesPerDG for {row.PartCode}: {batteriesPerDG}");
 
                         foreach (var serial in serials)
                         {
@@ -471,16 +463,7 @@ namespace KalaGenset.ERP.Core.Services
                             if (pc3 == "001") cntEng++;
                             else if (pc3 == "002") cntAlt++;
                             else if (pc3 == "010") cntBat++;
-                            else if (pc2 == "40") cntCpy++;
-
-                            // === LOG 3: Final counters per JobCard ===
-                            Console.WriteLine(
-                                $"[JC-LOG] === SUMMARY for JobCode={jobCardNo}, PartCode={row.PartCode}, Qty={row.Qty}, KVA={kva} ===");
-                            Console.WriteLine(
-                                $"[JC-LOG] Counts: Eng={cntEng}, Alt={cntAlt}, Bat={cntBat}, Cpy={cntCpy}");
-                            Console.WriteLine(
-                                $"[JC-LOG] JPriority maxes: jpEng={jpEng}, jpAlt={jpAlt}, jpBat={jpBat}, jpCpy={jpCpy}");
-                            // === END LOG 3 ===
+                            else if (pc2 == "40") cntCpy++;                          
                         }
 
                         #region STEP 10 — POST-INSERT SERIAL COUNT VALIDATION
