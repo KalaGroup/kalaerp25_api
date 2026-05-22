@@ -6,6 +6,8 @@ using KalaGenset.ERP.Data.DbContexts;
 using KalaGenset.ERP.Data.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace KalaGenset.ERP.Core.Services
 {

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using KalaGenset.ERP.Core.Interface;
 using KalaGenset.ERP.Core.Request.Jobcard;
+using KalaGenset.ERP.Core.ResponseDTO;
 using KalaGenset.ERP.Data.DbContexts;
 using KalaGenset.ERP.Data.Models;
 using Microsoft.Data.SqlClient;
@@ -1046,6 +1047,92 @@ namespace KalaGenset.ERP.Core.Services
             return cpStk;
         }
 
+        public async Task<List<ReverseTransOptionDTO>> GetReverseTransMstAsync(string pcCode)
+        {
+            var data = new List<ReverseTransOptionDTO>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "GetReversetransMstDts";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
+                    {
+                        Value = (object?)pcCode ?? DBNull.Value
+                    });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            data.Add(new ReverseTransOptionDTO
+                            {
+                                TransName = reader["TransName"]?.ToString() ?? string.Empty,
+                                TransID = reader.GetInt32(reader.GetOrdinal("TransID")),
+                            });
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        public async Task<List<KvaOptionDTO>> GetReverseKvaListAsync(int transType, string pcCode)
+        {
+            var data = new List<KvaOptionDTO>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "getddlRevTransDts_checker_maker";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
+                    {
+                        Value = transType
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@ddlType", SqlDbType.VarChar, 15)
+                    {
+                        Value = "KVA"
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
+                    {
+                        Value = (object?)pcCode ?? DBNull.Value
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 5)
+                    {
+                        Value = "0"
+                    });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            data.Add(new KvaOptionDTO
+                            {
+                                KVA = reader["KVA"]?.ToString() ?? string.Empty,
+                                KVA1 = reader["KVA1"]?.ToString() ?? string.Empty,
+                            });
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
         // ══════════════════════════════════════════════════════════════════
         // METHOD — GetJobCard2ReportAsync
         // Calls stored proc: JobCard2Report
@@ -1130,6 +1217,543 @@ namespace KalaGenset.ERP.Core.Services
             }
 
             return data;
+        }
+
+        public async Task<List<ModelOptionDTO>> GetReverseModelListAsync(int transType, string pcCode, string kva)
+        {
+            var data = new List<ModelOptionDTO>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "getddlRevTransDts_checker_maker";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
+                    {
+                        Value = transType
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@ddlType", SqlDbType.VarChar, 15)
+                    {
+                        Value = "Model"
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
+                    {
+                        Value = (object?)pcCode ?? DBNull.Value
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 5)
+                    {
+                        Value = (object?)kva ?? DBNull.Value
+                    });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            data.Add(new ModelOptionDTO
+                            {
+                                Model = reader["Model"]?.ToString() ?? string.Empty,
+                                Model1 = reader["Model1"]?.ToString() ?? string.Empty,
+                            });
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        public async Task<List<ReverseTransSearchResultDTO>> GetRevTransDtsAsync(
+            int transType,
+            string pcCode,
+            string kva,
+            string model)
+        {
+            var data = new List<ReverseTransSearchResultDTO>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "GetRevTransDts_Checker_Maker";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
+                    {
+                        Value = transType
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
+                    {
+                        Value = (object?)pcCode ?? DBNull.Value
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 10)
+                    {
+                        Value = (object?)kva ?? DBNull.Value
+                    });
+                    cmd.Parameters.Add(new SqlParameter("@Model", SqlDbType.VarChar, 100)
+                    {
+                        Value = (object?)model ?? DBNull.Value
+                    });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        // Local helper — returns null when the column is DBNull,
+                        // otherwise its string form. Keeps the projection terse.
+                        string? S(string col)
+                        {
+                            int ord = reader.GetOrdinal(col);
+                            return reader.IsDBNull(ord) ? null : reader[ord]?.ToString();
+                        }
+
+                        while (await reader.ReadAsync())
+                        {
+                            int selectROrd = reader.GetOrdinal("SelectR");
+                            int dtOrd = reader.GetOrdinal("Dt");
+
+                            data.Add(new ReverseTransSearchResultDTO
+                            {
+                                Stage4Code = S("Stage4Code"),
+                                TRCode = S("TRCode"),
+                                SelectR = reader.IsDBNull(selectROrd) ? 0 : Convert.ToInt32(reader[selectROrd]),
+                                KVA = S("KVA"),
+                                Phase = S("Phase"),
+                                Model = S("Model"),
+                                Panel = S("Panel"),
+                                EngSrNo = S("EngSrNo"),
+                                AltSrno = S("AltSrno"),
+                                CpySrno = S("CpySrno"),
+                                BatSrNo = S("BatSrNo"),
+                                Bat2SrNo = S("Bat2SrNo"),
+                                Bat3SrNo = S("Bat3SrNo"),
+                                Bat4SrNo = S("Bat4SrNo"),
+                                CPSrNo = S("CPSrNo"),
+                                CP2SrNo = S("CP2SrNo"),
+                                KRMSrNo = S("KRMSrNo"),
+                                Partcode = S("Partcode"),
+                                JobCode = S("JobCode"),
+                                J2Priority = S("J2Priority"),
+                                Dt = reader.IsDBNull(dtOrd) ? (DateTime?)null : Convert.ToDateTime(reader[dtOrd]),
+                                JobCard1 = S("JobCard1"),
+                                PanelType = S("PanelType"),
+                            });
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        public async Task<string> SubmitReverseTransAsync(ReverseTransRequest request)
+        {
+            if (request?.Rows == null || request.Rows.Count == 0)
+                return "No reverse rows provided.";
+            if (string.IsNullOrWhiteSpace(request.PCCode) || request.PCCode.Trim().Length < 2)
+                return "Invalid PCCode.";
+
+            string compCode = request.PCCode.Trim().Substring(0, 2);
+            string remark = request.Remark?.Trim() ?? string.Empty;
+            int revTransFor = request.RevTransFor;
+
+            var allCodes = new List<string>();
+            string result = string.Empty;
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    var sqlConn = (SqlConnection)_context.Database.GetDbConnection();
+                    var sqlTran = (SqlTransaction)_context.Database.CurrentTransaction.GetDbTransaction();
+
+                    // Financial year from the `yearend` master table (legacy ComCon.yearEnd query, inlined).
+                    string yr;
+                    using (var yrCmd = new SqlCommand(
+                        "SELECT SUBSTRING(CONVERT(varchar(10), startdate, 103), 9, 2) + '-' + " +
+                        "       SUBSTRING(CONVERT(varchar(10), enddate, 103), 9, 2) AS yr " +
+                        "FROM yearend",
+                        sqlConn, sqlTran))
+                    {
+                        yr = (await yrCmd.ExecuteScalarAsync())?.ToString()?.Trim() ?? string.Empty;
+                    }
+
+                    // GetMaxCode read once; in-memory ++ per row.
+                    var maxRec = await _context.GetMaxCodes
+                        .Where(g => g.TblName == "StageRevTrans"
+                                 && g.CompCode == compCode
+                                 && g.Prefix == "RTC"
+                                 && g.Yr == yr)
+                        .FirstOrDefaultAsync();
+
+                    int maxN = maxRec != null ? Convert.ToInt32(maxRec.MaxValue) : 0;
+
+                    foreach (var row in request.Rows)
+                    {
+                        // ── Step 1: mint new RTCode ──────────────────────────
+                        maxN++;
+                        string strMax = maxN.ToString("D6");
+                        string rtCode = $"RTC/{yr}/{compCode}{strMax}";
+
+                        if (maxRec != null)
+                        {
+                            maxRec.MaxValue = int.Parse(strMax);
+                            await _context.SaveChangesAsync();
+                        }
+
+                        // ── Step 2: INSERT StageRevTrans header ──────────────
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "INSERT INTO StageRevTrans(RTCode,Dt,Yr,MaxSrNo,PCCode,RevMstId," +
+                            "Stage4Code,TRCode,TransCode,ProductCode,CPType,Jobcard1,Jpriority," +
+                            "Remark,CompanyCode,Active,Auth) " +
+                            "VALUES(@RTCode,@Dt,@Yr,@MaxSrNo,@PCCode,@RevMstId,@Stage4Code,@TRCode," +
+                            "@TransCode,@ProductCode,@CPType,@Jobcard1,@Jpriority,@Remark," +
+                            "@CompanyCode,'1','1')",
+                            new SqlParameter("@RTCode", rtCode),
+                            new SqlParameter("@Dt", DateTime.Now),
+                            new SqlParameter("@Yr", yr),
+                            new SqlParameter("@MaxSrNo", rtCode.Substring(10, 8)),
+                            new SqlParameter("@PCCode", request.PCCode.Trim()),
+                            new SqlParameter("@RevMstId", revTransFor),
+                            new SqlParameter("@Stage4Code", (object?)row.Stage4Code?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@TRCode", (object?)row.TRCode?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@TransCode", (object?)row.JobCode?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@ProductCode", (object?)row.Partcode?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@CPType", (object?)row.PanelType?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@Jobcard1", (object?)row.JobCard1?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@Jpriority", (object?)row.J2Priority?.Trim() ?? DBNull.Value),
+                            new SqlParameter("@Remark", remark),
+                            new SqlParameter("@CompanyCode", compCode));
+
+                        // ── Step 3: call GetRevTransDetailSave SP ────────────
+                        // Returns (PartCode, SrNoPartcode, SerialNo, TRFCode, Qty).
+                        // Qty is identical across all rows for the same product;
+                        // we keep the first one to decide whether to delete the
+                        // master JobCard*details row (Qty == 1) or just decrement.
+                        var details = new List<(string PartCode, string SrNoPartcode, string SerialNo, string TRFCode)>();
+                        int jobDgQty = 0;
+
+                        using (var spCmd = new SqlCommand("GetRevTransDetailSave", sqlConn, sqlTran))
+                        {
+                            spCmd.CommandType = CommandType.StoredProcedure;
+                            spCmd.CommandTimeout = 0;
+                            spCmd.Parameters.AddWithValue("@TransType", revTransFor);
+                            spCmd.Parameters.AddWithValue("@TransCode", (object?)row.JobCode?.Trim() ?? DBNull.Value);
+                            spCmd.Parameters.AddWithValue("@ProductCode", (object?)row.Partcode?.Trim() ?? DBNull.Value);
+                            spCmd.Parameters.AddWithValue("@Jobcard1", (object?)row.JobCard1?.Trim() ?? DBNull.Value);
+                            // SP signature: @JPriority int  — caller passes a string from the UI,
+                            // we parse here so the int parameter binds cleanly.
+                            int jPrio = 0;
+                            int.TryParse(row.J2Priority, out jPrio);
+                            spCmd.Parameters.AddWithValue("@JPriority", jPrio);
+
+                            using var r = await spCmd.ExecuteReaderAsync();
+                            while (await r.ReadAsync())
+                            {
+                                if (jobDgQty == 0)
+                                    jobDgQty = Convert.ToInt32(r["Qty"]);
+                                details.Add((
+                                    r["PartCode"]?.ToString()?.Trim() ?? string.Empty,
+                                    r["SrNoPartcode"]?.ToString()?.Trim() ?? string.Empty,
+                                    r["SerialNo"]?.ToString()?.Trim() ?? string.Empty,
+                                    r["TRFCode"]?.ToString()?.Trim() ?? string.Empty));
+                            }
+                        }
+
+                        // ── Step 4: INSERT StageRevTransDts + cascading updates ──
+                        int srNoD = 0;
+                        foreach (var d in details)
+                        {
+                            srNoD++;
+
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "INSERT INTO StageRevTransDts(RTCode,SrNo,PartCode,SrNoPartcode,SerialNo,TRFCode) " +
+                                "VALUES(@RT,@Sr,@Pc,@Sp,@Sn,@Tr)",
+                                new SqlParameter("@RT", rtCode),
+                                new SqlParameter("@Sr", srNoD),
+                                new SqlParameter("@Pc", d.PartCode),
+                                new SqlParameter("@Sp", d.SrNoPartcode),
+                                new SqlParameter("@Sn", d.SerialNo),
+                                new SqlParameter("@Tr", d.TRFCode));
+
+                            string sp3 = d.SrNoPartcode.Length >= 3 ? d.SrNoPartcode.Substring(0, 3) : string.Empty;
+                            string tr3 = d.TRFCode.Length >= 3 ? d.TRFCode.Substring(0, 3) : string.Empty;
+
+                            if (revTransFor != 4)
+                            {
+                                // Non Stage-1 path: only CP (003) parts trigger downstream updates.
+                                if (sp3 == "003" && tr3 == "MTF")
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE MTFDetailsSub SET JobCardStatus='P' WHERE MTFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus='P' WHERE TRFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+                                else if (sp3 == "003" && tr3 == "PSH")
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus='P' WHERE PFBCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GiirDetailsSub SET JobCardStatus='P' WHERE GiirCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+                            }
+                            else // revTransFor == 4 — Stage 1
+                            {
+                                // 401 / MTF — canopy MTF + process feedback.
+                                if (sp3 == "401" && tr3 == "MTF")
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE MTFDetailsSub SET JobCardStatus='P' WHERE MTFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus='P' WHERE TRFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+
+                                // 001 — engine. Clear Stockwip + Giir status.
+                                if (sp3 == "001")
+                                {
+                                    string issueCode = $"{(row.JobCard1?.Trim() ?? string.Empty)}-->{d.SerialNo}";
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "DELETE FROM Stockwip WHERE IssueCode=@Code AND ToProfitcenterCode=@Pc",
+                                        new SqlParameter("@Code", issueCode),
+                                        new SqlParameter("@Pc", request.PCCode.Trim()));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "DELETE FROM Stockwip WHERE ReceivedCode=@Code AND ToProfitcenterCode=@Pc",
+                                        new SqlParameter("@Code", issueCode),
+                                        new SqlParameter("@Pc", request.PCCode.Trim()));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GiirDetailsSub SET JobCardStatus='P' WHERE TRFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GiirDetailsSub SET JobCardStatus='P' WHERE GiirCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+
+                                // 002 / 010 (Alt / Bat) — MTF or GIR/GRI/CNV.
+                                // Legacy had this branch under an `else if` that
+                                // was unreachable because the prior `if (001)`
+                                // always returned first; here we treat each
+                                // family as an independent check so 002/010 MTF
+                                // and GIR rows actually update.
+                                if ((sp3 == "002" || sp3 == "010") && tr3 == "MTF")
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE MTFDetailsSub SET JobCardStatus='P' WHERE MTFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GiirDetailsSub SET JobCardStatus='P' WHERE TRFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GatereceiptInternalDetailsSub SET JobCardStatus='P' WHERE TRFCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ConvertSerialNoDetails SET JobCardStatus='P' WHERE CMTFCode=@Tr AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+                                else if ((sp3 == "002" || sp3 == "010") &&
+                                         (tr3 == "GIR" || tr3 == "GRI" || tr3 == "CNV"))
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GatereceiptInternalDetailsSub SET JobCardStatus='P' WHERE GRICode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GiirDetailsSub SET JobCardStatus='P' WHERE GIIRCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ConvertSerialNoDetails SET JobCardStatus='P' WHERE CNVCode=@Tr AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+                                // 401 / PSH — canopy PSH.
+                                else if (sp3 == "401" && tr3 == "PSH")
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus='P' WHERE PFBCode=@Tr AND PartCode=@Sp AND SerialNo=@Sn",
+                                        new SqlParameter("@Tr", d.TRFCode),
+                                        new SqlParameter("@Sp", d.SrNoPartcode),
+                                        new SqlParameter("@Sn", d.SerialNo));
+                                }
+                            }
+                        }
+
+                        // ── Step 5: TestReport / PDIR (RevTransFor == 2) ─────
+                        if (revTransFor == 2)
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE TestReport SET Active='0' WHERE TRCode=@Tr",
+                                new SqlParameter("@Tr", row.TRCode?.Trim() ?? string.Empty));
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE PDIR SET Active='0' WHERE TRCode=@Tr",
+                                new SqlParameter("@Tr", row.TRCode?.Trim() ?? string.Empty));
+                        }
+
+                        // ── Step 6: Stockwip + ProcessFeedback (2 or 3) ──────
+                        if (revTransFor == 3 || revTransFor == 2)
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM Stockwip WHERE IssueCode=@Code AND fromProfitcenterCode=@Pc",
+                                new SqlParameter("@Code", row.Stage4Code?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", request.PCCode.Trim()));
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM Stockwip WHERE ReceivedCode=@Code AND ToProfitcenterCode=@Pc",
+                                new SqlParameter("@Code", row.Stage4Code?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", request.PCCode.Trim()));
+                            // Legacy issue-code was JobCard1-->EngSrNo for Stage4 StockWip cleanup.
+                            string issueCode4 = $"{(row.JobCard1?.Trim() ?? string.Empty)}-->{(row.EngSrNo?.Trim() ?? string.Empty)}";
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM Stockwip WHERE IssueCode=@Code AND ToProfitcenterCode=@Pc AND StageName='StageIV'",
+                                new SqlParameter("@Code", issueCode4),
+                                new SqlParameter("@Pc", request.PCCode.Trim()));
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE ProcessFeedback SET Active='0' WHERE PfbCode=@Code",
+                                new SqlParameter("@Code", row.Stage4Code?.Trim() ?? string.Empty));
+                        }
+
+                        // ── Step 7: JobCard2 / JobCard cleanup ───────────────
+                        if (revTransFor != 4)
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM JobCard2DetailsSub WHERE JobCode=@Jc AND PartCode=@Pc AND JobCard1=@Jc1 AND J2Priority=@Pr",
+                                new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty),
+                                new SqlParameter("@Jc1", row.JobCard1?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pr", row.J2Priority?.Trim() ?? string.Empty));
+
+                            if (jobDgQty == 1)
+                            {
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    "DELETE FROM JobCard2Details WHERE JobCode=@Jc AND PartCode=@Pc",
+                                    new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                    new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty));
+
+                                int otherParts;
+                                using (var cnt = new SqlCommand(
+                                    "SELECT ISNULL(COUNT(JobCode), 0) FROM JobCard2Details WHERE JobCode = @Jc",
+                                    sqlConn, sqlTran))
+                                {
+                                    cnt.Parameters.AddWithValue("@Jc", row.JobCode?.Trim() ?? string.Empty);
+                                    otherParts = Convert.ToInt32(await cnt.ExecuteScalarAsync());
+                                }
+                                if (otherParts == 0)
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "DELETE FROM JobCard2 WHERE JobCode=@Jc",
+                                        new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty));
+                                }
+                            }
+                            else
+                            {
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    "UPDATE JobCard2Details SET Qty = Qty - 1 WHERE JobCode=@Jc AND PartCode=@Pc",
+                                    new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                    new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty));
+                            }
+
+                            // Bump JobCard1 back to "P" / decrement its JobCard2Qty.
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE JobCardDetailsSub SET JobCard2Status='P' WHERE JobCode=@Jc1 AND PartCode=@Pc AND JPriority=@Pr",
+                                new SqlParameter("@Jc1", row.JobCard1?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pr", row.J2Priority?.Trim() ?? string.Empty));
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "UPDATE JobCardDetails SET JobCard2Qty = JobCard2Qty - 1 WHERE JobCode=@Jc1 AND PartCode=@Pc",
+                                new SqlParameter("@Jc1", row.JobCard1?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty));
+                        }
+                        else // revTransFor == 4 — Stage 1: JobCard1 cleanup
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM JobCardDetailsSub WHERE JobCode=@Jc AND PartCode=@Pc AND JPriority=@Pr",
+                                new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty),
+                                new SqlParameter("@Pr", row.J2Priority?.Trim() ?? string.Empty));
+
+                            if (jobDgQty == 1)
+                            {
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    "DELETE FROM JobCardDetails WHERE JobCode=@Jc AND PartCode=@Pc",
+                                    new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                    new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty));
+
+                                int otherParts;
+                                using (var cnt = new SqlCommand(
+                                    "SELECT ISNULL(COUNT(JobCode), 0) FROM JobCardDetails WHERE JobCode = @Jc",
+                                    sqlConn, sqlTran))
+                                {
+                                    cnt.Parameters.AddWithValue("@Jc", row.JobCode?.Trim() ?? string.Empty);
+                                    otherParts = Convert.ToInt32(await cnt.ExecuteScalarAsync());
+                                }
+                                if (otherParts == 0)
+                                {
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "DELETE FROM JobCard WHERE JobCode=@Jc",
+                                        new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty));
+                                }
+                            }
+                            else
+                            {
+                                await _context.Database.ExecuteSqlRawAsync(
+                                    "UPDATE JobCardDetails SET Qty = Qty - 1 WHERE JobCode=@Jc AND PartCode=@Pc",
+                                    new SqlParameter("@Jc", row.JobCode?.Trim() ?? string.Empty),
+                                    new SqlParameter("@Pc", row.Partcode?.Trim() ?? string.Empty));
+                            }
+                        }
+
+                        allCodes.Add(rtCode);
+                    }
+
+                    await tx.CommitAsync();
+                    result = string.Join(",", allCodes);
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    result = $"StackTrace {ex.StackTrace} Message {ex.Message}";
+                }
+            });
+
+            return result;
         }
     }
 }

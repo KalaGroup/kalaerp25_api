@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using KalaGenset.ERP.Core.Request.Jobcard;
+using KalaGenset.ERP.Core.ResponseDTO;
 
 namespace KalaGenset.ERP.Core.Interface
 {
@@ -26,6 +27,16 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<List<Dictionary<string, object?>>> GetJobCard2CPAsync();
 
         public Task<string> GetCPStkAsync(string strKVA, string ph, string panelType, string compId, string assemblyLine);
+
+        public Task<List<ReverseTransOptionDTO>> GetReverseTransMstAsync(string pcCode);
+
+        public Task<List<KvaOptionDTO>> GetReverseKvaListAsync(int transType, string pcCode);
+
+        public Task<List<ModelOptionDTO>> GetReverseModelListAsync(int transType, string pcCode, string kva);
+
+        public Task<List<ReverseTransSearchResultDTO>> GetRevTransDtsAsync(int transType, string pcCode, string kva, string model);
+
+        public Task<string> SubmitReverseTransAsync(ReverseTransRequest request);
 
         public Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
 
