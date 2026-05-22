@@ -29,5 +29,19 @@ namespace KalaGenset.ERP.Core.Interface
         Task<bool> DeleteKaizenSheet(int id);
         Task<string> UpdateKaizenSheet(int id, CreateKaizenSheetRequest request);
         public Task<bool> AuthorizeKaizenSheet(int id);
+
+        public Task<List<QualityCheckListReportRowDTO>> GetAllQualityCheckListsAsync();
+
+        public Task<bool> UpdateStageWiseQualityCheckListAsync(UpdateStageWiseQualityCheckListRequest request);
+
+        public Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
+
+        public Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
+
+        public Task<bool> SoftDeleteStageWiseQualityCheckListAsync(int id);
+
+        public Task<bool> AuthorizeStageWiseQualityCheckListAsync(int id, string? checkerRemark);
+
+        public Task<bool> RevertAuthorizationStageWiseQualityCheckListAsync(int id);
     }
 }

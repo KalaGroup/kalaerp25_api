@@ -248,5 +248,142 @@ namespace KalaGenset.ERP.API.Controllers
                 return StatusCode(500, new { message = "Failed to authorize.", error = ex.Message });
             }
         }
+
+        [HttpGet("GetAllQualityCheckLists")]
+        public async Task<IActionResult> GetAllQualityCheckLists()
+        {
+            try
+            {
+                var data = await _qualityService.GetAllQualityCheckListsAsync();
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to fetch quality check lists.", Detail = ex.Message });
+            }
+        }
+
+        [HttpPost("UpdateStageWiseQualityCheckList")]
+        public async Task<IActionResult> UpdateStageWiseQualityCheckList([FromBody] UpdateStageWiseQualityCheckListRequest request)
+        {
+            if (request == null)
+                return BadRequest(new { Message = "Request body is required." });
+            if (request.stageWiseQcid <= 0)
+                return BadRequest(new { Message = "stageWiseQcid is required." });
+
+            try
+            {
+                var ok = await _qualityService.UpdateStageWiseQualityCheckListAsync(request);
+                if (!ok)
+                    return NotFound(new { Message = "Quality checklist not found." });
+                return Ok(new { Message = "Quality checklist updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to update quality checklist.", Detail = ex.Message });
+            }
+        }
+
+        [HttpGet("CheckDuplicateQualityCheckList/{pcCode}/{stageName}/{fromKva}/{toKva}")]
+        public async Task<IActionResult> CheckDuplicateQualityCheckList(string pcCode, string stageName, string fromKva, string toKva)
+        {
+            try
+            {
+                var exists = await _qualityService.CheckDuplicateQualityCheckListAsync(pcCode, stageName, fromKva, toKva);
+                return Ok(new { isDuplicate = exists });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to check duplicate quality check list.", Detail = ex.Message });
+            }
+        }
+
+        [HttpPost("SaveStageWiseQualityCheckList")]
+        public async Task<IActionResult> SaveStageWiseQualityCheckList([FromBody] StageWiseQualityCheckListRequest request)
+        {
+            if (request == null)
+                return BadRequest(new { Message = "Request body is required." });
+
+            try
+            {
+                await _qualityService.SaveStageWiseQualityCheckListAsync(request);
+                return Ok(new { Message = "Quality checklist saved successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to save quality checklist.", Detail = ex.Message });
+            }
+        }
+
+        [HttpPost("SoftDeleteStageWiseQualityCheckList/{id}")]
+        public async Task<IActionResult> SoftDeleteStageWiseQualityCheckList(int id)
+        {
+            if (id <= 0)
+                return BadRequest(new { Message = "id is required." });
+
+            try
+            {
+                var ok = await _qualityService.SoftDeleteStageWiseQualityCheckListAsync(id);
+                if (!ok)
+                    return NotFound(new { Message = "Quality checklist not found." });
+                return Ok(new { Message = "Quality checklist removed." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to delete quality checklist.", Detail = ex.Message });
+            }
+        }
+
+        [HttpPost("AuthorizeStageWiseQualityCheckList/{id}")]
+        public async Task<IActionResult> AuthorizeStageWiseQualityCheckList(int id, [FromBody] AuthorizeQualityCheckListRequest request)
+        {
+            if (id <= 0)
+                return BadRequest(new { Message = "id is required." });
+
+            try
+            {
+                var ok = await _qualityService.AuthorizeStageWiseQualityCheckListAsync(id, request?.checkerRemark);
+                if (!ok)
+                    return NotFound(new { Message = "Quality checklist not found." });
+                return Ok(new { Message = "Checklist authorized successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to authorize quality checklist.", Detail = ex.Message });
+            }
+        }
+
+        [HttpPost("RevertAuthorizationStageWiseQualityCheckList/{id}")]
+        public async Task<IActionResult> RevertAuthorizationStageWiseQualityCheckList(int id)
+        {
+            if (id <= 0)
+                return BadRequest(new { Message = "id is required." });
+
+            try
+            {
+                var ok = await _qualityService.RevertAuthorizationStageWiseQualityCheckListAsync(id);
+                if (!ok)
+                    return NotFound(new { Message = "Quality checklist not found." });
+                return Ok(new { Message = "Authorization reverted." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new { Message = "Failed to revert authorization.", Detail = ex.Message });
+            }
+        }
     }
 }
