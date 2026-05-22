@@ -140,6 +140,7 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<_6m> _6ms { get; set; }
 
+   
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ActionTaken>(entity =>
@@ -4442,9 +4443,9 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<StageWiseQualityCheckListDetail>(entity =>
         {
-            entity.HasKey(e => new { e.StageWiseQcid, e.SrNo }).HasName("PK_StageWiseQCDetails");
+            entity.HasKey(e => e.StageWiseQcdetailId).HasName("PK_StageWiseQualityCheckListDetail");
 
-            entity.Property(e => e.StageWiseQcid).HasColumnName("StageWiseQCId");
+            entity.Property(e => e.StageWiseQcdetailId).HasColumnName("StageWiseQCDetailId");
             entity.Property(e => e.Observation)
                 .HasMaxLength(200)
                 .IsUnicode(false);
@@ -4459,6 +4460,7 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.Specification)
                 .HasMaxLength(200)
                 .IsUnicode(false);
+            entity.Property(e => e.StageWiseQcid).HasColumnName("StageWiseQCId");
             entity.Property(e => e.SubAssemblyPart)
                 .HasMaxLength(100)
                 .IsUnicode(false);

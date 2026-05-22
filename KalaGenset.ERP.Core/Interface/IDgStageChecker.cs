@@ -17,12 +17,6 @@ namespace KalaGenset.ERP.Core.Interface
 
         public Task<List<DGAssemblyProfitcenters>> GetDGAssemblyProfitcentersAsync();
 
-        public Task<List<PartKvaDto>> GetActivePartKvaListAsync();
-
-        public Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
-
-        public Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
-
         public Task<List<PendingAuthQualityListDto>> GetAllPendingAuthQualityListAsync();
 
         public Task<List<PendingAuthQAListDetailsResponse>> GetPendingAuthQAListDetailsAsync(int stageWiseQCId);

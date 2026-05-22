@@ -435,7 +435,7 @@ namespace KalaGenset.ERP.Core.Services
                             c2.CommandText = "SELECT partdesc FROM Part WHERE Partcode = @pc";
                             c2.Parameters.Add(new SqlParameter("@pc", p.PartCode));
                             var name = (await c2.ExecuteScalarAsync())?.ToString() ?? "0";
-                            return $"{diff} - Giir Qty not aviable For Product {name}";
+                            return $"{diff} - Giir Qty not available For Product {name}";
                         }
                     }
                     if (!anyRow)
@@ -445,7 +445,7 @@ namespace KalaGenset.ERP.Core.Services
                         c2.CommandText = "SELECT partdesc FROM Part WHERE Partcode = @pc";
                         c2.Parameters.Add(new SqlParameter("@pc", p.PartCode));
                         var name = (await c2.ExecuteScalarAsync())?.ToString() ?? "0";
-                        return $"{p.PartCode} - Giir Qty not aviable For Product {name}";
+                        return $"{p.PartCode} - Giir Qty not available For Product {name}";
                     }
                 }
             }
@@ -835,7 +835,7 @@ namespace KalaGenset.ERP.Core.Services
                         using (var c = conn.CreateCommand())
                         {
                             c.Transaction = sqlTran;
-                            c.CommandText = "InsertMemoExciseMfg_DG";
+                            c.CommandText = "InsertMemoExciseMfg_DG_Maker_Checker";
                             c.CommandType = CommandType.StoredProcedure;
                             c.Parameters.AddWithValue("@MECode", memoCode);
                             c.Parameters.AddWithValue("@MaxSrNo", memoSerial);
@@ -855,6 +855,8 @@ namespace KalaGenset.ERP.Core.Services
                             c.Parameters.AddWithValue("@Auth", 0);
                             c.Parameters.AddWithValue("@MMTFCode", mtfCode);
                             c.Parameters.AddWithValue("@MTFScanStatus", anyEmpty ? "D" : "P");
+                            c.Parameters.AddWithValue("@FromProfitCenter_Act", req.FromPCCode);
+                            c.Parameters.AddWithValue("@ToProfitCenter_Act", req.ToPCCode);
                             await c.ExecuteNonQueryAsync();
                         }
 

@@ -26,7 +26,7 @@ namespace KalaGenset.ERP.API.Controllers
 
         [HttpPost("GetStageScanDetails")]
         public async Task<IActionResult> GetStageScanDetails([FromBody] EngineDetailsRequest request)
-        {
+            {
             if (request == null || string.IsNullOrEmpty(request.SerialNo))
             {
                 return BadRequest("Invalid request parameters.");

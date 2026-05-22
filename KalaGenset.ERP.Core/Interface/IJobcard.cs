@@ -37,5 +37,9 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<List<ReverseTransSearchResultDTO>> GetRevTransDtsAsync(int transType, string pcCode, string kva, string model);
 
         public Task<string> SubmitReverseTransAsync(ReverseTransRequest request);
+
+        public Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
+
+        public Task<List<Dictionary<string, object>>> GetJobCard2ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
     }
 }

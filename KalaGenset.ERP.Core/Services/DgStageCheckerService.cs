@@ -183,132 +183,12 @@ namespace KalaGenset.ERP.Core.Services
         /// <remarks>
         /// Calls stored procedure: GetActivePartKVAList
         /// </remarks>
-        public async Task<List<PartKvaDto>> GetActivePartKvaListAsync()
-        {
-            try
-            {
-                return await _context.Database
-                    .SqlQueryRaw<PartKvaDto>("EXEC GetActivePartKVAList")
-                    .ToListAsync();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Error fetching Part KVA list", ex);
-            }
-        }
         #endregion
 
-        #region Quality Check List Methods
-
-        /// <summary>
-        /// Saves a new stage-wise quality check list with its checkpoint details.
-        /// Creates master record and associated detail records in a transaction.
-        /// </summary>
-        /// <param name="request">
-        /// The request object containing:
-        /// <list type="bullet">
-        ///   <item><description>pcCode: Profit center code</description></item>
-        ///   <item><description>stageName: Stage name (Stage1/Stage2/Stage3)</description></item>
-        ///   <item><description>fromKVA: Starting KVA range</description></item>
-        ///   <item><description>toKVA: Ending KVA range</description></item>
-        ///   <item><description>makerRemark: Remark from the maker</description></item>
-        ///   <item><description>checkpointItems: List of checkpoint details</description></item>
-        /// </list>
-        /// </param>
-        /// <exception cref="Exception">Thrown when save operation fails. Transaction is rolled back.</exception>
-        /// <remarks>
-        /// Tables affected:
-        /// - StageWiseQualityCheckList (Master)
-        /// - StageWiseQualityCheckListDetail (Details)
-        /// </remarks>
-        public async Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request)
-        {
-            // Start explicit transaction
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
-            try
-            {
-                // 🔹 1. Save MASTER record
-                var master = new StageWiseQualityCheckList
-                {
-                    Pccode = request.pcCode,
-                    StageName = request.stageName,
-                    FromKva = request.fromKVA,
-                    ToKva = request.toKVA,
-                    IsActive = true,
-                    MakerRemark = request.makerRemark,
-                };
-
-                _context.StageWiseQualityCheckLists.Add(master);
-                await _context.SaveChangesAsync();   // PK generated here
-
-                // 🔹 2. Retrieve generated PK
-                int stageWiseQCId = master.StageWiseQcid;
-
-                // 🔹 3. Prepare DETAIL records
-                var details = request.checkpointItems.Select(item =>
-                    new StageWiseQualityCheckListDetail
-                    {
-                        StageWiseQcid = stageWiseQCId,   // SAME PK FOR ALL
-                        SrNo = item.srNo,
-                        SubAssemblyPart = item.subAssemblyPart,
-                        QualityProcessCheckpoint = item.qualityProcessCheckpoint,
-                        Specification = item.specification,
-                        Observation = item.observation,
-                        OkNok = item.ok_nok
-                    }).ToList();
-
-                // 🔹 4. Save DETAIL records
-                _context.StageWiseQualityCheckListDetails.AddRange(details);
-                await _context.SaveChangesAsync();
-
-                // 🔹 5. Commit transaction
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                // Rollback on any failure
-                await transaction.RollbackAsync();
-                throw new Exception("Error saving Stage Wise Quality Check List", ex);
-            }
-        }
-
-        /// <summary>
-        /// Checks if a duplicate quality check list exists for the given criteria.
-        /// </summary>
-        /// <param name="pcCode">Profit center code.</param>
-        /// <param name="stageName">Stage name (Stage1/Stage2/Stage3).</param>
-        /// <param name="fromKva">Starting KVA range (as string, will be converted to decimal).</param>
-        /// <param name="toKva">Ending KVA range (as string, will be converted to decimal).</param>
-        /// <returns>
-        /// <c>true</c> if a duplicate exists; otherwise, <c>false</c>.
-        /// </returns>
-        /// <exception cref="Exception">Thrown when KVA values are invalid or database operation fails.</exception>
-        public async Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva)
-        {
-            try
-            {
-                // 🔹 Convert string → decimal
-                if (!decimal.TryParse(fromKva, out decimal fromKvaDecimal))
-                    throw new Exception("Invalid FromKVA value");
-
-                if (!decimal.TryParse(toKva, out decimal toKvaDecimal))
-                    throw new Exception("Invalid ToKVA value");
-
-
-                var exists = await _context.StageWiseQualityCheckLists
-                    .AnyAsync(x => x.Pccode == pcCode
-                               && x.StageName == stageName
-                               && x.FromKva == fromKvaDecimal
-                               && x.ToKva == toKvaDecimal);
-                return exists;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Error checking duplicate Quality Check List", ex);
-            }
-        }
-        #endregion
+        // GetActivePartKvaListAsync, SaveStageWiseQualityCheckListAsync,
+        // CheckDuplicateQualityCheckListAsync, UpdateStageWiseQualityCheckListAsync,
+        // SoftDeleteStageWiseQualityCheckListAsync, and GetAllQualityCheckListsAsync
+        // have been moved to QualityService (interface IQuality).
 
         #region Pending Authorization Methods
 
@@ -674,7 +554,7 @@ namespace KalaGenset.ERP.Core.Services
 
                             var receivedEngCode = $"{jobCode}-->{engSrNo}";  // For Stage 1
                             var issuedEngCode = $"{jobCode}-->{engSrNo}"; // For Stage 2
-
+                                    
                             // Build list of valid serial numbers
                             var serialNumbers = new List<string>();
 
@@ -687,7 +567,7 @@ namespace KalaGenset.ERP.Core.Services
 
                             if (stageName == "Stage1")
                             {
-                                var stockWipDataStage1 = await _context.Stockwips.Where(sw => sw.PartCode.StartsWith("001") && sw.ReceivedCode == receivedEngCode &&
+                                var stockWipDataStage1 = await _context.Stockwips.Where(sw => sw.PartCode.StartsWith("101") && sw.ReceivedCode == receivedEngCode &&
                                                          sw.StageName == "StageI").Select(sw => new
                                                          {
                                                             sw.FromProfitCenterCode,

@@ -30,18 +30,23 @@ namespace KalaGenset.ERP.Core.Interface
         Task<string> UpdateKaizenSheet(int id, CreateKaizenSheetRequest request);
         public Task<bool> AuthorizeKaizenSheet(int id);
 
-        public Task<List<QualityCheckListReportRowDTO>> GetAllQualityCheckListsAsync();
+        // ── DG Quality Master form endpoints (moved from IDgStageChecker) ─────
+        Task<List<PartKvaDto>> GetActivePartKvaListAsync();
 
-        public Task<bool> UpdateStageWiseQualityCheckListAsync(UpdateStageWiseQualityCheckListRequest request);
+        Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
 
-        public Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
+        Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
 
-        public Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
+        Task<List<QualityCheckListReportDto>> GetAllQualityCheckListsAsync();
 
-        public Task<bool> SoftDeleteStageWiseQualityCheckListAsync(int id);
+        Task UpdateStageWiseQualityCheckListAsync(UpdateStageWiseQualityCheckListRequest request);
 
-        public Task<bool> AuthorizeStageWiseQualityCheckListAsync(int id, string? checkerRemark);
+        Task<bool> SoftDeleteStageWiseQualityCheckListAsync(int stageWiseQcid);
 
-        public Task<bool> RevertAuthorizationStageWiseQualityCheckListAsync(int id);
+        // Checker action — sets IsAuth = true and stores the optional checker remark
+        Task<bool> AuthorizeStageWiseQualityCheckListAsync(int stageWiseQcid, string? checkerRemark);
+
+        // Checker action — rolls a previously authorized checklist back to Pending
+        Task<bool> RevertAuthorizationStageWiseQualityCheckListAsync(int stageWiseQcid);
     }
 }

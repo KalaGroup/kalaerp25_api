@@ -85,7 +85,8 @@ namespace KalaGenset.ERP.Core.Services
                     if (preConn.State == ConnectionState.Closed)
                         await preConn.OpenAsync();
 
-                    using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
+                    //using (var srCmd = new SqlCommand("GetJobCardSrNo", preConn))
+                    using (var srCmd = new SqlCommand("GetJobCardSrNo_Cheker_Maker", preConn))
                     {
                         srCmd.CommandType = CommandType.StoredProcedure;
                         srCmd.CommandTimeout = 0;
@@ -93,6 +94,7 @@ namespace KalaGenset.ERP.Core.Services
                         srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
                         srCmd.Parameters.AddWithValue("@Qty", row.Qty);
                         srCmd.Parameters.AddWithValue("@CompCode", compCode);
+                        srCmd.Parameters.AddWithValue("@AssemblyLine", request.pcCode_Act); //no need for GetJobCardSrNo sp
                         using var r = await srCmd.ExecuteReaderAsync();
                         while (await r.ReadAsync())
                             preSerials.Add((
@@ -135,6 +137,8 @@ namespace KalaGenset.ERP.Core.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
+                allJobCards.Clear();   // ← reset on every (re)try
+                result = "";           // ← reset error result too, same reason
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
@@ -197,7 +201,8 @@ namespace KalaGenset.ERP.Core.Services
 
                         #region STEP 5 — FETCH SERIAL NUMBERS within transaction
                         var serials = new List<(string PartCode, string SerialNo, string Gcode)>();
-                        using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
+                        //using (var srCmd = new SqlCommand("GetJobCardSrNo", sqlConn, sqlTran))
+                        using (var srCmd = new SqlCommand("GetJobCardSrNo_Cheker_Maker", sqlConn, sqlTran))
                         {
                             srCmd.CommandType = CommandType.StoredProcedure;
                             srCmd.CommandTimeout = 0;
@@ -205,6 +210,7 @@ namespace KalaGenset.ERP.Core.Services
                             srCmd.Parameters.AddWithValue("@PartCode", row.PartCode);
                             srCmd.Parameters.AddWithValue("@Qty", row.Qty);
                             srCmd.Parameters.AddWithValue("@CompCode", compCode);
+                            srCmd.Parameters.AddWithValue("@AssemblyLine", request.pcCode_Act); // no need for GetJobCardSrNo sp
                             using var srReader = await srCmd.ExecuteReaderAsync();
                             while (await srReader.ReadAsync())
                                 serials.Add((
@@ -212,12 +218,36 @@ namespace KalaGenset.ERP.Core.Services
                                     srReader["SerialNo"]?.ToString()?.Trim() ?? "",
                                     srReader["Gcode"]?.ToString()?.Trim() ?? ""));
                         }
+                   
+
                         if (!serials.Any()) continue;
                         #endregion
 
+                        //int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
+                        //int batCnt = 0;
+                        //int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
+
                         int jpEng = 0, jpAlt = 0, jpBat = 0, jpCpy = 0;
+                        int jpBatRaw = 0;          // raw battery group counter — increments every 2 batteries, never wraps
                         int batCnt = 0;
                         int cntEng = 0, cntAlt = 0, cntBat = 0, cntCpy = 0;
+
+                        // Fetch batteriesPerDG from BOM (same source GetJobCardSrNo uses)
+                        int batteriesPerDG = 1;
+                        using (var bomCmd = new SqlCommand(@"SELECT TOP 1 CAST(Bd.Qty AS INT)
+                               FROM BOM B 
+                               INNER JOIN BOMDetails Bd ON B.BOMCode = Bd.BomCode
+                               INNER JOIN Part P ON B.Partcode = P.Partcode
+                               WHERE B.Active = '1' AND B.Discard = '1' 
+                               AND P.Active = '1' AND P.Discard = '1' 
+                               AND Bd.KITCode = @KitCode 
+                               AND SUBSTRING(Bd.partcode, 1, 3) = '010'", sqlConn, sqlTran))
+                        {
+                            bomCmd.Parameters.AddWithValue("@KitCode", row.PartCode);
+                            var bomResult = await bomCmd.ExecuteScalarAsync();
+                            if (bomResult != null && bomResult != DBNull.Value)
+                                batteriesPerDG = Convert.ToInt32(bomResult);
+                        }
 
                         foreach (var serial in serials)
                         {
@@ -225,18 +255,68 @@ namespace KalaGenset.ERP.Core.Services
                             string pc2 = serial.PartCode.Length >= 2 ? serial.PartCode.Substring(0, 2) : "";
                             string gc3 = serial.Gcode.Length >= 3 ? serial.Gcode.Substring(0, 3) : "";
 
+                            //#region STEP 6 — CALCULATE JPRIORITY
+                            //int jPriority = 0;
+                            //int batCntBefore = batCnt;     // capture state before
+                            //int jpBatBefore = jpBat;
+                            //if (pc3 == "001") { jpEng++; jPriority = jpEng; }
+                            //else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
+                            //else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
+                            //else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
+                            //else if (pc3 == "010" && kva > 200)
+                            //{
+                            //    if (batCnt == 0) { jpBat++; batCnt = 1; }
+                            //    else { batCnt = 0; }
+                            //    jPriority = jpBat;
+                            //}
+
+                            //// === LOG 2: JPriority assignment per serial ===
+                            //Console.WriteLine(
+                            //    $"[JC-LOG] JPRI: SerialNo={serial.SerialNo}, SrNoPartCode={serial.PartCode}, pc3={pc3}, kva={kva}, " +
+                            //    $"batCntBefore={batCntBefore}, batCntAfter={batCnt}, jpBatBefore={jpBatBefore}, jpBatAfter={jpBat}, " +
+                            //    $"=> JPriority={jPriority}");
+                            //// === END LOG 2 ===
+                            //#endregion
+
                             #region STEP 6 — CALCULATE JPRIORITY
                             int jPriority = 0;
+                            int batCntBefore = batCnt;
+                            int jpBatRawBefore = jpBatRaw;
+
                             if (pc3 == "001") { jpEng++; jPriority = jpEng; }
                             else if (pc3 == "002") { jpAlt++; jPriority = jpAlt; }
                             else if (pc3 == "401") { jpCpy++; jPriority = jpCpy; }
-                            else if (pc3 == "010" && kva <= 200) { jpBat++; jPriority = jpBat; }
-                            else if (pc3 == "010" && kva > 200)
+                            else if (pc3 == "010")
                             {
-                                if (batCnt == 0) { jpBat++; batCnt = 1; }
-                                else { batCnt = 0; }
-                                jPriority = jpBat;
+                                // Increment jpBatRaw every batteriesPerDG batteries (1 → every battery, 2 → every 2nd, 4 → every 2nd pair)
+                                // The "every 2 batteries" toggle stays for >1 batteries-per-DG; for 1 battery-per-DG, increment every time.
+                                if (batteriesPerDG <= 1)
+                                {
+                                    jpBatRaw++;
+                                }
+                                else
+                                {
+                                    if (batCnt == 0) { jpBatRaw++; batCnt = 1; }
+                                    else { batCnt = 0; }
+                                }
+
+                                // Wrap JPriority back to plan range using row.Qty
+                                // Examples (Qty=2, batteriesPerDG=4):
+                                //   Batteries 1-2 → jpBatRaw=1 → JP=1
+                                //   Batteries 3-4 → jpBatRaw=2 → JP=2
+                                //   Batteries 5-6 → jpBatRaw=3 → JP=1 (wraps back)
+                                //   Batteries 7-8 → jpBatRaw=4 → JP=2 (wraps back)
+                                int qty = row.Qty;
+                                jPriority = qty > 0 ? ((jpBatRaw - 1) % qty) + 1 : jpBatRaw;
+                                jpBat = jPriority;   // keep jpBat in sync for any downstream code/validation
                             }
+
+                            // === LOG 2: JPriority assignment per serial ===
+                            Console.WriteLine(
+                                $"[JC-LOG] JPRI: SerialNo={serial.SerialNo}, SrNoPartCode={serial.PartCode}, pc3={pc3}, kva={kva}, " +
+                                $"batCntBefore={batCntBefore}, batCntAfter={batCnt}, jpBatRawBefore={jpBatRawBefore}, jpBatRawAfter={jpBatRaw}, " +
+                                $"batteriesPerDG={batteriesPerDG}, qty={row.Qty}, => JPriority={jPriority}");
+                            // === END LOG 2 ===
                             #endregion
 
                             #region STEP 7 — DETERMINE TRANSFERSTATUS (D=Direct, P=Pending)
@@ -384,7 +464,7 @@ namespace KalaGenset.ERP.Core.Services
                             if (pc3 == "001") cntEng++;
                             else if (pc3 == "002") cntAlt++;
                             else if (pc3 == "010") cntBat++;
-                            else if (pc2 == "40") cntCpy++;
+                            else if (pc2 == "40") cntCpy++;                          
                         }
 
                         #region STEP 10 — POST-INSERT SERIAL COUNT VALIDATION
@@ -425,10 +505,10 @@ namespace KalaGenset.ERP.Core.Services
 
                     result = string.Join("#", allJobCards);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     await transaction.RollbackAsync();
-                    result = $"StackTrace {ex.StackTrace} Message {ex.Message}";
+                    throw;
                 }
             });
 
@@ -512,7 +592,7 @@ namespace KalaGenset.ERP.Core.Services
             {
                 using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "GetPlanDetails";
+                    cmd.CommandText = "GetPlanDetails_Checker_Maker";
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.CommandTimeout = 0;
                     cmd.Parameters.Add(new SqlParameter("@JobCode", SqlDbType.VarChar) { Value = jobCode.Trim() });
@@ -710,6 +790,7 @@ namespace KalaGenset.ERP.Core.Services
                         }
                         else
                         {
+                            jobCard.Auth = false;
                             int intMaxReq = await _context.GetMaxCodes
                                 .Where(g => g.TblName == "CorporateRequisition"
                                          && g.CompCode == compCode
@@ -1044,6 +1125,92 @@ namespace KalaGenset.ERP.Core.Services
                                 KVA = reader["KVA"]?.ToString() ?? string.Empty,
                                 KVA1 = reader["KVA1"]?.ToString() ?? string.Empty,
                             });
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // METHOD — GetJobCard2ReportAsync
+        // Calls stored proc: JobCard2Report
+        // Example: EXEC JobCard2Report '03', '03.123', '2026-02-01', '2026-02-28';
+        // Params: @CompanyCode, @AssemblyLine, @FromDate, @ToDate
+        // ══════════════════════════════════════════════════════════════════
+        public async Task<List<Dictionary<string, object>>> GetJobCard2ReportAsync(
+            string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate)
+        {
+            var data = new List<Dictionary<string, object>>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "JobCard2Report";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@CompanyCode",  SqlDbType.VarChar, 10) { Value = companyCode  ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.VarChar, 10) { Value = assemblyLine ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@FromDate",     SqlDbType.DateTime)    { Value = fromDate });
+                    cmd.Parameters.Add(new SqlParameter("@ToDate",       SqlDbType.DateTime)    { Value = toDate });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                            data.Add(row);
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // METHOD — GetJobCard1ReportAsync
+        // Calls stored proc: JobCard1Report
+        // Params: @CompanyCode, @AssemblyLine, @FromDate, @ToDate
+        // Returns one row per JobCard plan with stage progress.
+        // ══════════════════════════════════════════════════════════════════
+        public async Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(
+            string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate)
+        {
+            var data = new List<Dictionary<string, object>>();
+
+            using (var conn = _context.Database.GetDbConnection())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "JobCard1Report";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+
+                    cmd.Parameters.Add(new SqlParameter("@CompanyCode",  SqlDbType.VarChar, 10) { Value = companyCode  ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.VarChar, 10) { Value = assemblyLine ?? (object)DBNull.Value });
+                    cmd.Parameters.Add(new SqlParameter("@FromDate",     SqlDbType.DateTime)    { Value = fromDate });
+                    cmd.Parameters.Add(new SqlParameter("@ToDate",       SqlDbType.DateTime)    { Value = toDate });
+
+                    if (conn.State == ConnectionState.Closed)
+                        await conn.OpenAsync();
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                            data.Add(row);
                         }
                     }
                 }
