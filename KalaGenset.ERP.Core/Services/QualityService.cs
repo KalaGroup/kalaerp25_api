@@ -555,7 +555,7 @@ namespace KalaGenset.ERP.Core.Services
             }
         }
 
-        public async Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva)
+        public async Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva, int? excludeId = null)
         {
             try
             {
@@ -564,11 +564,14 @@ namespace KalaGenset.ERP.Core.Services
                 if (!decimal.TryParse(toKva, out decimal toKvaDecimal))
                     throw new Exception("Invalid ToKVA value");
 
+                // `excludeId` is the StageWiseQcid the caller is currently editing.
+                // We must NOT flag that row as its own duplicate, so it's filtered out.
                 return await _context.StageWiseQualityCheckLists
                     .AnyAsync(x => x.Pccode == pcCode
                                 && x.StageName == stageName
                                 && x.FromKva == fromKvaDecimal
-                                && x.ToKva == toKvaDecimal);
+                                && x.ToKva == toKvaDecimal
+                                && (excludeId == null || x.StageWiseQcid != excludeId.Value));
             }
             catch (Exception ex)
             {

@@ -282,11 +282,16 @@ namespace KalaGenset.ERP.API.Controllers
         }
 
         [HttpGet("CheckDuplicateQualityCheckList/{pcCode}/{stageName}/{fromKva}/{toKva}")]
-        public async Task<IActionResult> CheckDuplicateQualityCheckList(string pcCode, string stageName, string fromKva, string toKva)
+        public async Task<IActionResult> CheckDuplicateQualityCheckList(
+            string pcCode,
+            string stageName,
+            string fromKva,
+            string toKva,
+            [FromQuery] int? excludeId = null)
         {
             try
             {
-                var exists = await _qualityService.CheckDuplicateQualityCheckListAsync(pcCode, stageName, fromKva, toKva);
+                var exists = await _qualityService.CheckDuplicateQualityCheckListAsync(pcCode, stageName, fromKva, toKva, excludeId);
                 return Ok(new { isDuplicate = exists });
             }
             catch (Exception ex)

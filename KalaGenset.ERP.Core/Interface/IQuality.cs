@@ -35,7 +35,7 @@ namespace KalaGenset.ERP.Core.Interface
 
         Task SaveStageWiseQualityCheckListAsync(StageWiseQualityCheckListRequest request);
 
-        Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva);
+        Task<bool> CheckDuplicateQualityCheckListAsync(string pcCode, string stageName, string fromKva, string toKva, int? excludeId = null);
 
         Task<List<QualityCheckListReportDto>> GetAllQualityCheckListsAsync();
 
