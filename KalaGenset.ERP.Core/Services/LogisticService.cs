@@ -607,6 +607,26 @@ namespace KalaGenset.ERP.Core.Services
                                 }
                             }
 
+                            // ── BATTERY RE-VALIDATION UNDER LOCK ──
+                            // All srRows are this battery part's serials, so srRows.Count == available.
+                            // If fewer than needed, return -> transaction never commits -> rolls back
+                            // on dispose -> nothing from this submit is saved.
+                            if (prefix3 == "010")
+                            {
+                                int batAvailable = srRows.Count;
+                                int batNeeded = (int)Math.Round(p.MtfQty, 0);   // same rounding as Phase 2
+
+                                if (batNeeded > batAvailable)
+                                {
+                                    using var nameCmd = conn.CreateCommand();
+                                    nameCmd.Transaction = sqlTran;
+                                    nameCmd.CommandText = "SELECT partdesc FROM Part WHERE Partcode = @pc";
+                                    nameCmd.Parameters.Add(new SqlParameter("@pc", p.PartCode));
+                                    var name = (await nameCmd.ExecuteScalarAsync())?.ToString() ?? "0";
+                                    return $"Battery SrNo Not available For DG {name}";
+                                }
+                            }
+
                             int srNoK = 0;
                             foreach (var sr in srRows)
                             {
