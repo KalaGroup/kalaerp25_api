@@ -35,5 +35,10 @@ namespace KalaGenset.ERP.Core.Interface
         public IQueryable<Select6MResponseDTO> Select6MFromDB();
         public Task<List<GetTRPrcChkDts>> FetchProcessCheckpointsFromDB(string stageName, string statusName);
         public Task<string> UploadVideoAndPDFAsync(UploadVideopdfDGAssemblyRequest uploadVideopdfDGAssemblyReq);
+        public Task<List<Dictionary<string, object?>>> GetEngAltTrCertificateAsync(DateTime fromDate, DateTime toDate, string? serialNo);
+        public Task<List<Dictionary<string, object?>>> GetEngAltTrAttachmentsAsync(string trCode);
+        public Task<(byte[]? Content, string? FileName, string? ContentType)> DownloadEngAltTrAttachmentAsync(string trCode, string fileName, string fileType, string? videoId);
+        public Task<string> SaveEngAltTrAttachmentsAsync(string trCode, string empCode, string compCode, List<(string FileType, Microsoft.AspNetCore.Http.IFormFile File)> files, List<(string FileName, string FileType, string? VideoId)> deletions);
+        public Task<string> DeleteEngAltTrAttachmentAsync(string trCode, string fileName, string fileType, string? videoId, string empCode, string compCode);
     }
 }

@@ -299,5 +299,133 @@ namespace KalaGenset.ERP.API.Controllers
             var result = await _engineDGAssembly.UploadVideoAndPDFAsync(uploadVideopdfDGAssemblyReq);
             return Ok(result);
         }
+
+        [HttpGet("GetEngAltTrCertificate")]
+        public async Task<IActionResult> GetEngAltTrCertificate([FromQuery] DateTime fromDate, [FromQuery] DateTime toDate, [FromQuery] string? serialNo)
+        {
+            if (fromDate == default || toDate == default)
+            {
+                return BadRequest("fromDate and toDate are required.");
+            }
+
+            var result = await _engineDGAssembly.GetEngAltTrCertificateAsync(fromDate, toDate, serialNo);
+            return Ok(result ?? new List<Dictionary<string, object?>>());
+        }
+
+        [HttpGet("GetEngAltTrAttachments")]
+        public async Task<IActionResult> GetEngAltTrAttachments([FromQuery] string trCode)
+        {
+            if (string.IsNullOrWhiteSpace(trCode))
+            {
+                return BadRequest("trCode is required.");
+            }
+
+            var result = await _engineDGAssembly.GetEngAltTrAttachmentsAsync(trCode);
+            return Ok(result ?? new List<Dictionary<string, object?>>());
+        }
+
+        [HttpGet("DownloadEngAltTrAttachment")]
+        public async Task<IActionResult> DownloadEngAltTrAttachment(
+            [FromQuery] string trCode,
+            [FromQuery] string fileName,
+            [FromQuery] string fileType,
+            [FromQuery] string? videoId)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(fileType))
+            {
+                return BadRequest("fileName and fileType are required.");
+            }
+
+            var (content, name, contentType) = await _engineDGAssembly
+                .DownloadEngAltTrAttachmentAsync(trCode ?? "", fileName, fileType, videoId);
+
+            if (content == null || name == null)
+            {
+                return NotFound($"File '{fileName}' not found on disk.");
+            }
+
+            return File(content, contentType ?? "application/octet-stream", name);
+        }
+
+        [HttpPost("SaveEngAltTrAttachments")]
+        [RequestSizeLimit(524288000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 524288000)]
+        public async Task<IActionResult> SaveEngAltTrAttachments([FromForm] SaveEngAltTrAttachmentsRequest req)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.TRCode))
+            {
+                return BadRequest("TRCode is required.");
+            }
+            if (req.Files == null || req.Files.Count == 0)
+            {
+                return BadRequest("Please add at least one file attachment before saving.");
+            }
+            if (req.FileTypes == null || req.FileTypes.Count != req.Files.Count)
+            {
+                return BadRequest("FileTypes count must match Files count.");
+            }
+
+            var pairs = new List<(string FileType, Microsoft.AspNetCore.Http.IFormFile File)>();
+            for (int i = 0; i < req.Files.Count; i++)
+            {
+                pairs.Add((req.FileTypes[i] ?? "", req.Files[i]));
+            }
+
+            var deletions = new List<(string FileName, string FileType, string? VideoId)>();
+            if (req.DelFileNames != null)
+            {
+                for (int i = 0; i < req.DelFileNames.Count; i++)
+                {
+                    var fn = req.DelFileNames[i] ?? "";
+                    var ft = (req.DelFileTypes != null && i < req.DelFileTypes.Count) ? req.DelFileTypes[i] : "";
+                    var vid = (req.DelVideoIds != null && i < req.DelVideoIds.Count) ? req.DelVideoIds[i] : "";
+                    deletions.Add((fn, ft ?? "", vid));
+                }
+            }
+
+            var message = await _engineDGAssembly.SaveEngAltTrAttachmentsAsync(
+                req.TRCode, req.EmpCode ?? "", req.CompCode ?? "", pairs, deletions);
+            return Ok(new { message });
+        }
+
+        [HttpPost("DeleteEngAltTrAttachment")]
+        public async Task<IActionResult> DeleteEngAltTrAttachment([FromBody] DeleteEngAltTrAttachmentRequest req)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.TRCode))
+            {
+                return BadRequest("TRCode is required.");
+            }
+            if (string.IsNullOrWhiteSpace(req.FileName) && string.IsNullOrWhiteSpace(req.VideoId))
+            {
+                return BadRequest("fileName or videoId is required.");
+            }
+
+            var message = await _engineDGAssembly.DeleteEngAltTrAttachmentAsync(
+                req.TRCode, req.FileName ?? "", req.FileType ?? "", req.VideoId, req.EmpCode ?? "", req.CompCode ?? "");
+            return Ok(new { message });
+        }
+    }
+
+    public class SaveEngAltTrAttachmentsRequest
+    {
+        public string TRCode { get; set; } = "";
+        public string? EmpCode { get; set; }
+        public string? CompCode { get; set; }
+        public List<Microsoft.AspNetCore.Http.IFormFile> Files { get; set; } = new();
+        public List<string> FileTypes { get; set; } = new();
+        // Saved files marked for deletion (parallel arrays).
+        public List<string> DelFileNames { get; set; } = new();
+        public List<string> DelFileTypes { get; set; } = new();
+        public List<string> DelVideoIds { get; set; } = new();
+    }
+
+    public class DeleteEngAltTrAttachmentRequest
+    {
+        public string TRCode { get; set; } = "";
+        public string? FileName { get; set; }
+        public string? FileType { get; set; }
+        public string? VideoId { get; set; }
+        public string? EmpCode { get; set; }
+        public string? CompCode { get; set; }
     }
 }

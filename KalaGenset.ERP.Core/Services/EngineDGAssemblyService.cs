@@ -365,6 +365,529 @@ namespace KalaGenset.ERP.Core.Services
             return result;
         }
 
+        public async Task<List<Dictionary<string, object?>>> GetEngAltTrCertificateAsync(DateTime fromDate, DateTime toDate, string? serialNo)
+        {
+            var result = new List<Dictionary<string, object?>>();
+
+            // SP signature: @fromDate varchar(20), @ToDate varchar(20), @SerialNo varchar(20).
+            // Legacy passes MM/dd/yyyy HH:mm:ss (e.g. '05/01/2026 00:00:00'). Matching that
+            // format avoids DATEFORMAT-locale surprises when the SP implicitly converts the
+            // varchar to datetime for the BETWEEN compare. InvariantCulture forces literal '/'
+            // separators regardless of the host server's culture.
+            // SerialNo must include LIKE wildcards — the SP does not add them.
+            var fromStr = fromDate.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture) + " 00:00:00";
+            var toStr = toDate.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture) + " 23:59:59";
+            var serialParam = string.IsNullOrWhiteSpace(serialNo)
+                ? string.Empty
+                : "%" + serialNo.Trim() + "%";
+
+            using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var command = new SqlCommand("getEngAltTrCertificate_sp", connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+
+                command.Parameters.Add("@fromDate", SqlDbType.VarChar, 20).Value = fromStr;
+                command.Parameters.Add("@ToDate", SqlDbType.VarChar, 20).Value = toStr;
+                command.Parameters.Add("@SerialNo", SqlDbType.VarChar, 20).Value = serialParam;
+
+                await connection.OpenAsync();
+
+                // SP returns a few columns with non-canonical casing (TrDt, Partdesc, Partcode);
+                // alias them to what the Angular consumer expects.
+                var keyAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TrDt"] = "TRDt",
+                    ["MOdel"] = "Model",
+                    ["Partdesc"] = "PartDesc",
+                    ["Partcode"] = "PartCode",
+                };
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            var columnName = reader.GetName(i);
+                            if (keyAliases.TryGetValue(columnName, out var canonical))
+                                columnName = canonical;
+                            var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
+                            row[columnName] = value;
+                        }
+
+                        result.Add(row);
+                    }
+                }
+
+                // SP returns CntEngFile / CntAltFile / CTFile / KWHFile as blank strings.
+                // Legacy code-behind fills them via 4 COUNT queries per TR. We do it in one
+                // batched lookup against TESTReportFileDetails grouped by TRCode + FileType.
+                // Trim is critical: testreport.TRCode may be char(N) (space-padded on read),
+                // while TESTReportFileDetails.TRCode is varchar — exact-string dict lookup
+                // would otherwise miss every row.
+                var trCodes = result
+                    .Select(r => r.TryGetValue("TRCode", out var v) ? v?.ToString()?.Trim() : null)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (trCodes.Count > 0)
+                {
+                    var flags = await LoadEngAltFileFlagsAsync(connection, trCodes);
+                    foreach (var row in result)
+                    {
+                        var trCode = row.TryGetValue("TRCode", out var v) ? v?.ToString()?.Trim() : null;
+                        if (string.IsNullOrEmpty(trCode)) continue;
+
+                        if (flags.TryGetValue(trCode!, out var present))
+                        {
+                            row["CntEngFile"] = present.Contains("Engine") ? "Yes" : "No";
+                            row["CntAltFile"] = present.Contains("Alternator") ? "Yes" : "No";
+                            row["CTFile"]     = present.Contains("CT") ? "Yes" : "No";
+                            row["KWHFile"]    = present.Contains("KWH") ? "Yes" : "No";
+                        }
+                        else
+                        {
+                            row["CntEngFile"] = "No";
+                            row["CntAltFile"] = "No";
+                            row["CTFile"]     = "No";
+                            row["KWHFile"]    = "No";
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<List<Dictionary<string, object?>>> GetEngAltTrAttachmentsAsync(string trCode)
+        {
+            // Mirrors legacy EngAltTrCertificate.aspx.cs ShowRecord() — 4-source UNION ALL.
+            // Parameterized (legacy concatenated raw strings — kept the shape, lost the injection risk).
+            var result = new List<Dictionary<string, object?>>();
+            if (string.IsNullOrWhiteSpace(trCode)) return result;
+            var trCodeTrim = trCode.Trim();
+
+            const string sql = @"
+SELECT ROW_NUMBER() OVER (ORDER BY SrNo) AS SrNo, Type, FileType, SaveOrUpdate, FileName, Video_ID
+FROM (
+    SELECT 1 AS SrNo, 'Image' AS Type, FileType AS FileType, 'S' AS SaveOrUpdate, FileName, '0' AS Video_ID
+    FROM TestReportFileDetails WITH (NOLOCK)
+    WHERE TRCode = @TRCode AND Active = '1'
+    UNION ALL
+    SELECT 2 AS SrNo, 'Image' AS Type, 'PDIR' AS FileType, 'S' AS SaveOrUpdate, FileAttachment AS FileName, '0' AS Video_ID
+    FROM PDIRFileDetails WITH (NOLOCK)
+    WHERE PDICode = @TRCode AND Active = '1'
+    UNION ALL
+    SELECT 3 AS SrNo, 'Video' AS Type, 'TRVideo' AS FileType, 'S' AS SaveOrUpdate, tr_video_name AS FileName, CAST(Video_ID AS VARCHAR(50)) AS Video_ID
+    FROM videos WITH (NOLOCK)
+    WHERE tr_video_type = 'TR' AND Active = '1'
+      AND eng_sr_no IN (SELECT SerialNo FROM TestReportSerialNoDetails WITH (NOLOCK) WHERE TRCode = @TRCode AND LEFT(partcode,3) = '001')
+    UNION ALL
+    SELECT 4 AS SrNo, 'Video' AS Type, 'PDIVideo' AS FileType, 'S' AS SaveOrUpdate, pdir_video_name AS FileName, CAST(Video_ID AS VARCHAR(50)) AS Video_ID
+    FROM videos WITH (NOLOCK)
+    WHERE pdir_video_type = 'PD' AND Active = '1'
+      AND eng_sr_no IN (SELECT SerialNo FROM TestReportSerialNoDetails WITH (NOLOCK) WHERE TRCode = @TRCode AND LEFT(partcode,3) = '001')
+) T
+ORDER BY SrNo";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var command = new SqlCommand(sql, connection);
+            command.Parameters.Add("@TRCode", SqlDbType.VarChar, 100).Value = trCodeTrim;
+            await connection.OpenAsync();
+            using var reader = await command.ExecuteReaderAsync();
+            int rowIdx = 0;
+            while (await reader.ReadAsync())
+            {
+                rowIdx++;
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    var colName = reader.GetName(i);
+                    var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
+                    if (value is string s) value = s.Trim();
+                    row[colName] = value;
+                }
+                // Renumber SrNo sequentially in case multiple sources contribute rows.
+                row["SrNo"] = rowIdx;
+                result.Add(row);
+            }
+            return result;
+        }
+
+        // Maps a FileType to its source table/fields/folder. Names are static (NOT user input).
+        private static (string Table, string IdField, string FileField, string Folder, string IdValue)
+            ResolveAttachmentSource(string fileTypeTrim, string trCodeTrim, string? videoId)
+        {
+            if (fileTypeTrim.Equals("PDIR", StringComparison.OrdinalIgnoreCase))
+                return ("PDIRFileDetails", "PDICode", "FileAttachment", "PDIRFile", trCodeTrim);
+            if (fileTypeTrim.Equals("TRVideo", StringComparison.OrdinalIgnoreCase))
+                return ("videos", "video_id", "tr_video_name", "TRAttachments", (videoId ?? "").Trim());
+            if (fileTypeTrim.Equals("PDIVideo", StringComparison.OrdinalIgnoreCase))
+                return ("videos", "video_id", "pdir_video_name", "TRAttachments", (videoId ?? "").Trim());
+            // Engine / Alternator / CT / KWH / EWAP — all in TestReportFileDetails.
+            return ("TestReportFileDetails", "TRCode", "FileName", "TestReportAttachfile", trCodeTrim);
+        }
+
+        // Mirrors legacy clsCommonFunctions.viewMainFilePath(): finds the file's stored SysDt,
+        // then builds the historical path F:\ERP\<year>\<MM Month>\<folder>\<fileName>.
+        private async Task<string?> ResolveAttachmentPathAsync(
+            string trCodeTrim, string fileNameTrim, string fileTypeTrim, string? videoId)
+        {
+            if (string.IsNullOrWhiteSpace(fileNameTrim)) return null;
+            var (table, idField, fileField, folder, idValue) =
+                ResolveAttachmentSource(fileTypeTrim, trCodeTrim, videoId);
+            if (string.IsNullOrEmpty(idValue)) return null;
+
+            DateTime? sysDt = null;
+            var sysDtSql = $"SELECT TOP 1 SysDt FROM {table} WITH (NOLOCK) " +
+                           $"WHERE {idField} = @IdValue AND {fileField} = @FileName";
+            using (var conn = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var cmd = new SqlCommand(sysDtSql, conn))
+            {
+                cmd.Parameters.Add("@IdValue", SqlDbType.VarChar, 100).Value = idValue;
+                cmd.Parameters.Add("@FileName", SqlDbType.VarChar, 200).Value = fileNameTrim;
+                await conn.OpenAsync();
+                var raw = await cmd.ExecuteScalarAsync();
+                if (raw != null && raw != DBNull.Value)
+                    sysDt = Convert.ToDateTime(raw);
+            }
+            if (sysDt == null) return null;
+
+            // Folder name format from legacy line 1232-1234:  "<MM> <MonthName>"  (e.g. "05 May").
+            var year = sysDt.Value.Year.ToString();
+            var monthFolder = sysDt.Value.ToString("MM MMMM", System.Globalization.CultureInfo.InvariantCulture);
+            var basePath = _configuration["FileStorage:BasePath"] ?? "F:\\ERP";
+            return Path.Combine(basePath, year, monthFolder, folder, fileNameTrim);
+        }
+
+        public async Task<(byte[]? Content, string? FileName, string? ContentType)> DownloadEngAltTrAttachmentAsync(
+            string trCode, string fileName, string fileType, string? videoId)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) return (null, null, null);
+            var trCodeTrim = (trCode ?? "").Trim();
+            var fileNameTrim = fileName.Trim();
+            var fileTypeTrim = (fileType ?? "").Trim();
+
+            var path = await ResolveAttachmentPathAsync(trCodeTrim, fileNameTrim, fileTypeTrim, videoId);
+            if (path == null || !File.Exists(path)) return (null, null, null);
+
+            var bytes = await File.ReadAllBytesAsync(path);
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var contentType = ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".pdf" => "application/pdf",
+                ".mp4" => "video/mp4",
+                ".wmv" => "video/x-ms-wmv",
+                ".avi" => "video/x-msvideo",
+                ".mpeg" or ".mpg" => "video/mpeg",
+                ".flv" => "video/x-flv",
+                _ => "application/octet-stream",
+            };
+            return (bytes, fileNameTrim, contentType);
+        }
+
+        public async Task<string> SaveEngAltTrAttachmentsAsync(
+            string trCode, string empCode, string compCode,
+            List<(string FileType, Microsoft.AspNetCore.Http.IFormFile File)> files,
+            List<(string FileName, string FileType, string? VideoId)> deletions)
+        {
+            if (string.IsNullOrWhiteSpace(trCode)) return "TRCode is required.";
+            files ??= new List<(string, Microsoft.AspNetCore.Http.IFormFile)>();
+            deletions ??= new List<(string, string, string?)>();
+            if (files.Count == 0 && deletions.Count == 0) return "No changes to save.";
+
+            var trCodeTrim = trCode.Trim();
+
+            // Allowed extensions match legacy SaveAs flow + the modal's image-only file types.
+            string[] allowedExt = { ".jpg", ".jpeg", ".png", ".pdf" };
+            foreach (var f in files)
+            {
+                if (f.File == null || f.File.Length == 0) return "An uploaded file is empty.";
+                var ext = Path.GetExtension(f.File.FileName).ToLowerInvariant();
+                if (!allowedExt.Contains(ext))
+                    return $"Invalid file type '{ext}'. Allowed: {string.Join(", ", allowedExt)}.";
+            }
+
+            // Resolve on-disk paths for the deletions BEFORE the transaction removes their rows
+            // (path lookup reads each row's SysDt). Physical files are removed after commit.
+            var pathsToDelete = new List<string>();
+            foreach (var d in deletions)
+            {
+                var p = await ResolveAttachmentPathAsync(trCodeTrim, (d.FileName ?? "").Trim(), (d.FileType ?? "").Trim(), d.VideoId);
+                if (!string.IsNullOrEmpty(p)) pathsToDelete.Add(p!);
+            }
+
+            // Get current count of saved rows for this TR so new SrNo continues the sequence,
+            // matching legacy's grid-index-based numbering.
+            int existingCount;
+            using (var countConn = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var countCmd = new SqlCommand(
+                "SELECT COUNT(*) FROM TestReportFileDetails WITH (NOLOCK) WHERE TRCode = @TRCode AND Active = '1'",
+                countConn))
+            {
+                countCmd.Parameters.Add("@TRCode", SqlDbType.VarChar, 100).Value = trCodeTrim;
+                await countConn.OpenAsync();
+                existingCount = Convert.ToInt32(await countCmd.ExecuteScalarAsync() ?? 0);
+            }
+
+            string mainFolder = files.Count > 0 ? GetMainFilePath("TestReportAttachfile") : "";
+            bool isMemoTr = trCodeTrim.Length > 0 && (trCodeTrim[0] == 'M' || trCodeTrim[0] == 'm');
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            var message = await strategy.ExecuteAsync(async () =>
+            {
+                using var tx = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    // ── 1. DELETES (hard) — process marked saved files first ──
+                    foreach (var d in deletions)
+                    {
+                        var delFileName = (d.FileName ?? "").Trim();
+                        var delFileType = (d.FileType ?? "").Trim();
+                        var delVideoId = (d.VideoId ?? "").Trim();
+
+                        if (delFileType.Equals("PDIR", StringComparison.OrdinalIgnoreCase))
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM PDIRFileDetails WHERE PDICode=@PDICode AND FileAttachment=@FileName",
+                                new SqlParameter("@PDICode", trCodeTrim),
+                                new SqlParameter("@FileName", delFileName));
+                        }
+                        else if (delFileType.Equals("TRVideo", StringComparison.OrdinalIgnoreCase)
+                              || delFileType.Equals("PDIVideo", StringComparison.OrdinalIgnoreCase))
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM videos WHERE video_id=@VideoId",
+                                new SqlParameter("@VideoId", delVideoId));
+                        }
+                        else
+                        {
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "DELETE FROM TestReportFileDetails WHERE TRCode=@TRCode AND FileName=@FileName AND FileType=@FileType",
+                                new SqlParameter("@TRCode", trCodeTrim),
+                                new SqlParameter("@FileName", delFileName),
+                                new SqlParameter("@FileType", delFileType));
+                        }
+                    }
+
+                    // ── 2. INSERTS — new uploads ──
+                    for (int i = 0; i < files.Count; i++)
+                    {
+                        var (fileType, formFile) = files[i];
+                        int srNo = existingCount + i + 1;
+
+                        // Legacy filename pattern (lines 547-552):
+                        //   non-M: <chars 4..8>+<chars 10..17>-<idx><ext>          e.g. 26-2701000869-4.jpg
+                        //   M-pfx: <chars 4..8>+<chars 10..17>+M-<idx><ext>        e.g. 26-2703006179M-4.jpg
+                        var ext = Path.GetExtension(formFile.FileName);
+                        string fileBase;
+                        if (trCodeTrim.Length >= 18)
+                        {
+                            var part1 = trCodeTrim.Substring(4, 5);
+                            var part2 = trCodeTrim.Substring(10, 8);
+                            fileBase = isMemoTr ? $"{part1}{part2}M-{srNo}{ext}" : $"{part1}{part2}-{srNo}{ext}";
+                        }
+                        else
+                        {
+                            // Defensive fallback for unexpected TRCode format.
+                            fileBase = $"{trCodeTrim.Replace('/', '_')}-{srNo}{ext}";
+                        }
+
+                        var fullPath = Path.Combine(mainFolder, fileBase);
+
+                        // Write the file to disk.
+                        using (var stream = new FileStream(fullPath, FileMode.Create))
+                        {
+                            await formFile.CopyToAsync(stream);
+                        }
+
+                        // INSERT row into TestReportFileDetails — parameterized to avoid the
+                        // legacy string-concat SQL-injection vector. Active='1' so new rows
+                        // are immediately visible to GetEngAltTrAttachmentsAsync.
+                        var insertParams = new[]
+                        {
+                            new SqlParameter("@TRCode", SqlDbType.VarChar, 100) { Value = trCodeTrim },
+                            new SqlParameter("@SysDt", SqlDbType.DateTime) { Value = DateTime.Now },
+                            new SqlParameter("@SrNo", SqlDbType.VarChar, 10) { Value = srNo.ToString() },
+                            new SqlParameter("@FileType", SqlDbType.VarChar, 50) { Value = fileType ?? "" },
+                            new SqlParameter("@FileName", SqlDbType.VarChar, 200) { Value = fileBase },
+                        };
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "INSERT INTO TestReportFileDetails (TRCode, SysDt, SrNo, FileType, FileName, Active) " +
+                            "VALUES (@TRCode, @SysDt, @SrNo, @FileType, @FileName, '1')",
+                            insertParams);
+                    }
+
+                    // ── 3. Audit log row, matching legacy line 566-576 ──
+                    var logParams = new[]
+                    {
+                        new SqlParameter("@TransactionDtTime", SqlDbType.DateTime) { Value = DateTime.Now },
+                        new SqlParameter("@EmpID", SqlDbType.VarChar, 20) { Value = (object?)empCode ?? "" },
+                        new SqlParameter("@TransactionType", SqlDbType.VarChar, 5) { Value = "S" },
+                        new SqlParameter("@TransactionFrom", SqlDbType.VarChar, 50) { Value = "TREngAltAttachment" },
+                        new SqlParameter("@TransactionNo", SqlDbType.VarChar, 100) { Value = trCodeTrim },
+                        new SqlParameter("@CompanyCode", SqlDbType.VarChar, 20) { Value = (object?)compCode ?? "" },
+                    };
+                    await _context.Database.ExecuteSqlRawAsync(
+                        "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                        logParams);
+
+                    await tx.CommitAsync();
+
+                    var added = files.Count;
+                    var removed = deletions.Count;
+                    if (added > 0 && removed > 0)
+                        return $"Saved: {added} added, {removed} removed for TRCode {trCodeTrim}.";
+                    if (removed > 0)
+                        return $"Removed {removed} file(s) for TRCode {trCodeTrim}.";
+                    return $"Record Saved Successfully with TRCode : {trCodeTrim}";
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            });
+
+            // Remove physical files for the committed deletions (best-effort).
+            foreach (var p in pathsToDelete)
+            {
+                try { if (File.Exists(p)) File.Delete(p); }
+                catch { /* ignore disk-side failures; DB rows already removed */ }
+            }
+
+            return message;
+        }
+
+        public async Task<string> DeleteEngAltTrAttachmentAsync(
+            string trCode, string fileName, string fileType, string? videoId, string empCode, string compCode)
+        {
+            // HARD delete: remove the DB row AND the physical file from disk.
+            var trCodeTrim = (trCode ?? "").Trim();
+            var fileNameTrim = (fileName ?? "").Trim();
+            var fileTypeTrim = (fileType ?? "").Trim();
+            var videoIdTrim = (videoId ?? "").Trim();
+
+            // Resolve the on-disk path BEFORE the row is gone (path lookup needs the DB row's SysDt).
+            var physicalPath = await ResolveAttachmentPathAsync(trCodeTrim, fileNameTrim, fileTypeTrim, videoId);
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            var message = await strategy.ExecuteAsync(async () =>
+            {
+                using var tx = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    int affected;
+                    if (fileTypeTrim.Equals("PDIR", StringComparison.OrdinalIgnoreCase))
+                    {
+                        affected = await _context.Database.ExecuteSqlRawAsync(
+                            "DELETE FROM PDIRFileDetails WHERE PDICode=@PDICode AND FileAttachment=@FileName",
+                            new SqlParameter("@PDICode", trCodeTrim),
+                            new SqlParameter("@FileName", fileNameTrim));
+                    }
+                    else if (fileTypeTrim.Equals("TRVideo", StringComparison.OrdinalIgnoreCase)
+                          || fileTypeTrim.Equals("PDIVideo", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Hard-delete the videos row by id (removes the shared row entirely).
+                        affected = await _context.Database.ExecuteSqlRawAsync(
+                            "DELETE FROM videos WHERE video_id=@VideoId",
+                            new SqlParameter("@VideoId", videoIdTrim));
+                    }
+                    else
+                    {
+                        // Engine / Alternator / CT / KWH / EWAP
+                        affected = await _context.Database.ExecuteSqlRawAsync(
+                            "DELETE FROM TestReportFileDetails WHERE TRCode=@TRCode AND FileName=@FileName AND FileType=@FileType",
+                            new SqlParameter("@TRCode", trCodeTrim),
+                            new SqlParameter("@FileName", fileNameTrim),
+                            new SqlParameter("@FileType", fileTypeTrim));
+                    }
+
+                    // Audit log row (TransactionType 'D' = delete).
+                    var logParams = new[]
+                    {
+                        new SqlParameter("@TransactionDtTime", SqlDbType.DateTime) { Value = DateTime.Now },
+                        new SqlParameter("@EmpID", SqlDbType.VarChar, 20) { Value = (object?)empCode ?? "" },
+                        new SqlParameter("@TransactionType", SqlDbType.VarChar, 5) { Value = "D" },
+                        new SqlParameter("@TransactionFrom", SqlDbType.VarChar, 50) { Value = "TREngAltAttachment" },
+                        new SqlParameter("@TransactionNo", SqlDbType.VarChar, 100) { Value = trCodeTrim },
+                        new SqlParameter("@CompanyCode", SqlDbType.VarChar, 20) { Value = (object?)compCode ?? "" },
+                    };
+                    await _context.Database.ExecuteSqlRawAsync(
+                        "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                        logParams);
+
+                    await tx.CommitAsync();
+                    return affected > 0
+                        ? "Attachment deleted successfully."
+                        : "Attachment not found or already removed.";
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            });
+
+            // Delete the physical file AFTER the DB row is committed (best-effort — if the file
+            // is already gone we still report success since the row is removed).
+            if (!string.IsNullOrEmpty(physicalPath))
+            {
+                try
+                {
+                    if (File.Exists(physicalPath)) File.Delete(physicalPath);
+                }
+                catch { /* ignore disk-side failures; DB row is already deleted */ }
+            }
+
+            return message;
+        }
+
+        private static async Task<Dictionary<string, HashSet<string>>> LoadEngAltFileFlagsAsync(
+            SqlConnection connection, List<string?> trCodes)
+        {
+            var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+            var paramNames = new List<string>(trCodes.Count);
+            using var cmd = connection.CreateCommand();
+            for (int i = 0; i < trCodes.Count; i++)
+            {
+                var p = "@tr" + i;
+                paramNames.Add(p);
+                cmd.Parameters.Add(p, SqlDbType.VarChar, 100).Value = (object?)trCodes[i] ?? DBNull.Value;
+            }
+
+            cmd.CommandText =
+                "SELECT TRCode, FileType, COUNT(*) AS Cnt " +
+                "FROM TESTReportFileDetails WITH (NOLOCK) " +
+                "WHERE TRCode IN (" + string.Join(",", paramNames) + ") " +
+                "AND FileType IN ('Engine','Alternator','CT','KWH') " +
+                "GROUP BY TRCode, FileType";
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                // Trim defensively: source columns may be char(N) and read back padded.
+                var tr = reader.IsDBNull(0) ? "" : reader.GetString(0).Trim();
+                var ft = reader.IsDBNull(1) ? "" : reader.GetString(1).Trim();
+                if (string.IsNullOrEmpty(tr) || string.IsNullOrEmpty(ft)) continue;
+
+                if (!map.TryGetValue(tr, out var set))
+                {
+                    set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    map[tr] = set;
+                }
+                set.Add(ft);
+            }
+            return map;
+        }
+
         public async Task<List<Dictionary<string, object?>>> GetJobCardDGDtsAsync(string strJobCardType, string strcompID, string assemblyLine)
         {
             var result = new List<Dictionary<string, object?>>();
@@ -4615,8 +5138,10 @@ namespace KalaGenset.ERP.Core.Services
             END AS Value")
                 .FirstOrDefault();
 
-            // Build complete path
-            string fullPath = Path.Combine("F:\\ERP", year, month, fileFolder.Trim());
+            // Build complete path. BasePath is config-driven so dev can point at D:\ERP
+            // while prod stays on F:\ERP without code changes.
+            var basePath = _configuration["FileStorage:BasePath"] ?? "F:\\ERP";
+            string fullPath = Path.Combine(basePath, year, month, fileFolder.Trim());
             // Create all directories in one call
             Directory.CreateDirectory(fullPath);
 
