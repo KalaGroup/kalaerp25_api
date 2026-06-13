@@ -18,6 +18,7 @@ namespace KalaGenset.ERP.Core.DTO
         public string CompanyId { get; set; }
         public string CompanyName { get; set; }
         public string ProfitCenterName { get; set; }
+        public string PositionRoleId { get; set; }
         public bool IsActive { get; set; }
        
     }

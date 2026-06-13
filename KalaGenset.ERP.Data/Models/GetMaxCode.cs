@@ -13,7 +13,7 @@ public partial class GetMaxCode
 
     public int MaxValue { get; set; }
 
-    public string FormName { get; set; } = null!;
+    public string? FormName { get; set; }
 
     public string TblName { get; set; } = null!;
 

@@ -77,7 +77,7 @@ namespace KalaGenset.ERP.Core.Services
                 var tpcCodeParam = new SqlParameter("@TPCCode", TPCCode);
 
                 var result = await _context.Database
-                    .SqlQueryRaw<ReqCodeForMTFScanDTO>("EXEC GetMTFWIPInternalReqCode @FPCCode, @TPCCode", fpcCodeParam, tpcCodeParam)
+                    .SqlQueryRaw<ReqCodeForMTFScanDTO>("EXEC GetMTFWIPInternalReqCode_Checker_Maker @FPCCode, @TPCCode", fpcCodeParam, tpcCodeParam)
                     .ToListAsync();
 
                 return result;
