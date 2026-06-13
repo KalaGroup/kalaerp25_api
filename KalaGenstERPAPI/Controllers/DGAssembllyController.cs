@@ -9,6 +9,7 @@ using KalaGenset.ERP.Data.Models;
 using Azure;
 using KalaGenset.ERP.Core.Interface;
 using KalaGenset.ERP.Core.Request;
+using KalaGenset.ERP.Core.ResponseDTO;
 
 namespace KalaGenset.ERP.API.Controllers
 {
@@ -386,6 +387,18 @@ namespace KalaGenset.ERP.API.Controllers
             var message = await _engineDGAssembly.SaveEngAltTrAttachmentsAsync(
                 req.TRCode, req.EmpCode ?? "", req.CompCode ?? "", pairs, deletions);
             return Ok(new { message });
+        }
+
+        [HttpGet("GetLineRights")]
+        public async Task<IActionResult> GetLineRights([FromQuery] string prmCode)
+        {
+            if (string.IsNullOrWhiteSpace(prmCode))
+            {
+                return BadRequest("prmCode is required.");
+            }
+
+            var result = await _engineDGAssembly.GetLineRightsAsync(prmCode.Trim());
+            return Ok(result ?? new List<LineDto>());
         }
 
         [HttpPost("DeleteEngAltTrAttachment")]

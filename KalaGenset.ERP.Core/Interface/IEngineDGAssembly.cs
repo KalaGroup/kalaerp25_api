@@ -40,5 +40,6 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<(byte[]? Content, string? FileName, string? ContentType)> DownloadEngAltTrAttachmentAsync(string trCode, string fileName, string fileType, string? videoId);
         public Task<string> SaveEngAltTrAttachmentsAsync(string trCode, string empCode, string compCode, List<(string FileType, Microsoft.AspNetCore.Http.IFormFile File)> files, List<(string FileName, string FileType, string? VideoId)> deletions);
         public Task<string> DeleteEngAltTrAttachmentAsync(string trCode, string fileName, string fileType, string? videoId, string empCode, string compCode);
+        public Task<List<LineDto>> GetLineRightsAsync(string prmCode);
     }
 }

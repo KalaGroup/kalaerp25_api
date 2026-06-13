@@ -2552,6 +2552,8 @@ ORDER BY SrNo";
                                .FirstOrDefault()
                                .ToString();
 
+                            CPProvider = CPProvider.Trim();   // assign it, don't discard it
+
                             if (CPProvider == "M")
                             {
                                 StrCPRate = _context.ProfitCenterPldetails
@@ -5146,6 +5148,27 @@ ORDER BY SrNo";
             Directory.CreateDirectory(fullPath);
 
             return fullPath;
+        }
+
+        public async Task<List<LineDto>> GetLineRightsAsync(string prmCode)
+        {
+            var result = await (
+                from r in _context.PositionLineRights
+                join l in _context.LinePCMsts
+                    on r.LineWisePC equals l.LineWisePC
+                where r.PRMCode == prmCode
+                      && r.Active == "1"
+                      && l.Active == "1"
+                orderby l.LineDesc
+                select new LineDto
+                {
+                    LineWisePC = l.LineWisePC,
+                    LineDesc = l.LineDesc,
+                    ParentDgPC = l.ParentDgPC
+                }
+            ).ToListAsync();
+
+            return result;
         }
     }
 }

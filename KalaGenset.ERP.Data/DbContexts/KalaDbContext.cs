@@ -70,6 +70,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<KaizenSheetMaster> KaizenSheetMasters { get; set; }
 
+    public virtual DbSet<LinePCMst> LinePCMsts { get; set; }
+
     public virtual DbSet<LoginMst> LoginMsts { get; set; }
 
     public virtual DbSet<MaterialRequisitionWithOutPlan> MaterialRequisitionWithOutPlans { get; set; }
@@ -89,6 +91,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<PcstageWiseRate> PcstageWiseRates { get; set; }
 
     public virtual DbSet<PcstageWiseRateChange> PcstageWiseRateChanges { get; set; }
+
+    public virtual DbSet<PositionLineRight> PositionLineRights { get; set; }
 
     public virtual DbSet<PrcChkDetail> PrcChkDetails { get; set; }
 
@@ -140,7 +144,6 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<_6m> _6ms { get; set; }
 
-   
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ActionTaken>(entity =>
@@ -2594,6 +2597,36 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.WorkstationName).HasMaxLength(200);
         });
 
+        modelBuilder.Entity<LinePCMst>(entity =>
+        {
+            entity.HasKey(e => e.LineWisePC);
+
+            entity.ToTable("LinePCMst");
+
+            entity.Property(e => e.LineWisePC)
+                .HasMaxLength(10);
+
+            entity.Property(e => e.LineDesc)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.ParentDgPC)
+                .HasMaxLength(10)
+                .IsRequired();
+
+            entity.Property(e => e.Active)
+                .HasMaxLength(1)
+                .IsFixedLength()
+                .HasDefaultValue("1");
+
+            entity.Property(e => e.CreatedBy)
+                .HasMaxLength(20);
+
+            entity.Property(e => e.CreatedOn)
+                .HasColumnType("datetime")
+                .HasDefaultValueSql("(getdate())");
+        });
+
         modelBuilder.Entity<LoginMst>(entity =>
         {
             entity.ToTable("LoginMst");
@@ -3665,6 +3698,37 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.StageName)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<PositionLineRight>(entity =>
+        {
+            entity.HasKey(e => e.PLRId);
+
+            entity.ToTable("Position_Line_Rights");
+
+            entity.HasIndex(e => new { e.PRMCode, e.LineWisePC })
+                .IsUnique()
+                .HasDatabaseName("UQ_PLR");
+
+            entity.Property(e => e.PRMCode)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(e => e.LineWisePC)
+                .HasMaxLength(10)
+                .IsRequired();
+
+            entity.Property(e => e.Active)
+                .HasMaxLength(1)
+                .IsFixedLength()
+                .HasDefaultValue("1");
+
+            entity.Property(e => e.CreatedBy)
+                .HasMaxLength(20);
+
+            entity.Property(e => e.CreatedOn)
+                .HasColumnType("datetime")
+                .HasDefaultValueSql("(getdate())");
         });
 
         modelBuilder.Entity<PrcChkDetail>(entity =>

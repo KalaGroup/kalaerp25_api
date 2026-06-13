@@ -27,7 +27,7 @@ namespace KalaGenset.ERP.Core.ResponseDTO
         public string cid { get; set; }
         public string? JobCode { get; set; }      // For Stage 1 & 2
         public string? PFBCode { get; set; }      // ADD THIS - For Stage 3
-        public int Kva { get; set; }
+        public decimal Kva { get; set; }
         public string partCode { get; set; }
         public int priority { get; set; }
         public string qualityStatus { get; set; }

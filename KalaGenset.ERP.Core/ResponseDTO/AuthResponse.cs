@@ -17,8 +17,9 @@ namespace KalaGenset.ERP.Core.Response
         public string profitCenterName { get; set; }
         public string empCode { get; set; }
         public string username { get; set; }
-        public string pccode { get; set; }
+        public string pccode_act { get; set; }
         public string pccode_old { get; set; }
+        public string positionRoleId { get; set; }
         public string message { get; set; }
     }
 }

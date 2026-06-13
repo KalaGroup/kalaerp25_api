@@ -31,7 +31,32 @@ namespace KalaGenset.ERP.Core.Services
 
         public AuthResponse AuthenticateUser(string userid, string password)
         {
-            var user = (from emp in _context.Employees
+            //var user = (from emp in _context.Employees
+            //            join login in _context.LoginMsts
+            //            on emp.Ecode equals login.Name
+            //            join comp in _context.Companies
+            //            on emp.CompanyCodeAct equals comp.Cid into compGroup
+            //            from comp in compGroup.DefaultIfEmpty()
+            //            join pcenter in _context.ProfitCenters
+            //            on emp.ProfitCenterAct equals pcenter.Pccode into pcGroup
+            //            from pcenter in pcGroup.DefaultIfEmpty()
+            //            where emp.Ecode == userid && login.PassWord == password
+            //            select new UserDto
+            //            {
+            //                EmpCode = emp.Ecode,
+            //                PositionRoleId = emp.PositionRoleId ?? "",
+            //                UserId = login.Id,
+            //                LoginType = login.LoginType,
+            //                Ename = emp.Fname + " " + emp.Lname,
+            //                PCCode_Old = emp.ProfitCenter ?? "",
+            //                PCCode = emp.ProfitCenterAct ?? "",
+            //                CompanyId = emp.CompanyCodeAct ?? "",
+            //                CompanyName = comp != null ? comp.Cname : "",
+            //                ProfitCenterName = pcenter != null ? pcenter.Pcname : "",
+            //                IsActive = emp.Active
+            //            }).FirstOrDefault();
+
+            var query = from emp in _context.Employees
                         join login in _context.LoginMsts
                         on emp.Ecode equals login.Name
                         join comp in _context.Companies
@@ -44,6 +69,7 @@ namespace KalaGenset.ERP.Core.Services
                         select new UserDto
                         {
                             EmpCode = emp.Ecode,
+                            PositionRoleId = emp.PositionRoleId ?? "",
                             UserId = login.Id,
                             LoginType = login.LoginType,
                             Ename = emp.Fname + " " + emp.Lname,
@@ -53,7 +79,11 @@ namespace KalaGenset.ERP.Core.Services
                             CompanyName = comp != null ? comp.Cname : "",
                             ProfitCenterName = pcenter != null ? pcenter.Pcname : "",
                             IsActive = emp.Active
-                        }).FirstOrDefault();
+                        };
+
+            var generatedSql = query.ToQueryString();
+
+            var user = query.FirstOrDefault();
 
             if (user == null)
             {
@@ -77,9 +107,10 @@ namespace KalaGenset.ERP.Core.Services
                 {
                     token = _token,
                     username = user.Ename,
-                    pccode = user.PCCode ?? "",
+                    pccode_act = user.PCCode ?? "",
                     pccode_old = user.PCCode_Old ?? "",
                     empCode = user.EmpCode,
+                    positionRoleId = user.PositionRoleId ?? "",
                     loginType = user.LoginType,
                     userId = user.UserId,
                     companyId = user.CompanyId ?? "",
