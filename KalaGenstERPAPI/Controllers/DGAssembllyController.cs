@@ -401,6 +401,25 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result ?? new List<LineDto>());
         }
 
+        [HttpGet("GetTestReportStatus")]
+        public async Task<IActionResult> GetTestReportStatus(
+            [FromQuery] string assemblyLine,
+            [FromQuery] DateTime fromDate,
+            [FromQuery] DateTime toDate)
+        {
+            if (string.IsNullOrWhiteSpace(assemblyLine))
+            {
+                return BadRequest("assemblyLine is required.");
+            }
+            if (fromDate == default || toDate == default)
+            {
+                return BadRequest("fromDate and toDate are required.");
+            }
+
+            var result = await _engineDGAssembly.GetTestReportStatusAsync(assemblyLine.Trim(), fromDate, toDate);
+            return Ok(result ?? new List<Dictionary<string, object?>>());
+        }
+
         [HttpPost("DeleteEngAltTrAttachment")]
         public async Task<IActionResult> DeleteEngAltTrAttachment([FromBody] DeleteEngAltTrAttachmentRequest req)
         {
