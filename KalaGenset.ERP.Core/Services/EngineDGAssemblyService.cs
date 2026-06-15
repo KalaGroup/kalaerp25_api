@@ -462,6 +462,52 @@ namespace KalaGenset.ERP.Core.Services
             return result;
         }
 
+        public async Task<List<Dictionary<string, object?>>> GetTestReportStatusAsync(string assemblyLine, DateTime fromDate, DateTime toDate)
+        {
+            // Wraps:
+            //   EXEC usp_GetTestReportStatus
+            //        @AssemblyLine = '01.106',
+            //        @FromDate     = '2026-06-01 00:00:00',
+            //        @ToDate       = '2026-06-15 23:59:59';
+            // Returns whatever columns the SP emits as a key/value dictionary per row;
+            // CP/Bat column counts are dynamic per the SP's internal logic.
+            var result = new List<Dictionary<string, object?>>();
+            var lineParam = (assemblyLine ?? string.Empty).Trim();
+
+            // Force full-day bounds so callers can pass plain dates without
+            // worrying about time-of-day cutting off same-day records.
+            var fromDateTime = fromDate.Date;
+            var toDateTime   = toDate.Date.AddDays(1).AddTicks(-1);
+
+            using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var command = new SqlCommand("usp_GetTestReportStatus", connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+                command.Parameters.Add("@AssemblyLine", SqlDbType.VarChar, 50).Value = lineParam;
+                command.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = fromDateTime;
+                command.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = toDateTime;
+
+                await connection.OpenAsync();
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            var columnName = reader.GetName(i);
+                            var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
+                            row[columnName] = value;
+                        }
+                        result.Add(row);
+                    }
+                }
+            }
+
+            return result;
+        }
+
         public async Task<List<Dictionary<string, object?>>> GetEngAltTrAttachmentsAsync(string trCode)
         {
             // Mirrors legacy EngAltTrCertificate.aspx.cs ShowRecord() — 4-source UNION ALL.
