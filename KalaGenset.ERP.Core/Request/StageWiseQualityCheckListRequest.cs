@@ -17,8 +17,10 @@
         public string subAssemblyPart { get; set; }
         public string qualityProcessCheckpoint { get; set; }
         public string specification { get; set; }
-        public string observation { get; set; }
-        public string ok_nok { get; set; }
+        // Observation is optional — UI permits blank / multi-line freeform entries.
+        public string? observation { get; set; }
+        // OK/NOK column was removed from the UI; payload always sends null.
+        public string? ok_nok { get; set; }
     }
 
     // Update payload: carries the master id, full current item list (with
@@ -40,7 +42,9 @@
         public string subAssemblyPart { get; set; }
         public string qualityProcessCheckpoint { get; set; }
         public string specification { get; set; }
-        public string observation { get; set; }
-        public string ok_nok { get; set; }
+        // Observation is optional (blank / multi-line text both allowed).
+        public string? observation { get; set; }
+        // OK/NOK column removed from the UI; payload always sends null.
+        public string? ok_nok { get; set; }
     }
 }

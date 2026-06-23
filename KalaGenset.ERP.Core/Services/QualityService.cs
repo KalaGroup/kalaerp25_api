@@ -8,6 +8,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace KalaGenset.ERP.Core.Services
 {
@@ -540,7 +542,7 @@ namespace KalaGenset.ERP.Core.Services
                         SubAssemblyPart          = item.subAssemblyPart,
                         QualityProcessCheckpoint = item.qualityProcessCheckpoint,
                         Specification            = item.specification,
-                        Observation              = item.observation,
+                        Observation              = NumberObservationLines(item.observation),
                         OkNok                    = item.ok_nok
                     }).ToList();
 
@@ -699,7 +701,7 @@ namespace KalaGenset.ERP.Core.Services
                         row.SubAssemblyPart          = item.subAssemblyPart;
                         row.QualityProcessCheckpoint = item.qualityProcessCheckpoint;
                         row.Specification            = item.specification;
-                        row.Observation              = item.observation;
+                        row.Observation              = NumberObservationLines(item.observation);
                         row.OkNok                    = item.ok_nok;
                     }
                     else
@@ -711,7 +713,7 @@ namespace KalaGenset.ERP.Core.Services
                             SubAssemblyPart          = item.subAssemblyPart,
                             QualityProcessCheckpoint = item.qualityProcessCheckpoint,
                             Specification            = item.specification,
-                            Observation              = item.observation,
+                            Observation              = NumberObservationLines(item.observation),
                             OkNok                    = item.ok_nok
                         });
                     }
@@ -769,6 +771,42 @@ namespace KalaGenset.ERP.Core.Services
             master.CheckerAuthRemark = null;
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  Observation numbering helpers
+        // ────────────────────────────────────────────────────────────────
+
+        // Strips any existing "<digits>. " or "<digits>." prefix from the start
+        // of a line, then re-numbers all lines when the entry has 2+ lines.
+        // Idempotent — calling it twice gives the same result, so the UI can
+        // round-trip safely (load, edit, re-save).
+        private static readonly Regex _leadingNumberRegex = new(@"^\s*\d+\.\s*", RegexOptions.Compiled);
+
+        private static string? NumberObservationLines(string? value)
+        {
+            if (value == null) return null;
+            if (value.Length == 0) return value;
+
+            // Normalize CRLF / CR to LF so split is consistent.
+            var normalized = value.Replace("\r\n", "\n").Replace("\r", "\n");
+            var lines = normalized.Split('\n');
+
+            // Strip any pre-existing leading "<n>. " on each line.
+            var clean = lines.Select(l => _leadingNumberRegex.Replace(l, "")).ToList();
+
+            if (clean.Count <= 1)
+                return clean.Count == 1 ? clean[0] : value;
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < clean.Count; i++)
+            {
+                if (i > 0) sb.Append('\n');
+                sb.Append((i + 1).ToString())
+                  .Append(". ")
+                  .Append(clean[i]);
+            }
+            return sb.ToString();
         }
     }
 }
