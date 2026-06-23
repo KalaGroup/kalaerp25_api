@@ -541,7 +541,7 @@ namespace KalaGenset.ERP.Core.Services
                         SrNo                     = item.srNo,
                         SubAssemblyPart          = item.subAssemblyPart,
                         QualityProcessCheckpoint = item.qualityProcessCheckpoint,
-                        Specification            = item.specification,
+                        Specification            = NumberSpecificationLines(item.specification),
                         Observation              = NumberObservationLines(item.observation),
                         OkNok                    = item.ok_nok
                     }).ToList();
@@ -700,7 +700,7 @@ namespace KalaGenset.ERP.Core.Services
                         row.SrNo                     = item.srNo;
                         row.SubAssemblyPart          = item.subAssemblyPart;
                         row.QualityProcessCheckpoint = item.qualityProcessCheckpoint;
-                        row.Specification            = item.specification;
+                        row.Specification            = NumberSpecificationLines(item.specification);
                         row.Observation              = NumberObservationLines(item.observation);
                         row.OkNok                    = item.ok_nok;
                     }
@@ -712,7 +712,7 @@ namespace KalaGenset.ERP.Core.Services
                             SrNo                     = item.srNo,
                             SubAssemblyPart          = item.subAssemblyPart,
                             QualityProcessCheckpoint = item.qualityProcessCheckpoint,
-                            Specification            = item.specification,
+                            Specification            = NumberSpecificationLines(item.specification),
                             Observation              = NumberObservationLines(item.observation),
                             OkNok                    = item.ok_nok
                         });
@@ -774,7 +774,7 @@ namespace KalaGenset.ERP.Core.Services
         }
 
         // ────────────────────────────────────────────────────────────────
-        //  Observation numbering helpers
+        //  Multi-line numbering helpers (Observation + Specification)
         // ────────────────────────────────────────────────────────────────
 
         // Strips any existing "<digits>. " or "<digits>." prefix from the start
@@ -783,7 +783,13 @@ namespace KalaGenset.ERP.Core.Services
         // round-trip safely (load, edit, re-save).
         private static readonly Regex _leadingNumberRegex = new(@"^\s*\d+\.\s*", RegexOptions.Compiled);
 
-        private static string? NumberObservationLines(string? value)
+        // Kept for backward-compat — delegates to the shared helper below.
+        private static string? NumberObservationLines(string? value) => NumberMultilineLines(value);
+
+        // New: same logic, used for Specification too.
+        private static string? NumberSpecificationLines(string? value) => NumberMultilineLines(value);
+
+        private static string? NumberMultilineLines(string? value)
         {
             if (value == null) return null;
             if (value.Length == 0) return value;

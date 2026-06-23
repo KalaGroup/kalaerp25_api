@@ -16,7 +16,8 @@
         public int srNo { get; set; }
         public string subAssemblyPart { get; set; }
         public string qualityProcessCheckpoint { get; set; }
-        public string specification { get; set; }
+        // Specification is multi-line freeform; the API numbers it on save.
+        public string? specification { get; set; }
         // Observation is optional — UI permits blank / multi-line freeform entries.
         public string? observation { get; set; }
         // OK/NOK column was removed from the UI; payload always sends null.
@@ -41,7 +42,8 @@
         public int srNo { get; set; }
         public string subAssemblyPart { get; set; }
         public string qualityProcessCheckpoint { get; set; }
-        public string specification { get; set; }
+        // Specification is multi-line freeform; the API numbers it on save.
+        public string? specification { get; set; }
         // Observation is optional (blank / multi-line text both allowed).
         public string? observation { get; set; }
         // OK/NOK column removed from the UI; payload always sends null.
