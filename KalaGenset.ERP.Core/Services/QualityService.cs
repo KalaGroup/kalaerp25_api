@@ -553,7 +553,11 @@ namespace KalaGenset.ERP.Core.Services
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw new Exception("Error saving Stage Wise Quality Check List", ex);
+                // Bubble up the inner exception text so the client sees the real
+                // cause (e.g. "String or binary data would be truncated" when a
+                // numbered multi-line value exceeds the column's MaxLength).
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error saving Stage Wise Quality Check List: {inner}", ex);
             }
         }
 
@@ -568,11 +572,16 @@ namespace KalaGenset.ERP.Core.Services
 
                 // `excludeId` is the StageWiseQcid the caller is currently editing.
                 // We must NOT flag that row as its own duplicate, so it's filtered out.
+                // Soft-deleted rows (IsActive = false) and discarded rows
+                // (IsDiscard = true) are not considered duplicates so a fresh save
+                // with the same (PC, Stage, KVA range) can succeed after delete.
                 return await _context.StageWiseQualityCheckLists
                     .AnyAsync(x => x.Pccode == pcCode
                                 && x.StageName == stageName
                                 && x.FromKva == fromKvaDecimal
                                 && x.ToKva == toKvaDecimal
+                                && x.IsActive == true
+                                && x.IsDiscard != true
                                 && (excludeId == null || x.StageWiseQcid != excludeId.Value));
             }
             catch (Exception ex)
@@ -728,7 +737,8 @@ namespace KalaGenset.ERP.Core.Services
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw new Exception("Error updating Stage Wise Quality Check List", ex);
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error updating Stage Wise Quality Check List: {inner}", ex);
             }
         }
 
@@ -737,9 +747,31 @@ namespace KalaGenset.ERP.Core.Services
             var master = await _context.StageWiseQualityCheckLists
                 .FirstOrDefaultAsync(m => m.StageWiseQcid == stageWiseQcid);
             if (master == null) return false;
-            master.IsActive = false;
-            await _context.SaveChangesAsync();
-            return true;
+
+            // Atomic: soft-delete the master row AND hard-delete its details so
+            // a fresh save with the same (PC, Stage, KVA range) doesn't trip the
+            // duplicate guard.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var details = await _context.StageWiseQualityCheckListDetails
+                    .Where(d => d.StageWiseQcid == stageWiseQcid)
+                    .ToListAsync();
+                if (details.Count > 0)
+                    _context.StageWiseQualityCheckListDetails.RemoveRange(details);
+
+                master.IsActive = false;
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error deleting Stage Wise Quality Check List: {inner}", ex);
+            }
         }
 
         /// <summary>

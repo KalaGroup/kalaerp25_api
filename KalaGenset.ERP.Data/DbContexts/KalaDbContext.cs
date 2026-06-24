@@ -4510,8 +4510,10 @@ public partial class KalaDbContext : DbContext
             entity.HasKey(e => e.StageWiseQcdetailId).HasName("PK_StageWiseQualityCheckListDetail");
 
             entity.Property(e => e.StageWiseQcdetailId).HasColumnName("StageWiseQCDetailId");
+            // Bumped to 1000 to accommodate numbered multi-line entries (up to
+            // 4 lines × ~200 chars each + "1. ", "2. ", "\n" separators).
             entity.Property(e => e.Observation)
-                .HasMaxLength(200)
+                .HasMaxLength(1000)
                 .IsUnicode(false);
             entity.Property(e => e.OkNok)
                 .HasMaxLength(3)
@@ -4519,10 +4521,10 @@ public partial class KalaDbContext : DbContext
                 .IsFixedLength()
                 .HasColumnName("OK-NOK");
             entity.Property(e => e.QualityProcessCheckpoint)
-                .HasMaxLength(200)
+                .HasMaxLength(1000)
                 .IsUnicode(false);
             entity.Property(e => e.Specification)
-                .HasMaxLength(200)
+                .HasMaxLength(1000)
                 .IsUnicode(false);
             entity.Property(e => e.StageWiseQcid).HasColumnName("StageWiseQCId");
             entity.Property(e => e.SubAssemblyPart)
