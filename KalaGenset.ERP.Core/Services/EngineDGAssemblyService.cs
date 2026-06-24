@@ -3328,7 +3328,7 @@ ORDER BY SrNo";
                         List<InternalTOCResult> dsKanBan = new List<InternalTOCResult>();
 
                         string strKanBan = "";
-                        dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode_Old);
+                        dsKanBan = await GetInternalTOCResults(dgStageScanReq.PCCode_Act);
 
                         if (dsKanBan.Count > 0)
                         {
@@ -3356,15 +3356,15 @@ ORDER BY SrNo";
                                 toprofitCenterCode = "28.020";
                             }
 
-                            GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode_Old.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
+                            GetMaxValue = await GetMaxNo("REQ", dgStageScanReq.PCCode_Act.Trim().Substring(0, 2), query1, "MaterialRequisitionWithOutPlan");
                             strKanBan = GetMaxValue;
                             string? yearEnds = _context.YearEnds
                                         .Select(y => (y.StartDate.Year % 100).ToString("00") + "-" + (y.EndDate.Year % 100).ToString("00"))
                                         .FirstOrDefault();
-                            string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, @ToProfitCenterCode, @ProfitCenterCode_Act, @ToProfitCenterCode_Act, ClassCode, CompanyCode, ActNo, 
-                                         REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode, PCCode_Act) 
+                            string query = @"INSERT INTO MaterialRequisitionWithOutPlan(REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, ToProfitCenterCode, ProfitCenterCode_Act, ToProfitCenterCode_Act, ClassCode, CompanyCode, ActNo, 
+                                         REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode) 
                                          VALUES (@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ProfitCenterCode_Old, @ClassCode, @CompanyCode, 
-                                         @ActNo, @REQStatus, @ReqType, @Remark, @Discard, @Active, @Auth, @SourceCode, @PCCode_Act)";
+                                         @ActNo, @REQStatus, @ReqType, @Remark, @Discard, @Active, @Auth, @SourceCode)";
 
                             await _context.Database.ExecuteSqlRawAsync(query,
                                 new SqlParameter("@REQCode", strKanBan.Trim()),
