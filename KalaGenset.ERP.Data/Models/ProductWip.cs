@@ -26,4 +26,8 @@ public partial class ProductWip
     public double ReceivedQty { get; set; }
 
     public int StockType { get; set; }
+
+    public string? FromProfitCenterCodeAct { get; set; }
+
+    public string? ToProfitCenterCodeAct { get; set; }
 }

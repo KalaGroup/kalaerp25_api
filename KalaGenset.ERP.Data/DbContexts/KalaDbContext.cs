@@ -4165,6 +4165,10 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.FromPccode)
                 .HasMaxLength(50)
                 .HasColumnName("FromPCCode");
+            entity.Property(e => e.FromProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("FromProfitCenterCode_Act");
             entity.Property(e => e.Id)
                 .ValueGeneratedOnAdd()
                 .HasColumnName("id");
@@ -4180,6 +4184,10 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.ToPccode)
                 .HasMaxLength(50)
                 .HasColumnName("ToPCCode");
+            entity.Property(e => e.ToProfitCenterCodeAct)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ToProfitCenterCode_Act");
         });
 
         modelBuilder.Entity<ProfitCenter>(entity =>
