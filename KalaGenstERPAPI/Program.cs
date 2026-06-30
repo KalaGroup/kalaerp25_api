@@ -141,6 +141,9 @@ builder.Services.AddScoped<ICanopy, CanopyService>();
 builder.Services.AddScoped<ICanopyAssembly, CanopyAssemblyServices>();
 builder.Services.AddScoped<IJobcard, JobcardService>();
 builder.Services.AddScoped<I_invoiceScan, InvoiceScanService>();
+builder.Services.AddScoped<IMachineDownTime, MachineDownTimeService>();
+builder.Services.AddScoped<IManpowerStatus, ManpowerStatusService>();
+builder.Services.AddScoped<IMaterial, MaterialService>();
 
 // ✅ CORS Policy
 builder.Services.AddCors(options =>
