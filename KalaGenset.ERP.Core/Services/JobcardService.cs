@@ -614,7 +614,7 @@ namespace KalaGenset.ERP.Core.Services
                     //   - profitCenter maps  : derived from the actual profit center (pcCode_Act)
                     // ============================================================================
                     int intMaxReq = await _context.GetMaxCodes
-                        .Where(g => g.TblName == "MaterialRequisitionWithOutPlan"
+                        .Where(g => g.TblName == "MaterialRequisitionWithOutPlan "
                                  && g.CompCode == compCode
                                  && g.Prefix == "REQ"
                                  && g.Yr == yr)
