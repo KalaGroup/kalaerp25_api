@@ -26,9 +26,13 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<string> CreateKaizenSheet(CreateKaizenSheetRequest request);
         Task<List<KaizenSheetListResponse>> GetAllKaizenSheets();
         Task<List<KaizenSheetFullResponse>> GetAllKaizenSheetsFull();
+        Task<List<KaizenSheetFullResponse>> GetKaizenSheetsForHod(string empCode);
+        Task<List<KaizenSheetFullResponse>> GetKaizenSheetsByEmpCode(string empCode);
         Task<bool> DeleteKaizenSheet(int id);
         Task<string> UpdateKaizenSheet(int id, CreateKaizenSheetRequest request);
-        public Task<bool> AuthorizeKaizenSheet(int id);
+        public Task<bool> AuthorizeKaizenSheet(int id, string? performedBy, string? performedByCode);
+        Task<bool> SendBackKaizenSheet(int id, string? remark, string? performedBy, string? performedByCode);
+        Task<List<KaizenHistoryResponse>> GetKaizenHistory(int kaizenSheetMasterId);
 
         // ── DG Quality Master form endpoints (moved from IDgStageChecker) ─────
         Task<List<PartKvaDto>> GetActivePartKvaListAsync();

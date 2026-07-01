@@ -96,4 +96,10 @@ public partial class KaizenSheetMaster
     public bool IsDiscard { get; set; }
 
     public bool IsAuth { get; set; }
+
+    public bool IsSentBack { get; set; }
+
+    public string? AuthRemark { get; set; }
+
+    public string? EmpCode { get; set; }
 }

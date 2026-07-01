@@ -131,7 +131,7 @@ namespace KalaGenset.ERP.Core.Services
                     }
 
                     await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();                   
+                    await transaction.CommitAsync();
                 }
                 catch
                 {
@@ -251,6 +251,7 @@ namespace KalaGenset.ERP.Core.Services
 
                     // Data Submitted
                     DataSubmittedBy = request.DataSubmittedBy,
+                    EmpCode = request.EmpCode,
                     DataSubmittedOn = string.IsNullOrEmpty(request.DataSubmittedOn)
                         ? null
                         : DateOnly.Parse(request.DataSubmittedOn),
@@ -263,6 +264,10 @@ namespace KalaGenset.ERP.Core.Services
 
                 _context.KaizenSheetMasters.Add(entity);
                 await _context.SaveChangesAsync();
+
+                // history: sheet created
+                await AddKaizenHistoryAsync(entity.Id, entity.KaizenSheetNo, "Created", null,
+                    request.DataSubmittedBy, request.EmpCode);
 
                 // ✅ return generated sheet number
                 return kaizenSheetNo;
@@ -339,59 +344,95 @@ namespace KalaGenset.ERP.Core.Services
 
         public async Task<List<KaizenSheetFullResponse>> GetAllKaizenSheetsFull()
         {
-            return await _context.KaizenSheetMasters
+            var list = await _context.KaizenSheetMasters
                 .Where(k => k.IsActive && !k.IsDiscard)
                 .OrderByDescending(k => k.Id)
-                .Select(k => new KaizenSheetFullResponse
-                {
-                    Id = k.Id,
-                    KaizenSheetNo = k.KaizenSheetNo,
-                    DivisionId = k.DivisionId,
-                    DivisionName = k.DivisionName,
-                    DepartmentCode = k.DepartmentCode,
-                    DepartmentName = k.DepartmentName,
-                    WorkstationCode = k.WorkstationCode,
-                    WorkstationName = k.WorkstationName,
-                    KaizenTheme = k.KaizenTheme,
-                    KaizenInitiationDate = k.KaizenInitiationDate.ToString("yyyy-MM-dd"),
-                    CompletionDate = k.CompletionDate.HasValue ? k.CompletionDate.Value.ToString("yyyy-MM-dd") : null,
-                    ProblemWhat = k.ProblemWhat,
-                    ProblemWhen = k.ProblemWhen,
-                    ProblemWhere = k.ProblemWhere,
-                    ProblemWho = k.ProblemWho,
-                    ProblemWhy = k.ProblemWhy,
-                    ProblemHow = k.ProblemHow,
-                    ProblemHowMuch = k.ProblemHowMuch,
-                    BeforePhotoPath = k.BeforePhotoPath,
-                    BeforePhotoName = k.BeforePhotoName,
-                    AfterPhotoPath = k.AfterPhotoPath,
-                    AfterPhotoName = k.AfterPhotoName,
-                    RcaWhy1 = k.RcaWhy1,
-                    RcaWhy2 = k.RcaWhy2,
-                    RcaWhy3 = k.RcaWhy3,
-                    RcaWhy4 = k.RcaWhy4,
-                    RcaWhy5 = k.RcaWhy5,
-                    Idea = k.Idea,
-                    IdeaRemark = k.IdeaRemark,
-                    CountermeasureRemark = k.CountermeasureRemark,
-                    Result = k.Result,
-                    Improvement = k.Improvement,
-                    Benefit = k.Benefit,
-                    InvestmentArea = k.InvestmentArea,
-                    SavingArea = k.SavingArea,
-                    HorizontalDeployment = k.HorizontalDeployment,
-                    ImpactGraphPath = k.ImpactGraphPath,
-                    ImpactGraphName = k.ImpactGraphName,
-                    SustenanceWhatToDo = k.SustenanceWhatToDo,
-                    SustenanceHowToDo = k.SustenanceHowToDo,
-                    SustenanceFrequency = k.SustenanceFrequency,
-                    DataSubmittedBy = k.DataSubmittedBy,
-                    DataSubmittedOn = k.DataSubmittedOn.HasValue ? k.DataSubmittedOn.Value.ToString("yyyy-MM-dd") : null,
-                    IsActive = k.IsActive,
-                    IsDiscard = k.IsDiscard,
-                    IsAuth = k.IsAuth
-                })
                 .ToListAsync();
+
+            return list.Select(MapKaizenFull).ToList();
+        }
+
+        // HOD view: only Kaizen sheets whose submitter (EmpCode) directly reports to THIS
+        // HOD (looked up from their own empCode inside the SP) plus the HOD's own sheets.
+        public async Task<List<KaizenSheetFullResponse>> GetKaizenSheetsForHod(string empCode)
+        {
+            var param = new SqlParameter("@EmpCode", (object?)empCode ?? DBNull.Value);
+
+            var list = await _context.KaizenSheetMasters
+                .FromSqlRaw("EXEC dbo.GetKaizenSheetsForHod @EmpCode", param)
+                .ToListAsync();
+
+            return list.Select(MapKaizenFull).ToList();
+        }
+
+        // Normal employee view: only the Kaizen sheets they submitted (EmpCode = their code).
+        public async Task<List<KaizenSheetFullResponse>> GetKaizenSheetsByEmpCode(string empCode)
+        {
+            var code = (empCode ?? string.Empty).Trim();
+
+            var list = await _context.KaizenSheetMasters
+                .Where(k => k.IsActive && !k.IsDiscard && k.EmpCode == code)
+                .OrderByDescending(k => k.Id)
+                .ToListAsync();
+
+            return list.Select(MapKaizenFull).ToList();
+        }
+
+        // Shared entity -> DTO mapper for Kaizen sheet rows.
+        private static KaizenSheetFullResponse MapKaizenFull(KaizenSheetMaster k)
+        {
+            return new KaizenSheetFullResponse
+            {
+                Id = k.Id,
+                KaizenSheetNo = k.KaizenSheetNo,
+                DivisionId = k.DivisionId,
+                DivisionName = k.DivisionName,
+                DepartmentCode = k.DepartmentCode,
+                DepartmentName = k.DepartmentName,
+                WorkstationCode = k.WorkstationCode,
+                WorkstationName = k.WorkstationName,
+                KaizenTheme = k.KaizenTheme,
+                KaizenInitiationDate = k.KaizenInitiationDate.ToString("yyyy-MM-dd"),
+                CompletionDate = k.CompletionDate.HasValue ? k.CompletionDate.Value.ToString("yyyy-MM-dd") : null,
+                ProblemWhat = k.ProblemWhat,
+                ProblemWhen = k.ProblemWhen,
+                ProblemWhere = k.ProblemWhere,
+                ProblemWho = k.ProblemWho,
+                ProblemWhy = k.ProblemWhy,
+                ProblemHow = k.ProblemHow,
+                ProblemHowMuch = k.ProblemHowMuch,
+                BeforePhotoPath = k.BeforePhotoPath,
+                BeforePhotoName = k.BeforePhotoName,
+                AfterPhotoPath = k.AfterPhotoPath,
+                AfterPhotoName = k.AfterPhotoName,
+                RcaWhy1 = k.RcaWhy1,
+                RcaWhy2 = k.RcaWhy2,
+                RcaWhy3 = k.RcaWhy3,
+                RcaWhy4 = k.RcaWhy4,
+                RcaWhy5 = k.RcaWhy5,
+                Idea = k.Idea,
+                IdeaRemark = k.IdeaRemark,
+                CountermeasureRemark = k.CountermeasureRemark,
+                Result = k.Result,
+                Improvement = k.Improvement,
+                Benefit = k.Benefit,
+                InvestmentArea = k.InvestmentArea,
+                SavingArea = k.SavingArea,
+                HorizontalDeployment = k.HorizontalDeployment,
+                ImpactGraphPath = k.ImpactGraphPath,
+                ImpactGraphName = k.ImpactGraphName,
+                SustenanceWhatToDo = k.SustenanceWhatToDo,
+                SustenanceHowToDo = k.SustenanceHowToDo,
+                SustenanceFrequency = k.SustenanceFrequency,
+                DataSubmittedBy = k.DataSubmittedBy,
+                EmpCode = k.EmpCode,
+                DataSubmittedOn = k.DataSubmittedOn.HasValue ? k.DataSubmittedOn.Value.ToString("yyyy-MM-dd") : null,
+                IsActive = k.IsActive,
+                IsDiscard = k.IsDiscard,
+                IsAuth = k.IsAuth,
+                IsSentBack = k.IsSentBack,
+                AuthRemark = k.AuthRemark
+            };
         }
 
         public async Task<bool> DeleteKaizenSheet(int id)
@@ -476,15 +517,28 @@ namespace KalaGenset.ERP.Core.Services
 
             // Submitted
             entity.DataSubmittedBy = request.DataSubmittedBy;
+            entity.EmpCode = request.EmpCode;
             entity.DataSubmittedOn = string.IsNullOrEmpty(request.DataSubmittedOn)
                 ? null : DateOnly.Parse(request.DataSubmittedOn);
 
+            // Resubmitting a sent-back sheet returns it to Pending for re-review
+            bool wasSentBack = entity.IsSentBack;
+            entity.IsSentBack = false;
+            entity.AuthRemark = null;
+
             await _context.SaveChangesAsync();
+
+            // history: only log as a resubmission if it was previously sent back
+            if (wasSentBack)
+            {
+                await AddKaizenHistoryAsync(entity.Id, entity.KaizenSheetNo, "Resubmitted", null,
+                    request.DataSubmittedBy, request.EmpCode);
+            }
 
             return "Kaizen sheet updated successfully";
         }
 
-        public async Task<bool> AuthorizeKaizenSheet(int id)
+        public async Task<bool> AuthorizeKaizenSheet(int id, string? performedBy, string? performedByCode)
         {
             var entity = await _context.KaizenSheetMasters
                 .FirstOrDefaultAsync(k => k.Id == id && k.IsActive && !k.IsDiscard && !k.IsAuth);
@@ -492,8 +546,73 @@ namespace KalaGenset.ERP.Core.Services
             if (entity == null) return false;
 
             entity.IsAuth = true;
+            entity.IsSentBack = false;
+            entity.AuthRemark = null;
             await _context.SaveChangesAsync();
+
+            // history: authorized
+            await AddKaizenHistoryAsync(entity.Id, entity.KaizenSheetNo, "Authorized", null,
+                performedBy, performedByCode);
             return true;
+        }
+
+        // HOD returns a Kaizen sheet to the submitter for rework, with a reason.
+        // The sheet stays un-authorized and is flagged as "Sent Back" until the
+        // maker edits and resubmits it (which clears the flag back to Pending).
+        // Every send-back is recorded in KaizenSheetHistory, so multiple rounds are kept.
+        public async Task<bool> SendBackKaizenSheet(int id, string? remark, string? performedBy, string? performedByCode)
+        {
+            var entity = await _context.KaizenSheetMasters
+                .FirstOrDefaultAsync(k => k.Id == id && k.IsActive && !k.IsDiscard && !k.IsAuth);
+
+            if (entity == null) return false;
+
+            entity.IsSentBack = true;
+            entity.IsAuth = false;
+            entity.AuthRemark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim();
+            await _context.SaveChangesAsync();
+
+            // history: sent back (one row per round)
+            await AddKaizenHistoryAsync(entity.Id, entity.KaizenSheetNo, "SentBack", remark,
+                performedBy, performedByCode);
+            return true;
+        }
+
+        // Inserts a single audit row for a Kaizen sheet action.
+        private async Task AddKaizenHistoryAsync(int masterId, string? sheetNo, string action,
+            string? remark, string? actionBy, string? actionByCode)
+        {
+            _context.KaizenSheetHistories.Add(new KaizenSheetHistory
+            {
+                KaizenSheetMasterId = masterId,
+                KaizenSheetNo = sheetNo,
+                Action = action,
+                Remark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim(),
+                ActionBy = string.IsNullOrWhiteSpace(actionBy) ? null : actionBy.Trim(),
+                ActionByCode = string.IsNullOrWhiteSpace(actionByCode) ? null : actionByCode.Trim(),
+                ActionOn = DateTime.Now
+            });
+            await _context.SaveChangesAsync();
+        }
+
+        // Full timeline for one Kaizen sheet, oldest first.
+        public async Task<List<KaizenHistoryResponse>> GetKaizenHistory(int kaizenSheetMasterId)
+        {
+            return await _context.KaizenSheetHistories
+                .Where(h => h.KaizenSheetMasterId == kaizenSheetMasterId)
+                .OrderBy(h => h.Id)
+                .Select(h => new KaizenHistoryResponse
+                {
+                    Id = h.Id,
+                    KaizenSheetMasterId = h.KaizenSheetMasterId,
+                    KaizenSheetNo = h.KaizenSheetNo,
+                    Action = h.Action,
+                    Remark = h.Remark,
+                    ActionBy = h.ActionBy,
+                    ActionByCode = h.ActionByCode,
+                    ActionOn = h.ActionOn.ToString("yyyy-MM-dd HH:mm")
+                })
+                .ToListAsync();
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -537,13 +656,13 @@ namespace KalaGenset.ERP.Core.Services
                 var details = request.checkpointItems.Select(item =>
                     new StageWiseQualityCheckListDetail
                     {
-                        StageWiseQcid            = stageWiseQCId,
-                        SrNo                     = item.srNo,
-                        SubAssemblyPart          = item.subAssemblyPart,
+                        StageWiseQcid = stageWiseQCId,
+                        SrNo = item.srNo,
+                        SubAssemblyPart = item.subAssemblyPart,
                         QualityProcessCheckpoint = item.qualityProcessCheckpoint,
-                        Specification            = NumberSpecificationLines(item.specification),
-                        Observation              = NumberObservationLines(item.observation),
-                        OkNok                    = item.ok_nok
+                        Specification = NumberSpecificationLines(item.specification),
+                        Observation = NumberObservationLines(item.observation),
+                        OkNok = item.ok_nok
                     }).ToList();
 
                 _context.StageWiseQualityCheckListDetails.AddRange(details);
@@ -624,36 +743,36 @@ namespace KalaGenset.ERP.Core.Services
                                   .OrderBy(d => d.SrNo)
                                   .Select(d => new QualityCheckListItemDto
                                   {
-                                      StageWiseQcdetailId      = d.StageWiseQcdetailId,
-                                      SrNo                     = d.SrNo,
-                                      SubAssemblyPart          = d.SubAssemblyPart,
+                                      StageWiseQcdetailId = d.StageWiseQcdetailId,
+                                      SrNo = d.SrNo,
+                                      SubAssemblyPart = d.SubAssemblyPart,
                                       QualityProcessCheckpoint = d.QualityProcessCheckpoint,
-                                      Specification            = d.Specification,
-                                      Observation              = d.Observation,
-                                      OkNok                    = d.OkNok
+                                      Specification = d.Specification,
+                                      Observation = d.Observation,
+                                      OkNok = d.OkNok
                                   }).ToList()
                     }
                 ).ToListAsync();
 
                 return raw.Select(r => new QualityCheckListReportDto
                 {
-                    StageWiseQcid     = r.StageWiseQcid,
-                    Pccode            = r.Pccode,
-                    PCName            = r.PCName,
-                    StageName         = r.StageName,
-                    FromKva           = r.FromKva,
-                    ToKva             = r.ToKva,
-                    MakerRemark       = r.MakerRemark,
+                    StageWiseQcid = r.StageWiseQcid,
+                    Pccode = r.Pccode,
+                    PCName = r.PCName,
+                    StageName = r.StageName,
+                    FromKva = r.FromKva,
+                    ToKva = r.ToKva,
+                    MakerRemark = r.MakerRemark,
                     CheckerAuthRemark = r.CheckerAuthRemark,
-                    IsActive          = r.IsActive,
-                    IsAuth            = r.IsAuth,
-                    IsDiscard         = r.IsDiscard,
-                    ItemCount         = r.ItemCount,
-                    AuthStatus        = r.IsDiscard ? "Discarded"
+                    IsActive = r.IsActive,
+                    IsAuth = r.IsAuth,
+                    IsDiscard = r.IsDiscard,
+                    ItemCount = r.ItemCount,
+                    AuthStatus = r.IsDiscard ? "Discarded"
                                        : !r.IsActive ? "Inactive"
-                                       : r.IsAuth    ? "Authorized"
+                                       : r.IsAuth ? "Authorized"
                                                      : "Pending",
-                    Items             = r.Items
+                    Items = r.Items
                 }).ToList();
             }
             catch (Exception ex)
@@ -706,24 +825,24 @@ namespace KalaGenset.ERP.Core.Services
                     {
                         var row = existing.FirstOrDefault(d => d.StageWiseQcdetailId == item.stageWiseQcdetailId.Value);
                         if (row == null) continue;
-                        row.SrNo                     = item.srNo;
-                        row.SubAssemblyPart          = item.subAssemblyPart;
+                        row.SrNo = item.srNo;
+                        row.SubAssemblyPart = item.subAssemblyPart;
                         row.QualityProcessCheckpoint = item.qualityProcessCheckpoint;
-                        row.Specification            = NumberSpecificationLines(item.specification);
-                        row.Observation              = NumberObservationLines(item.observation);
-                        row.OkNok                    = item.ok_nok;
+                        row.Specification = NumberSpecificationLines(item.specification);
+                        row.Observation = NumberObservationLines(item.observation);
+                        row.OkNok = item.ok_nok;
                     }
                     else
                     {
                         _context.StageWiseQualityCheckListDetails.Add(new StageWiseQualityCheckListDetail
                         {
-                            StageWiseQcid            = request.stageWiseQcid,
-                            SrNo                     = item.srNo,
-                            SubAssemblyPart          = item.subAssemblyPart,
+                            StageWiseQcid = request.stageWiseQcid,
+                            SrNo = item.srNo,
+                            SubAssemblyPart = item.subAssemblyPart,
                             QualityProcessCheckpoint = item.qualityProcessCheckpoint,
-                            Specification            = NumberSpecificationLines(item.specification),
-                            Observation              = NumberObservationLines(item.observation),
-                            OkNok                    = item.ok_nok
+                            Specification = NumberSpecificationLines(item.specification),
+                            Observation = NumberObservationLines(item.observation),
+                            OkNok = item.ok_nok
                         });
                     }
                 }
@@ -848,4 +967,3 @@ namespace KalaGenset.ERP.Core.Services
         }
     }
 }
- 

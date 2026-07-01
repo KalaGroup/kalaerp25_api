@@ -1,25 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace KalaGenset.ERP.Data.Models
+namespace KalaGenset.ERP.Data.Models;
+
+public partial class LinePcmst
 {
-    public partial class LinePCMst
-    {
-        public string LineWisePC { get; set; }
+    public string LineWisePc { get; set; } = null!;
 
-        public string LineDesc { get; set; }
+    public string LineDesc { get; set; } = null!;
 
-        public string ParentDgPC { get; set; }
+    public string ParentDgPc { get; set; } = null!;
 
-        public int? DivisionId { get; set; }
+    public int? DivisionId { get; set; }
 
-        public string Active { get; set; }
+    public string Active { get; set; } = null!;
 
-        public string CreatedBy { get; set; }
+    public string? CreatedBy { get; set; }
 
-        public DateTime? CreatedOn { get; set; }
-    }
+    public DateTime? CreatedOn { get; set; }
 }

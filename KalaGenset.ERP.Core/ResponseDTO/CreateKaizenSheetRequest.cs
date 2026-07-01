@@ -52,6 +52,7 @@
 
         // Data Submitted
         public string? DataSubmittedBy { get; set; }
+        public string? EmpCode { get; set; }
         public string? DataSubmittedOn { get; set; }     // "yyyy-MM-dd"
 
         // File paths — set by controller after saving files, not sent by UI

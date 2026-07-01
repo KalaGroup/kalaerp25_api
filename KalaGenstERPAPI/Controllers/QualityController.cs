@@ -154,6 +154,39 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(result);
         }
 
+        // GET api/Quality/GetKaizenSheetsForHod?empCode=0211
+        // Returns only sheets from THIS HOD's direct reports (+ the HOD's own sheets).
+        // The HOD's PositionRoleID is resolved from empCode inside the stored procedure.
+        [HttpGet("GetKaizenSheetsForHod")]
+        public async Task<IActionResult> GetKaizenSheetsForHod([FromQuery] string empCode)
+        {
+            try
+            {
+                var result = await _qualityService.GetKaizenSheetsForHod(empCode);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to load Kaizen sheets for HOD.", error = ex.Message });
+            }
+        }
+
+        // GET api/Quality/GetKaizenSheetsByEmpCode?empCode=01230337
+        // Returns only the Kaizen sheets submitted by this employee (their own records).
+        [HttpGet("GetKaizenSheetsByEmpCode")]
+        public async Task<IActionResult> GetKaizenSheetsByEmpCode([FromQuery] string empCode)
+        {
+            try
+            {
+                var result = await _qualityService.GetKaizenSheetsByEmpCode(empCode);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to load Kaizen sheets.", error = ex.Message });
+            }
+        }
+
         [HttpDelete("DeleteKaizenSheet/{id}")]
         public async Task<IActionResult> DeleteKaizenSheet(int id)
         {
@@ -231,12 +264,18 @@ namespace KalaGenset.ERP.API.Controllers
             return File(fileBytes, contentType);
         }
 
+        public class AuthorizeKaizenBody
+        {
+            public string? performedBy { get; set; }
+            public string? performedByCode { get; set; }
+        }
+
         [HttpPut("AuthorizeKaizenSheet/{id}")]
-        public async Task<IActionResult> AuthorizeKaizenSheet(int id)
+        public async Task<IActionResult> AuthorizeKaizenSheet(int id, [FromBody] AuthorizeKaizenBody? body)
         {
             try
             {
-                var result = await _qualityService.AuthorizeKaizenSheet(id);
+                var result = await _qualityService.AuthorizeKaizenSheet(id, body?.performedBy, body?.performedByCode);
                 if (result)
                 {
                     return Ok(new { message = "Kaizen sheet authorized successfully." });
@@ -246,6 +285,48 @@ namespace KalaGenset.ERP.API.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Failed to authorize.", error = ex.Message });
+            }
+        }
+
+        public class SendBackKaizenBody
+        {
+            public string? remark { get; set; }
+            public string? performedBy { get; set; }
+            public string? performedByCode { get; set; }
+        }
+
+        // PUT api/Quality/SendBackKaizenSheet/{id}
+        // Body: { "remark": "reason", "performedBy": "name", "performedByCode": "empCode" }
+        [HttpPut("SendBackKaizenSheet/{id}")]
+        public async Task<IActionResult> SendBackKaizenSheet(int id, [FromBody] SendBackKaizenBody body)
+        {
+            try
+            {
+                var result = await _qualityService.SendBackKaizenSheet(id, body?.remark, body?.performedBy, body?.performedByCode);
+                if (result)
+                {
+                    return Ok(new { message = "Kaizen sheet sent back for rework." });
+                }
+                return NotFound(new { message = "Kaizen sheet not found or already authorized." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to send back.", error = ex.Message });
+            }
+        }
+
+        // GET api/Quality/GetKaizenHistory/{id}   (id = KaizenSheetMaster.Id)
+        [HttpGet("GetKaizenHistory/{id}")]
+        public async Task<IActionResult> GetKaizenHistory(int id)
+        {
+            try
+            {
+                var result = await _qualityService.GetKaizenHistory(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to load history.", error = ex.Message });
             }
         }
 

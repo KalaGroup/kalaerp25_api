@@ -5200,17 +5200,17 @@ ORDER BY SrNo";
         {
             var result = await (
                 from r in _context.PositionLineRights
-                join l in _context.LinePCMsts
-                    on r.LineWisePC equals l.LineWisePC
-                where r.PRMCode == prmCode
+                join l in _context.LinePcmsts
+                    on r.LineWisePc equals l.LineWisePc
+                where r.Prmcode == prmCode
                       && r.Active == "1"
                       && l.Active == "1"
                 orderby l.LineDesc
                 select new LineDto
                 {
-                    LineWisePC = l.LineWisePC,
+                    LineWisePC = l.LineWisePc,
                     LineDesc = l.LineDesc,
-                    ParentDgPC = l.ParentDgPC
+                    ParentDgPC = l.ParentDgPc
                 }
             ).ToListAsync();
 
