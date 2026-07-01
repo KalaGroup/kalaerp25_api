@@ -98,5 +98,65 @@ namespace KalaGenset.ERP.API.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        // ── Canopy Assembly Plan ───────────────────────────────────────
+        [HttpGet("GetCanopyPlanPartOptions")]
+        public async Task<IActionResult> GetCanopyPlanPartOptions(
+            [FromQuery] string? searchText,
+            [FromQuery] string pcCode)
+        {
+            if (string.IsNullOrWhiteSpace(pcCode))
+                return BadRequest("pcCode is required.");
+
+            var rows = await _canopyAssemblyService
+                .GetCanopyPlanPartOptionsAsync(searchText, pcCode.Trim());
+            return Ok(rows ?? new List<CanopyPlanPartOptionDto>());
+        }
+
+        [HttpGet("GetCanopyPlanPartContext")]
+        public async Task<IActionResult> GetCanopyPlanPartContext(
+            [FromQuery] string partCode,
+            [FromQuery] string pcCode)
+        {
+            if (string.IsNullOrWhiteSpace(partCode))
+                return BadRequest("partCode is required.");
+
+            var ctx = await _canopyAssemblyService
+                .GetCanopyPlanPartContextAsync(partCode.Trim(), pcCode?.Trim() ?? string.Empty);
+            return Ok(ctx);
+        }
+
+        [HttpGet("GetCanopyPlanCheckerMakerRows")]
+        public async Task<IActionResult> GetCanopyPlanCheckerMakerRows(
+            [FromQuery] string lineWisePC)
+        {
+            if (string.IsNullOrWhiteSpace(lineWisePC))
+                return BadRequest("lineWisePC is required.");
+
+            var rows = await _canopyAssemblyService
+                .GetCanopyPlanCheckerMakerRowsAsync(lineWisePC.Trim());
+            return Ok(rows ?? new List<CanopyPlanCheckerMakerRowDto>());
+        }
+
+        [HttpPost("SubmitCanopyPlan")]
+        public async Task<IActionResult> SubmitCanopyPlan(
+            [FromBody] SubmitCanopyPlanRequest req)
+        {
+            if (req == null) return BadRequest("Request body is required.");
+
+            try
+            {
+                var resp = await _canopyAssemblyService.SubmitCanopyPlanAsync(req);
+                return Ok(resp);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }

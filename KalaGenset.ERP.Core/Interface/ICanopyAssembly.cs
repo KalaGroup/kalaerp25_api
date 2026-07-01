@@ -31,5 +31,25 @@ namespace KalaGenset.ERP.Core.Interface
         // Save → master + details + WIP + serials + (optional) Kanban
         Task<FlatPackSubmitResponse> SubmitFlatPackProcessAsync(
             FlatPackSubmitRequest req);
+
+        // ── Canopy Assembly Plan (manual planning) ──────────────────
+        // Lazy-loaded canopy part dropdown (BOMDetails kit family '40%')
+        Task<List<CanopyPlanPartOptionDto>> GetCanopyPlanPartOptionsAsync(
+            string? searchText,
+            string pcCode);
+
+        // After a part is picked — derives BomCode + stock + pending qty
+        Task<CanopyPlanPartContextDto> GetCanopyPlanPartContextAsync(
+            string partCode,
+            string pcCode);
+
+        // Save plan → master CanopyPlan + N CanopyPlanDetails + 2 auto-REQs per row
+        Task<SubmitCanopyPlanResponse> SubmitCanopyPlanAsync(
+            SubmitCanopyPlanRequest req);
+
+        // SP getcpyplandts_checker_maker — returns all candidate canopy parts
+        // for the selected line (with per-PC KVA tier + stock + pending baked in).
+        Task<List<CanopyPlanCheckerMakerRowDto>> GetCanopyPlanCheckerMakerRowsAsync(
+            string lineWisePC);
     }
 }
