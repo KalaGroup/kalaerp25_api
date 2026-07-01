@@ -70,11 +70,16 @@ namespace KalaGenset.ERP.Core.ResponseDTO
 
         // Submitted
         public string? DataSubmittedBy { get; set; }
+        public string? EmpCode { get; set; }
         public string? DataSubmittedOn { get; set; }
 
         // Audit
         public bool IsActive { get; set; }
         public bool IsDiscard { get; set; }
         public bool IsAuth { get; set; }
+
+        // Send-back-for-rework
+        public bool IsSentBack { get; set; }
+        public string? AuthRemark { get; set; }
     }
 }

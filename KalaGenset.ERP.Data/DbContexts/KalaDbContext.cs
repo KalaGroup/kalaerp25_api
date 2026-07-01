@@ -68,9 +68,11 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<Jobcard2DetailsSub> Jobcard2DetailsSubs { get; set; }
 
+    public virtual DbSet<KaizenSheetHistory> KaizenSheetHistories { get; set; }
+
     public virtual DbSet<KaizenSheetMaster> KaizenSheetMasters { get; set; }
 
-    public virtual DbSet<LinePCMst> LinePCMsts { get; set; }
+    public virtual DbSet<LinePcmst> LinePcmsts { get; set; }
 
     public virtual DbSet<LoginMst> LoginMsts { get; set; }
 
@@ -2534,6 +2536,30 @@ public partial class KalaDbContext : DbContext
                 .HasColumnName("TRStatus");
         });
 
+        modelBuilder.Entity<KaizenSheetHistory>(entity =>
+        {
+            entity.ToTable("KaizenSheetHistory");
+
+            entity.HasIndex(e => e.KaizenSheetMasterId, "IX_KaizenSheetHistory_MasterId");
+
+            entity.Property(e => e.Action)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.ActionBy).HasMaxLength(200);
+            entity.Property(e => e.ActionByCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.ActionOn)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.KaizenSheetNo)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.Remark)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+        });
+
         modelBuilder.Entity<KaizenSheetMaster>(entity =>
         {
             entity.ToTable("KaizenSheetMaster");
@@ -2542,6 +2568,9 @@ public partial class KalaDbContext : DbContext
 
             entity.Property(e => e.AfterPhotoName).HasMaxLength(255);
             entity.Property(e => e.AfterPhotoPath).HasMaxLength(500);
+            entity.Property(e => e.AuthRemark)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.BeforePhotoName).HasMaxLength(255);
             entity.Property(e => e.BeforePhotoPath).HasMaxLength(500);
             entity.Property(e => e.Benefit)
@@ -2554,6 +2583,9 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.DepartmentName).HasMaxLength(200);
             entity.Property(e => e.DivisionName).HasMaxLength(200);
+            entity.Property(e => e.EmpCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.HorizontalDeployment).HasMaxLength(1000);
             entity.Property(e => e.Idea)
                 .HasMaxLength(20)
@@ -2597,34 +2629,34 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.WorkstationName).HasMaxLength(200);
         });
 
-        modelBuilder.Entity<LinePCMst>(entity =>
+        modelBuilder.Entity<LinePcmst>(entity =>
         {
-            entity.HasKey(e => e.LineWisePC);
+            entity.HasKey(e => e.LineWisePc);
 
             entity.ToTable("LinePCMst");
 
-            entity.Property(e => e.LineWisePC)
-                .HasMaxLength(10);
-
-            entity.Property(e => e.LineDesc)
-                .HasMaxLength(100)
-                .IsRequired();
-
-            entity.Property(e => e.ParentDgPC)
+            entity.Property(e => e.LineWisePc)
                 .HasMaxLength(10)
-                .IsRequired();
-
+                .IsUnicode(false)
+                .HasColumnName("LineWisePC");
             entity.Property(e => e.Active)
                 .HasMaxLength(1)
-                .IsFixedLength()
-                .HasDefaultValue("1");
-
+                .IsUnicode(false)
+                .HasDefaultValue("1")
+                .IsFixedLength();
             entity.Property(e => e.CreatedBy)
-                .HasMaxLength(20);
-
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.CreatedOn)
-                .HasColumnType("datetime")
-                .HasDefaultValueSql("(getdate())");
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.LineDesc)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.ParentDgPc)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasColumnName("ParentDgPC");
         });
 
         modelBuilder.Entity<LoginMst>(entity =>
@@ -3702,33 +3734,32 @@ public partial class KalaDbContext : DbContext
 
         modelBuilder.Entity<PositionLineRight>(entity =>
         {
-            entity.HasKey(e => e.PLRId);
+            entity.HasKey(e => e.Plrid);
 
             entity.ToTable("Position_Line_Rights");
 
-            entity.HasIndex(e => new { e.PRMCode, e.LineWisePC })
-                .IsUnique()
-                .HasDatabaseName("UQ_PLR");
+            entity.HasIndex(e => new { e.Prmcode, e.LineWisePc }, "UQ_PLR").IsUnique();
 
-            entity.Property(e => e.PRMCode)
-                .HasMaxLength(30)
-                .IsRequired();
-
-            entity.Property(e => e.LineWisePC)
-                .HasMaxLength(10)
-                .IsRequired();
-
+            entity.Property(e => e.Plrid).HasColumnName("PLRId");
             entity.Property(e => e.Active)
                 .HasMaxLength(1)
-                .IsFixedLength()
-                .HasDefaultValue("1");
-
+                .IsUnicode(false)
+                .HasDefaultValue("1")
+                .IsFixedLength();
             entity.Property(e => e.CreatedBy)
-                .HasMaxLength(20);
-
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.CreatedOn)
-                .HasColumnType("datetime")
-                .HasDefaultValueSql("(getdate())");
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.LineWisePc)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasColumnName("LineWisePC");
+            entity.Property(e => e.Prmcode)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasColumnName("PRMCode");
         });
 
         modelBuilder.Entity<PrcChkDetail>(entity =>
@@ -4518,10 +4549,8 @@ public partial class KalaDbContext : DbContext
             entity.HasKey(e => e.StageWiseQcdetailId).HasName("PK_StageWiseQualityCheckListDetail");
 
             entity.Property(e => e.StageWiseQcdetailId).HasColumnName("StageWiseQCDetailId");
-            // Bumped to 1000 to accommodate numbered multi-line entries (up to
-            // 4 lines × ~200 chars each + "1. ", "2. ", "\n" separators).
             entity.Property(e => e.Observation)
-                .HasMaxLength(1000)
+                .HasMaxLength(200)
                 .IsUnicode(false);
             entity.Property(e => e.OkNok)
                 .HasMaxLength(3)
@@ -4529,10 +4558,10 @@ public partial class KalaDbContext : DbContext
                 .IsFixedLength()
                 .HasColumnName("OK-NOK");
             entity.Property(e => e.QualityProcessCheckpoint)
-                .HasMaxLength(1000)
+                .HasMaxLength(200)
                 .IsUnicode(false);
             entity.Property(e => e.Specification)
-                .HasMaxLength(1000)
+                .HasMaxLength(200)
                 .IsUnicode(false);
             entity.Property(e => e.StageWiseQcid).HasColumnName("StageWiseQCId");
             entity.Property(e => e.SubAssemblyPart)
