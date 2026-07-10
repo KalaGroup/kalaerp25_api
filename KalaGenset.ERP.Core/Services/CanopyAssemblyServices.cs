@@ -690,7 +690,7 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
             SqlConnection conn, SqlTransaction tx, string pcCode)
         {
             var results = new List<InternalTOCResult>();
-            using var cmd = new SqlCommand("InternalTOCReq", conn, tx);
+            using var cmd = new SqlCommand("InternalTOCReq_CPY_Checker_Maker", conn, tx);
             cmd.CommandType = CommandType.StoredProcedure;
             cmd.Parameters.Add("@PCCode", SqlDbType.NVarChar, 10).Value = pcCode.Trim();
 
@@ -1344,6 +1344,1875 @@ FROM (
             public string SerialNo { get; set; } = string.Empty;
             public string BFMSrNo  { get; set; } = string.Empty;
             public string FLKSrNo  { get; set; } = string.Empty;
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Canopy Assembly Process (operator-side) — line-rights aware
+        // ════════════════════════════════════════════════════════════════
+
+        // Kit-Below-Standard-Rate spare warehouse (unchanged from legacy).
+        private const string BelowRateStockPC = "01.007";
+
+        // Temp folder base (per-employee) — matches legacy `TempPrcCpy` layout.
+        // Kept as constants to avoid a config dependency; move to appsettings
+        // if/when the deployment target changes.
+        private const string CanopyProcessTempBase      = @"C:\TempERPFile\TempPrcCpy";
+        private const string CanopyProcessPermanentBase = @"C:\ERPFiles\TempPrcCpy";
+
+        // ── 1) Canopy Type dropdown ─────────────────────────────────────
+        // Legacy LoadMachine SP for canopy PCs returns 2 hardcoded rows
+        // (Foam / RockWool). We return the same shape here to avoid coupling
+        // to a per-PC SP branch that doesn't exist for LineWisePC values.
+        public Task<List<CanopyProcessMachineDto>> GetCanopyProcessMachineListAsync(string pcCode)
+        {
+            var rows = new List<CanopyProcessMachineDto>
+            {
+                new() { AMCode = "1", Part = "Foam",     PartCode = "Foam-->Foam1"     },
+                new() { AMCode = "2", Part = "RockWool", PartCode = "RockWool-->RockWool1" },
+            };
+            return Task.FromResult(rows);
+        }
+
+        // ── 2) KVA list ─────────────────────────────────────────────────
+        // Sourced from CanopyPlanDetails + CanopyPlan + Part (the plan-driven
+        // master), NOT ProcessFeedback — the Plan submit populates the former
+        // and never sets MachineCode='Foam'/SerialNo='Foam1' on the latter, so
+        // filtering PF by MachineCode/SerialNo returned zero rows every time.
+        // The `machineCode` parameter is accepted for wire compatibility with
+        // the Angular caller but intentionally not used in the query (the
+        // Canopy Type is Foam-vs-RockWool: v1 treats it as display metadata
+        // since CanopyPlanDetails doesn't record insulation type yet).
+        public async Task<List<CanopyProcessKvaDto>> GetCanopyProcessKvaListAsync(
+            string machineCode, string pcCode)
+        {
+            _ = machineCode;   // reserved for future canopy-type filter
+            var rows = new List<CanopyProcessKvaDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            const string sql = @"
+SELECT   P.KVA, P.KVA AS KVA1
+FROM     CanopyPlanDetails d  WITH (NOLOCK)
+INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
+INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
+WHERE    cp.PlanPCCode = @PCCode
+  AND    ISNULL(cp.Active, '1')       = '1'
+  AND    ISNULL(cp.PlanStatus, 'P')   = 'P'
+  AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
+  AND    (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
+  AND    P.KVA IS NOT NULL
+  AND    LTRIM(RTRIM(P.KVA)) <> ''
+GROUP BY P.KVA
+ORDER BY TRY_CAST(P.KVA AS decimal(10,2));";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PCCode", SqlDbType.NVarChar, 20).Value = pc;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessKvaDto
+                {
+                    KVA  = SafeStr(reader, "KVA"),
+                    KVA1 = SafeStr(reader, "KVA1"),
+                });
+            }
+            return rows;
+        }
+
+        // ── 3) Model list ───────────────────────────────────────────────
+        // Same source table as KVA — CanopyPlanDetails + CanopyPlan + Part.
+        // Cascades from the KVA the operator just picked.
+        public async Task<List<CanopyProcessModelDto>> GetCanopyProcessModelListAsync(
+            string machineCode, string kva, string pcCode)
+        {
+            _ = machineCode;   // reserved
+            var rows = new List<CanopyProcessModelDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            var kv = (kva ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc) || string.IsNullOrEmpty(kv)) return rows;
+
+            const string sql = @"
+SELECT   P.Model, P.Model AS Model1
+FROM     CanopyPlanDetails d  WITH (NOLOCK)
+INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
+INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
+WHERE    cp.PlanPCCode = @PCCode
+  AND    ISNULL(cp.Active, '1')     = '1'
+  AND    ISNULL(cp.PlanStatus, 'P') = 'P'
+  AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
+  AND    (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
+  AND    P.KVA   = @KVA
+  AND    P.Model IS NOT NULL
+  AND    LTRIM(RTRIM(P.Model)) <> ''
+GROUP BY P.Model
+ORDER BY P.Model;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PCCode", SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@KVA",    SqlDbType.NVarChar, 20).Value = kv;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessModelDto
+                {
+                    Model  = SafeStr(reader, "Model"),
+                    Model1 = SafeStr(reader, "Model1"),
+                });
+            }
+            return rows;
+        }
+
+        // ── 4) Plan context (top-1 plan row for the picked KVA + Model) ─
+        // Sourced from CanopyPlanDetails + CanopyPlan + Part. LEFT JOIN to
+        // ProcessFeedback surfaces an already-open PSH record if one exists
+        // (→ End mode); otherwise we synthesise a "NEW/{yr}/{seq}" placeholder
+        // from the CPCode so the Save-path's prefix check routes to the NEW
+        // (Start) branch and creates a fresh PSH record on submit.
+        public async Task<CanopyProcessPlanContextDto?> GetCanopyProcessPlanContextAsync(
+            string machineCode, string kva, string model, string pcCode)
+        {
+            _ = machineCode;   // reserved
+            var pc = (pcCode ?? string.Empty).Trim();
+            var kv = (kva ?? string.Empty).Trim();
+            var md = (model ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc) || string.IsNullOrEmpty(kv) || string.IsNullOrEmpty(md))
+                return null;
+
+            const string sql = @"
+SELECT TOP 1
+       CONVERT(VARCHAR(10), P.KVA) + '-->' + P.Model                   AS KVAMod,
+       P.KVA                                                            AS KVA,
+       P.Model                                                          AS Model,
+       cp.CPCode                                                        AS CPCode,
+       CONVERT(VARCHAR(19), cp.Dt, 120)                                 AS Dt,
+       d.Partcode                                                       AS Partcode,
+       P.PartDesc + '-->' + d.Partcode                                  AS Part,
+       ISNULL(d.Qty, 0)                                                 AS CPQty,
+       (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0))                      AS PlanQtyBal,
+       (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0))                      AS PrcQty,
+       COALESCE(
+           pf.PFBCode,
+           'NEW/' + SUBSTRING(cp.CPCode, 5, LEN(cp.CPCode))
+       )                                                                AS PFBCode,
+       CONVERT(VARCHAR(19), pf.EDt, 120)                                AS EDt,
+       d.BomCode                                                        AS BOMCode,
+       ''                                                               AS SCode
+FROM   CanopyPlanDetails d  WITH (NOLOCK)
+INNER  JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
+INNER  JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
+LEFT   JOIN ProcessFeedback pf WITH (NOLOCK)
+       ON  pf.CanopyPlanCode = cp.CPCode
+       AND pf.ProductCode    = d.Partcode
+       AND pf.EDt IS NULL
+       AND pf.PFBCode LIKE 'PSH/%'
+WHERE  cp.PlanPCCode = @PCCode
+   AND ISNULL(cp.Active, '1')     = '1'
+   AND ISNULL(cp.PlanStatus, 'P') = 'P'
+   AND CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
+   AND (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
+   AND P.KVA   = @KVA
+   AND P.Model = @Model
+ORDER BY cp.Dt ASC, cp.CPCode ASC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PCCode", SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@KVA",    SqlDbType.NVarChar, 20).Value = kv;
+            cmd.Parameters.Add("@Model",  SqlDbType.NVarChar, 50).Value = md;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) return null;
+
+            return new CanopyProcessPlanContextDto
+            {
+                KVAMod     = SafeStr(reader, "KVAMod"),
+                KVA        = SafeStr(reader, "KVA"),
+                Model      = SafeStr(reader, "Model"),
+                CPCode     = SafeStr(reader, "CPCode"),
+                Dt         = SafeStr(reader, "Dt"),
+                Partcode   = SafeStr(reader, "Partcode"),
+                Part       = SafeStr(reader, "Part"),
+                CPQty      = SafeDouble(reader, "CPQty"),
+                PlanQtyBal = SafeDouble(reader, "PlanQtyBal"),
+                PrcQty     = SafeDouble(reader, "PrcQty"),
+                PFBCode    = SafeStr(reader, "PFBCode"),
+                EDt        = SafeStr(reader, "EDt"),
+                BOMCode    = SafeStr(reader, "BOMCode"),
+                SCode      = SafeStr(reader, "SCode"),
+            };
+        }
+
+        // ── 5) Kit list (PSH mode) ──────────────────────────────────────
+        public async Task<List<CanopyProcessKitDto>> GetCanopyProcessKitListAsync(
+            string machineCode, string pcCode, string planCode, string partCode)
+        {
+            var rows = new List<CanopyProcessKitDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            var plan = (planCode ?? string.Empty).Trim();
+            var part = (partCode ?? string.Empty).Trim();
+            var (machine, serial) = SplitMachineSerial(machineCode);
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            const string sql = @"
+SELECT AliseName                                    AS KitDesc,
+       pf.PartCode + '-->' + P.PartDesc             AS KitCode,
+       pf.PFBCode                                    AS PfbCode,
+       CONVERT(VARCHAR(19), pf.EDt, 120)            AS EDt
+FROM   ProcessFeedback pf  WITH (NOLOCK)
+INNER JOIN Part         P WITH (NOLOCK) ON pf.PartCode = P.PartCode
+WHERE  pf.ProfitCenterCode = @PCCode
+   AND pf.MachineCode      = @Machine
+   AND pf.SerialNo         = @Serial
+   AND pf.EDt IS NULL
+   AND pf.CanopyPlanCode   = @PlanCode
+   AND pf.ProductCode      = @PartCode
+   AND pf.Active = '1'
+   AND pf.Dt >= '2020-07-10 00:00:00'
+ORDER BY pf.Dt DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PCCode",   SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@Machine",  SqlDbType.NVarChar, 50).Value = machine;
+            cmd.Parameters.Add("@Serial",   SqlDbType.NVarChar, 50).Value = serial;
+            cmd.Parameters.Add("@PlanCode", SqlDbType.NVarChar, 50).Value = plan;
+            cmd.Parameters.Add("@PartCode", SqlDbType.NVarChar, 50).Value = part;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessKitDto
+                {
+                    KitDesc = SafeStr(reader, "KitDesc"),
+                    KitCode = SafeStr(reader, "KitCode"),
+                    PfbCode = SafeStr(reader, "PfbCode"),
+                    EDt     = SafeStr(reader, "EDt"),
+                });
+            }
+            return rows;
+        }
+
+        // ── 6) Kit context (Bal + rate) — PSH mode after kit pick ───────
+        public async Task<CanopyProcessKitContextDto?> GetCanopyProcessKitContextAsync(
+            string machineCode, string kitCode, string pcCode,
+            string planCode, string partCode)
+        {
+            var pc = (pcCode ?? string.Empty).Trim();
+            var plan = (planCode ?? string.Empty).Trim();
+            var part = (partCode ?? string.Empty).Trim();
+            var kit = (kitCode ?? string.Empty).Trim();
+            var (machine, serial) = SplitMachineSerial(machineCode);
+            if (string.IsNullOrEmpty(pc) || string.IsNullOrEmpty(kit)) return null;
+
+            const string sql = @"
+SELECT ISNULL(pf.ProcessQty, 0) AS Bal,
+       ISNULL(pf.PFBRate,    0) AS SRate
+FROM   ProcessFeedback pf  WITH (NOLOCK)
+INNER JOIN Part         P WITH (NOLOCK) ON pf.PartCode = P.PartCode
+WHERE  pf.ProfitCenterCode = @PCCode
+   AND pf.MachineCode      = @Machine
+   AND pf.SerialNo         = @Serial
+   AND pf.EDt IS NULL
+   AND pf.CanopyPlanCode   = @PlanCode
+   AND pf.ProductCode      = @PartCode
+   AND pf.PartCode         = @KitCode
+   AND pf.Active = '1'
+   AND pf.Dt >= '2020-07-10 00:00:00'
+ORDER BY pf.Dt DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PCCode",   SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@Machine",  SqlDbType.NVarChar, 50).Value = machine;
+            cmd.Parameters.Add("@Serial",   SqlDbType.NVarChar, 50).Value = serial;
+            cmd.Parameters.Add("@PlanCode", SqlDbType.NVarChar, 50).Value = plan;
+            cmd.Parameters.Add("@PartCode", SqlDbType.NVarChar, 50).Value = part;
+            cmd.Parameters.Add("@KitCode",  SqlDbType.NVarChar, 50).Value = kit;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) return null;
+
+            return new CanopyProcessKitContextDto
+            {
+                Bal   = SafeDouble(reader, "Bal"),
+                SRate = SafeDouble(reader, "SRate"),
+            };
+        }
+
+        // ── 7) Part Details (top table) ─────────────────────────────────
+        // PSH mode: reads processfeedbackdetails filtered by PFBCode (already-open record).
+        // NEW mode: explodes the BOM at the LineWisePC — rate/wt/sqft from
+        // ProfitcenterPLDetails at LineWisePC (was hardcoded to 01.005 in legacy).
+        public async Task<List<CanopyProcessPartRowDto>> GetCanopyProcessPartRowsAsync(
+            string pcCode, int prcQty, string cpyPartCode,
+            string planCode, string bomCode, string pfbCode)
+        {
+            var rows = new List<CanopyProcessPartRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            var pfb = (pfbCode ?? string.Empty).Trim();
+            var bom = (bomCode ?? string.Empty).Trim();
+            var isPsh = pfb.StartsWith("PSH", StringComparison.OrdinalIgnoreCase);
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            await connection.OpenAsync();
+
+            if (isPsh)
+            {
+                const string sqlPsh = @"
+SELECT P.AliseName                                   AS Part,
+       0.0                                            AS KitQty,
+       pf.TotQty                                      AS PrcQty,
+       0.0                                            AS StkQty,
+       0.0                                            AS Wt,
+       0.0                                            AS TotWt,
+       0.0                                            AS Sqft,
+       0.0                                            AS TotSqft,
+       ISNULL(pf.PFBRate, 0)                          AS Rate,
+       pf.PartCode                                    AS PartCode
+FROM   ProcessFeedbackDetails pf WITH (NOLOCK)
+INNER JOIN Part               P  WITH (NOLOCK) ON pf.PartCode = P.PartCode
+WHERE  pf.PFBCode = @PFBCode
+   AND pf.PartCode LIKE '004%';";
+                using var cmd = new SqlCommand(sqlPsh, connection);
+                cmd.Parameters.Add("@PFBCode", SqlDbType.NVarChar, 50).Value = pfb;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    rows.Add(ReadPartRow(reader));
+                return rows;
+            }
+
+            // NEW mode — explode the BOM's kit lines (KitCode pattern '0121/0122'
+            // + substring(12,2)='12' = assembly stage). Rate/Wt/Sqft from
+            // ProfitcenterPLDetails at LineWisePC. Stock filters use the
+            // line-rights *_Act columns (matches the seed convention).
+            const string sqlNew = @"
+SELECT P.PartDesc + '-->' + Bd.PartCode                          AS Part,
+       Bd.Qty                                                    AS KitQty,
+       ROUND(@PrcQty * Bd.Qty, 2)                                AS PrcQty,
+       ISNULL((
+           SELECT ROUND(ISNULL(SUM(Recqty) - SUM(IssueQty), 0), 2)
+           FROM (
+               SELECT SUM(ReceivedQty) AS Recqty, 0.0 AS IssueQty
+               FROM stockwip
+               WHERE ToProfitCenterCode_Act = @PCCode
+                 AND StockType = '0'
+                 AND Partcode = Bd.PartCode
+                 AND ReceivedQty > 0
+               UNION ALL
+               SELECT 0.0 AS Recqty, SUM(IssueQty) AS IssueQty
+               FROM stockwip
+               WHERE FromProfitCenterCode_Act = @PCCode
+                 AND StockType = '0'
+                 AND Partcode = Bd.PartCode
+                 AND IssueQty > 0
+           ) AS stk), 0)                                          AS StkQty,
+       ISNULL(pl.PWt,   0)                                       AS Wt,
+       ROUND(@PrcQty * ISNULL(pl.PWt, 0), 2)                     AS TotWt,
+       ISNULL(pl.PSqft, 0)                                       AS Sqft,
+       ROUND(@PrcQty * ISNULL(pl.PSqft, 0), 2)                   AS TotSqft,
+       ISNULL(pl.Rate,  0)                                       AS Rate,
+       Bd.PartCode                                                AS PartCode
+FROM   BOMDetails Bd
+INNER JOIN Part   P  ON Bd.PartCode = P.PartCode
+LEFT  JOIN ProfitcenterPLDetails pl WITH (NOLOCK)
+       ON pl.PartCode = Bd.PartCode AND pl.ProfitcenterCode = @PCCode
+WHERE  Bd.BOMCode = @BOMCode
+   AND SUBSTRING(Bd.KitCode, 1, 4) IN ('0121','0122')
+   AND SUBSTRING(Bd.KitCode, 12, 2) = '12';";
+
+            using (var cmd = new SqlCommand(sqlNew, connection))
+            {
+                cmd.Parameters.Add("@BOMCode", SqlDbType.NVarChar, 50).Value = bom;
+                cmd.Parameters.Add("@PCCode",  SqlDbType.NVarChar, 20).Value = pc;
+                cmd.Parameters.Add("@PrcQty",  SqlDbType.Int).Value          = prcQty;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    rows.Add(ReadPartRow(reader));
+            }
+            return rows;
+        }
+
+        // ── 8) Assembly Kit Details (bottom mat-table) ──────────────────
+        // PSH mode: reads processfeedbackdetails MOB='B' rows.
+        // NEW mode: explodes the BOM's assembly kits ('0121/0122' + substr(12,2)='12').
+        public async Task<List<CanopyProcessAssemblyKitRowDto>> GetCanopyProcessAssemblyKitRowsAsync(
+            string pcCode, int prcQty, string cpyPartCode,
+            string planCode, string bomCode, string pfbCode)
+        {
+            var rows = new List<CanopyProcessAssemblyKitRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            var pfb = (pfbCode ?? string.Empty).Trim();
+            var bom = (bomCode ?? string.Empty).Trim();
+            var isPsh = pfb.StartsWith("PSH", StringComparison.OrdinalIgnoreCase);
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            await connection.OpenAsync();
+
+            if (isPsh)
+            {
+                const string sqlPsh = @"
+SELECT P.PartDesc + '-->' + pf.PartCode  AS Part,
+       pf.KitQty                          AS Qty,
+       pf.TotQty                          AS PrcQty,
+       pf.StockQty                        AS StkQty,
+       pf.PartCode                        AS PartCode
+FROM   ProcessFeedbackDetails pf WITH (NOLOCK)
+INNER JOIN Part               P  WITH (NOLOCK) ON pf.PartCode = P.PartCode
+WHERE  pf.PFBCode = @PFBCode
+   AND pf.MOB    = 'B';";
+                using var cmd = new SqlCommand(sqlPsh, connection);
+                cmd.Parameters.Add("@PFBCode", SqlDbType.NVarChar, 50).Value = pfb;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    rows.Add(ReadAssemblyKitRow(reader));
+                return rows;
+            }
+
+            // Stock filters use the line-rights *_Act columns (matches the
+            // seed convention that populates ToProfitCenterCode_Act with
+            // LineWisePC on receipts and FromProfitCenterCode_Act on issues).
+            const string sqlNew = @"
+SELECT P.PartDesc + '-->' + Bd.PartCode                          AS Part,
+       Bd.Qty                                                    AS Qty,
+       ROUND(@PrcQty * Bd.Qty, 2)                                AS PrcQty,
+       ISNULL((
+           SELECT ROUND(ISNULL(SUM(Recqty) - SUM(IssueQty), 0), 2)
+           FROM (
+               SELECT SUM(ReceivedQty) AS Recqty, 0.0 AS IssueQty
+               FROM stockwip
+               WHERE ToProfitCenterCode_Act = @PCCode
+                 AND StockType = '0'
+                 AND Partcode = Bd.PartCode
+                 AND ReceivedQty > 0
+               UNION ALL
+               SELECT 0.0 AS Recqty, SUM(IssueQty) AS IssueQty
+               FROM stockwip
+               WHERE FromProfitCenterCode_Act = @PCCode
+                 AND StockType = '0'
+                 AND Partcode = Bd.PartCode
+                 AND IssueQty > 0
+           ) AS stk), 0)                                          AS StkQty,
+       Bd.PartCode                                                AS PartCode
+FROM   BOMDetails Bd
+INNER JOIN Part   P ON Bd.PartCode = P.PartCode
+WHERE  Bd.BOMCode = @BOMCode
+   AND SUBSTRING(Bd.KitCode, 1, 4) IN ('0121','0122')
+   AND SUBSTRING(Bd.KitCode, 12, 2) = '12';";
+
+            using (var cmd = new SqlCommand(sqlNew, connection))
+            {
+                cmd.Parameters.Add("@BOMCode", SqlDbType.NVarChar, 50).Value = bom;
+                cmd.Parameters.Add("@PCCode",  SqlDbType.NVarChar, 20).Value = pc;
+                cmd.Parameters.Add("@PrcQty",  SqlDbType.Int).Value          = prcQty;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    rows.Add(ReadAssemblyKitRow(reader));
+            }
+            return rows;
+        }
+
+        // ── 9) Submit — NEW (Start) + PSH (End) ─────────────────────────
+        public async Task<SubmitCanopyProcessResponse> SubmitCanopyProcessAsync(
+            SubmitCanopyProcessRequest req)
+        {
+            ValidateCanopyProcessSubmit(req);
+
+            var pfb = req.PFBCode.Trim();
+            if (pfb.StartsWith("NEW", StringComparison.OrdinalIgnoreCase))
+                return await SubmitCanopyProcessNewAsync(req);
+            if (pfb.StartsWith("PSH", StringComparison.OrdinalIgnoreCase))
+                return await SubmitCanopyProcessPshAsync(req);
+            throw new ArgumentException($"Unexpected PFBCode prefix: '{pfb.Substring(0, Math.Min(3, pfb.Length))}'. Expected NEW or PSH.");
+        }
+
+        // ── 9a) NEW path — creates a fresh PSH record ────────────────────
+        private async Task<SubmitCanopyProcessResponse> SubmitCanopyProcessNewAsync(
+            SubmitCanopyProcessRequest req)
+        {
+            var pc      = req.PCCode.Trim();            // LineWisePC     (selected line's active PC)
+            var pcOld   = req.ParentDgPC.Trim();        // ParentDgPC     (selected line's old/parent PC)
+            var company = req.CompanyCode.Trim();
+            var emp     = req.EmpCode.Trim();
+            var (machine, serial) = SplitMachineSerial(req.MachineCodeSrNo);
+
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open) await conn.OpenAsync();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            var sqlTx = (SqlTransaction)tx.GetDbTransaction();
+
+            try
+            {
+                // 1) Rate/Wt/Sqft lookup for the canopy product at the current
+                //    LineWisePC (was hardcoded 01.005 in legacy).
+                var rateWtSqft = await GetProductRateWtSqftAsync(
+                    (SqlConnection)conn, sqlTx, pc, req.ProductCode.Trim());
+
+                // 2) Generate a fresh PSH code — legacy GetmaxPrc uses
+                //    ProcessFeedback + CompanyCode + Yr as the max-scan key.
+                var prcNo = await GetProcessFeedbackMaxNoAsync(sqlTx, "PSH", company);
+                var maxSrNo = ExtractSequencePart(prcNo);
+                var yearEnd = await GetYearEndAsync();
+
+                // 3) Master insert into ProcessFeedback.
+                //    ProfitCenterCode receives ParentDgPC (old/parent PC of the
+                //    selected line); the new PCCode_Act column receives
+                //    LineWisePC (the line's active PC). Same driver as the Plan
+                //    submit's Step-6 / Step-11 MaterialRequisitionWithOutPlan
+                //    inserts.
+                using (var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedback
+    (GroupPFBCode, PFBCode, MaxSrNo, Dt, EDt, Yr, MachineCode, SerialNo,
+     ProfitCenterCode, ProductCode, CanopyPlanCode, TurretKitCode, PartCode,
+     ProcessQty, CompanyCode, PFBRate, PPWCode, Remark,
+     WtPerUt, SqftPerUt, NstWtPerUt, NstSqftPerUt, PCCode_Act)
+VALUES (@PFBCode, @PFBCode, @MaxSrNo, @Dt, NULL, @Yr, @Machine, @Serial,
+        @PCCode, @ProductCode, @PlanCode, @BOMCode, @ProductCode,
+        @PrcQty, @CompanyCode, @Rate, @EmpCode, 'Nil',
+        @Wt, @Sqft, @TotWt, @TotSqft, @PCCodeAct);",
+                    (SqlConnection)conn, sqlTx))
+                {
+                    cmd.Parameters.AddWithValue("@PFBCode",     prcNo);
+                    cmd.Parameters.AddWithValue("@MaxSrNo",     maxSrNo);
+                    cmd.Parameters.AddWithValue("@Dt",          DateTime.Now);
+                    cmd.Parameters.AddWithValue("@Yr",          yearEnd ?? string.Empty);
+                    cmd.Parameters.AddWithValue("@Machine",     machine);
+                    cmd.Parameters.AddWithValue("@Serial",      serial);
+                    cmd.Parameters.AddWithValue("@PCCode",      pcOld);   // ParentDgPC -> ProfitCenterCode
+                    cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                    cmd.Parameters.AddWithValue("@PlanCode",    req.PlanCode.Trim());
+                    cmd.Parameters.AddWithValue("@BOMCode",     req.BOMCode.Trim());
+                    cmd.Parameters.AddWithValue("@PrcQty",      req.PrcQty);
+                    cmd.Parameters.AddWithValue("@CompanyCode", company);
+                    cmd.Parameters.AddWithValue("@Rate",        rateWtSqft.rate);
+                    cmd.Parameters.AddWithValue("@EmpCode",     emp);
+                    cmd.Parameters.AddWithValue("@Wt",          rateWtSqft.wt);
+                    cmd.Parameters.AddWithValue("@Sqft",        rateWtSqft.sqft);
+                    cmd.Parameters.AddWithValue("@TotWt",       Math.Round(req.PrcQty * rateWtSqft.wt,   2));
+                    cmd.Parameters.AddWithValue("@TotSqft",     Math.Round(req.PrcQty * rateWtSqft.sqft, 2));
+                    cmd.Parameters.AddWithValue("@PCCodeAct",   pc);      // LineWisePC -> PCCode_Act
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // 4) Loop kit lines — insert processfeedbackdetails + StockWIP
+                //    issue, then run BR-alternate substitution if this line is
+                //    the top-rate part in the plan sub.
+                int srNo = 0;
+                foreach (var line in req.PrcDts)
+                {
+                    srNo++;
+                    await InsertProcessFeedbackDetailsAsync((SqlConnection)conn, sqlTx,
+                        prcNo, srNo, line);
+                    await InsertStockWipIssueAsync((SqlConnection)conn, sqlTx,
+                        pc, line.PartCode, prcNo, line.PrcQty);
+
+                    var brError = await ProcessKitBelowStdRateAsync(
+                        (SqlConnection)conn, sqlTx, pc, prcNo, srNo,
+                        req.PlanCode.Trim(), req.ProductCode.Trim(), line, req.PrcQty);
+                    if (!string.IsNullOrEmpty(brError))
+                    {
+                        await tx.RollbackAsync();
+                        throw new InvalidOperationException(brError);
+                    }
+                }
+
+                // 5) Serial-number pull — Bangalore variant if company == "28".
+                var isBangalore = company.Equals("28", StringComparison.OrdinalIgnoreCase);
+                var serials = await GetCanopyProcessSerialsAsync(
+                    (SqlConnection)conn, sqlTx, req.ProductCode.Trim(), (int)req.PrcQty, isBangalore);
+                if (serials.Count < (int)req.PrcQty)
+                {
+                    await tx.RollbackAsync();
+                    throw new InvalidOperationException(
+                        $"Serial No Qty: ({serials.Count}) is less than Process Qty: {req.PrcQty}");
+                }
+
+                for (int m = 0; m < (int)req.PrcQty; m++)
+                {
+                    var srl = serials[m];
+                    using (var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackDetailsSub
+    (PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, BFMSrNo, FLKSrNo,
+     Status, QPCStatus, RWStatus)
+VALUES (@PFBCode, @SrNo, @ProductCode, @SerialNo, @SerialNo, @BFMSrNo, @FLKSrNo,
+        'P', 'OK', 'OK');",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@PFBCode",     prcNo);
+                        cmd.Parameters.AddWithValue("@SrNo",        m + 1);
+                        cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                        cmd.Parameters.AddWithValue("@SerialNo",    srl.SerialNo);
+                        cmd.Parameters.AddWithValue("@BFMSrNo",     srl.BFMSrNo);
+                        cmd.Parameters.AddWithValue("@FLKSrNo",     srl.FLKSrNo);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    // Bangalore: mark upstream engine-assembly serial as booked.
+                    // Others: mark plan-generated serial as delivered.
+                    if (isBangalore && !string.IsNullOrEmpty(srl.SourcePfbCode))
+                    {
+                        using var cmd = new SqlCommand(@"
+UPDATE ProcessFeedbackDetailsSub
+   SET JobCardStatus = 'B'
+ WHERE PfbCode  = @SourcePfb
+   AND SerialNo = @SerialNo
+   AND Partcode = @ProductCode;",
+                            (SqlConnection)conn, sqlTx);
+                        cmd.Parameters.AddWithValue("@SourcePfb",   srl.SourcePfbCode);
+                        cmd.Parameters.AddWithValue("@SerialNo",    srl.SerialNo);
+                        cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                    else if (!isBangalore)
+                    {
+                        using var cmd = new SqlCommand(@"
+UPDATE CanopyPlanSerialNo
+   SET CPYSerialStatus = 'D'
+ WHERE SerialNo = @SerialNo
+   AND Partcode = @ProductCode;",
+                            (SqlConnection)conn, sqlTx);
+                        cmd.Parameters.AddWithValue("@SerialNo",    srl.SerialNo);
+                        cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                // 6) Assembly-kit stock check + insertion.
+                var asslyRows = await GetAssemblyKitStockAsync(
+                    (SqlConnection)conn, sqlTx, req.BOMCode.Trim(), pc);
+                var shortList = new List<string>();
+                int asslySr = srNo;
+                foreach (var k in asslyRows)
+                {
+                    if (Math.Round(k.Qty * req.PrcQty, 2) > Math.Round(k.Stock, 2))
+                    {
+                        shortList.Add(k.PartDesc);
+                        continue;
+                    }
+                    asslySr++;
+                    using (var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackDetails
+    (PFBCode, SrNo, PartCode, KITQty, TotQty, SaleRate)
+VALUES (@PFBCode, @SrNo, @PartCode, @Qty, @TotQty, @Rate);",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@PFBCode",  prcNo);
+                        cmd.Parameters.AddWithValue("@SrNo",     asslySr);
+                        cmd.Parameters.AddWithValue("@PartCode", k.PartCode);
+                        cmd.Parameters.AddWithValue("@Qty",      k.Qty);
+                        cmd.Parameters.AddWithValue("@TotQty",   k.Qty * req.PrcQty);
+                        cmd.Parameters.AddWithValue("@Rate",     k.SuppRate);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                    await InsertStockWipIssueAsync((SqlConnection)conn, sqlTx,
+                        pc, k.PartCode, prcNo, k.Qty * req.PrcQty);
+                }
+                if (shortList.Count > 0)
+                {
+                    await tx.RollbackAsync();
+                    throw new InvalidOperationException(
+                        "Insufficient Stock (Assly Kit) For Part: " + string.Join(", ", shortList));
+                }
+
+                // 7) Update CanopyPlanDetails.WIP counts.
+                using (var cmd = new SqlCommand(@"
+UPDATE CanopyPlanDetails
+   SET CPYWIPQty = CPYWIPQty + @PrcQty,
+       CPYWOPQty = CPYWOPQty + @PrcQty
+ WHERE CPCode   = @PlanCode
+   AND Partcode = @ProductCode;",
+                    (SqlConnection)conn, sqlTx))
+                {
+                    cmd.Parameters.AddWithValue("@PrcQty",      req.PrcQty);
+                    cmd.Parameters.AddWithValue("@PlanCode",    req.PlanCode.Trim());
+                    cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // ─────────────────────────────────────────────────────────
+                // 8) [MOVED TO CHECKER] Plan-completion + Kanban REQ trigger.
+                //
+                // Previously fired here — but Kanban raising a material REQ at
+                // Maker Start time meant we asked logistics to replenish stores
+                // for units that hadn't been QC-authorized yet. If the checker
+                // then rejects or reworks some units, the REQ was speculative.
+                //
+                // The identical logic now lives in SaveCanopyProcessCheckAsync
+                // (see "Kanban trigger" block there) with an idempotency guard
+                // (`CPYWIPStatus != 'D'`) so multi-PFB / multi-checker sequences
+                // fire it exactly once per plan.
+                //
+                // Kept here — commented — as the reference implementation and
+                // an easy rollback point if the business decides to revert.
+                /*
+                var balAfter = await GetScalarInTxAsync<object>(
+                    (SqlConnection)conn, sqlTx,
+                    @"SELECT (Qty - CPYWIPQty) AS BalQty
+                      FROM   CanopyPlanDetails
+                      WHERE  CPCode = @PlanCode AND Partcode = @ProductCode;",
+                    ("@PlanCode", req.PlanCode.Trim()),
+                    ("@ProductCode", req.ProductCode.Trim()));
+                if (balAfter != null && Convert.ToDouble(balAfter) == 0)
+                {
+                    using (var cmd = new SqlCommand(@"
+UPDATE CanopyPlanDetails
+   SET CPYWIPStatus = 'D', CPYWOPStatus = 'D'
+ WHERE CPCode   = @PlanCode
+   AND Partcode = @ProductCode;",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@PlanCode",    req.PlanCode.Trim());
+                        cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    var kbRows = await GetInternalTOCRowsAsync((SqlConnection)conn, sqlTx, pc);
+                    if (kbRows.Count > 0)
+                    {
+                        string kbToPCCodeAct;
+                        string kbToPCCode;
+                        if (pc == "01.190" || pc == "03.069" || pc == "03.181")
+                        {
+                            kbToPCCodeAct = "23.001";
+                            kbToPCCode    = "23.001";
+                        }
+                        else if (pc == "28.025" || pc == "28.039" || pc == "28.116")
+                        {
+                            kbToPCCodeAct = "28.020";
+                            kbToPCCode    = "28.020";
+                        }
+                        else
+                        {
+                            kbToPCCodeAct = "23.001";
+                            kbToPCCode    = "23.001";
+                        }
+
+                        var kbReqCode = await GetMaxNoAsync(
+                            prefix: "REQ",
+                            compCode: company,
+                            tblName: "MaterialRequisitionWithOutPlan",
+                            tx: sqlTx);
+                        var kbMaxSrNo = ExtractSequencePart(kbReqCode);
+
+                        using (var cmd = new SqlCommand(@"
+INSERT INTO MaterialRequisitionWithOutPlan
+    (REQCode, MaxSrNo, Dt, Yr,
+     ProfitCenterCode, ToProfitCenterCode,
+     ProfitCenterCode_Act, ToProfitCenterCode_Act,
+     ClassCode,
+     CompanyCode, ActNo, REQStatus, ReqType, Remark, Discard, Active, Auth,
+     SourceCode, RequisitionFor)
+VALUES (@REQCode, @MaxSrNo, @Dt, @Yr,
+        @PCCode, @ToPCCode,
+        @PCCodeAct, @ToPCCodeAct,
+        @ProductCode,
+        @CompanyCode, @ActNo, 'P', 'WIP', @Remark, 1, 1, 1,
+        'KanBan', '0');",
+                            (SqlConnection)conn, sqlTx))
+                        {
+                            cmd.Parameters.AddWithValue("@REQCode",     kbReqCode);
+                            cmd.Parameters.AddWithValue("@MaxSrNo",     kbMaxSrNo);
+                            cmd.Parameters.AddWithValue("@Dt",          DateTime.Now);
+                            cmd.Parameters.AddWithValue("@Yr",          yearEnd ?? string.Empty);
+                            cmd.Parameters.AddWithValue("@PCCode",      pcOld);
+                            cmd.Parameters.AddWithValue("@ToPCCode",    kbToPCCode);
+                            cmd.Parameters.AddWithValue("@PCCodeAct",   pc);
+                            cmd.Parameters.AddWithValue("@ToPCCodeAct", kbToPCCodeAct);
+                            cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                            cmd.Parameters.AddWithValue("@CompanyCode", company);
+                            cmd.Parameters.AddWithValue("@ActNo",       req.BatchQty.ToString());
+                            cmd.Parameters.AddWithValue("@Remark",
+                                $"Auto Req For Plan No: {req.ProductCode.Trim()} and Prc No: {prcNo}");
+                            await cmd.ExecuteNonQueryAsync();
+                        }
+
+                        int kbSr = 0;
+                        foreach (var k in kbRows)
+                        {
+                            kbSr++;
+                            using var cmd = new SqlCommand("insertMaterialRequisitionWithOutPlanDetails",
+                                (SqlConnection)conn, sqlTx);
+                            cmd.CommandType = CommandType.StoredProcedure;
+                            cmd.Parameters.AddWithValue("@REQCode",   kbReqCode);
+                            cmd.Parameters.AddWithValue("@SrNo",      kbSr);
+                            cmd.Parameters.AddWithValue("@PartCode",  k.Partcode);
+                            cmd.Parameters.AddWithValue("@Qty",       (double)k.RaiseReqQty);
+                            cmd.Parameters.AddWithValue("@REQStatus", "P");
+                            await cmd.ExecuteNonQueryAsync();
+                        }
+
+                        await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                            emp, "S", "MaterialRequisitionWithoutPlan", kbReqCode, company);
+                    }
+                }
+                */
+                // ─────────────────────────────────────────────────────────
+
+                // 9) Activity log for the whole Process submission.
+                await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                    emp, "S", "Canopy Assembly Process", prcNo, company);
+
+                await tx.CommitAsync();
+                return new SubmitCanopyProcessResponse
+                {
+                    Message = $"ProcessCode={prcNo} — Canopy Assembly Started Successfully",
+                    PFBCode = prcNo,
+                };
+            }
+            catch (InvalidOperationException)
+            {
+                try { await tx.RollbackAsync(); } catch { /* already rolled back */ }
+                throw;
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { /* already rolled back */ }
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error saving Canopy Assembly Process (NEW): {inner}", ex);
+            }
+        }
+
+        // ── 9b) PSH path — closes units for an already-open record ──────
+        private async Task<SubmitCanopyProcessResponse> SubmitCanopyProcessPshAsync(
+            SubmitCanopyProcessRequest req)
+        {
+            var pc      = req.PCCode.Trim();
+            var company = req.CompanyCode.Trim();
+            var emp     = req.EmpCode.Trim();
+            var pfb     = req.PFBCode.Trim();
+
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open) await conn.OpenAsync();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            var sqlTx = (SqlTransaction)tx.GetDbTransaction();
+
+            try
+            {
+                // 1) Mark top-N serial numbers complete (EdtD = now).
+                using (var cmd = new SqlCommand(@"
+UPDATE ProcessFeedbackDetailsSub
+   SET EdtD = @Now
+ WHERE PfbCode = @PFBCode
+   AND EdtD IS NULL
+   AND SerialNo IN (
+       SELECT TOP (@PrcQty) SerialNo
+       FROM   ProcessFeedbackDetailsSub
+       WHERE  PfbCode = @PFBCode AND EdtD IS NULL
+       ORDER BY SerialNo);",
+                    (SqlConnection)conn, sqlTx))
+                {
+                    cmd.Parameters.AddWithValue("@Now",     DateTime.Now);
+                    cmd.Parameters.AddWithValue("@PFBCode", pfb);
+                    cmd.Parameters.AddWithValue("@PrcQty",  (int)req.PrcQty);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // 2) If all units now closed → set ProcessFeedback.EDt = now.
+                var totalQty = await GetScalarInTxAsync<object>((SqlConnection)conn, sqlTx,
+                    "SELECT ProcessQty FROM ProcessFeedback WHERE PFBCode = @PFBCode;",
+                    ("@PFBCode", pfb));
+                var closedQty = await GetScalarInTxAsync<object>((SqlConnection)conn, sqlTx,
+                    @"SELECT COUNT(*) FROM ProcessFeedbackDetailsSub
+                      WHERE PFBCode = @PFBCode AND EdtD IS NOT NULL;",
+                    ("@PFBCode", pfb));
+                if (totalQty != null && closedQty != null
+                    && Convert.ToInt32(totalQty) == Convert.ToInt32(closedQty))
+                {
+                    using var cmd = new SqlCommand(@"
+UPDATE ProcessFeedback SET EDt = @Now WHERE PFBCode = @PFBCode;",
+                        (SqlConnection)conn, sqlTx);
+                    cmd.Parameters.AddWithValue("@Now",     DateTime.Now);
+                    cmd.Parameters.AddWithValue("@PFBCode", pfb);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // 3) ProductWip receive row (product-level WIP).
+                using (var cmd = new SqlCommand(@"
+INSERT INTO ProductWip
+    (ProductCode, FromPCCode, ToPCCode, IssueCode, IssueDate, IssueQty, StockType)
+VALUES (@ProductCode, @PCCode, @PCCode, @PFBCode, @Now, @PrcQty, 0);",
+                    (SqlConnection)conn, sqlTx))
+                {
+                    cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                    cmd.Parameters.AddWithValue("@PCCode",      pc);
+                    cmd.Parameters.AddWithValue("@PFBCode",     pfb);
+                    cmd.Parameters.AddWithValue("@Now",         DateTime.Now);
+                    cmd.Parameters.AddWithValue("@PrcQty",      req.PrcQty);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // 4) Attachments — copy each from temp → permanent + link row.
+                if (req.Attachments != null && req.Attachments.Count > 0)
+                {
+                    var tempEmpPath = System.IO.Path.Combine(CanopyProcessTempBase, emp);
+                    var permBasePath = CanopyProcessPermanentBase;
+                    System.IO.Directory.CreateDirectory(permBasePath);
+
+                    int srA = 0;
+                    foreach (var att in req.Attachments)
+                    {
+                        srA++;
+                        if (string.IsNullOrWhiteSpace(att.FileName)) continue;
+
+                        var ext = System.IO.Path.GetExtension(att.FileName);
+                        var pfbKey = pfb.Length >= 18 ? pfb.Substring(4, 5) + pfb.Substring(10, 8) : pfb;
+                        var savedName = $"{pfbKey}-{srA}{ext}";
+
+                        var srcPath = System.IO.Path.Combine(tempEmpPath, att.FileName);
+                        var dstPath = System.IO.Path.Combine(permBasePath, savedName);
+                        if (System.IO.File.Exists(srcPath))
+                        {
+                            try
+                            {
+                                System.IO.File.Copy(srcPath, dstPath, overwrite: true);
+                            }
+                            catch { /* file-copy failure shouldn't block the DB write */ }
+                        }
+
+                        using var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackFiles (GroupPFBCode, SrNo, FileName)
+VALUES (@PFBCode, @SrNo, @FileName);",
+                            (SqlConnection)conn, sqlTx);
+                        cmd.Parameters.AddWithValue("@PFBCode",  pfb);
+                        cmd.Parameters.AddWithValue("@SrNo",     srA);
+                        cmd.Parameters.AddWithValue("@FileName", savedName);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                // 5) Activity log.
+                await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                    emp, "S", "Canopy Assembly Process", pfb, company);
+
+                await tx.CommitAsync();
+                return new SubmitCanopyProcessResponse
+                {
+                    Message = $"ProcessCode={pfb} — Canopy Assembly End Successfully",
+                    PFBCode = pfb,
+                };
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { /* already rolled back */ }
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error saving Canopy Assembly Process (PSH): {inner}", ex);
+            }
+        }
+
+        // ── Canopy-Process helper methods ────────────────────────────────
+
+        private static (string machine, string serial) SplitMachineSerial(string? machineCodeSrNo)
+        {
+            var raw = (machineCodeSrNo ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(raw)) return (string.Empty, string.Empty);
+            var idx = raw.IndexOf("-->", StringComparison.Ordinal);
+            return idx < 0
+                ? (raw, string.Empty)
+                : (raw.Substring(0, idx).Trim(), raw.Substring(idx + 3).Trim());
+        }
+
+        private static CanopyProcessPartRowDto ReadPartRow(SqlDataReader r) => new()
+        {
+            Part     = SafeStr(r, "Part"),
+            KitQty   = SafeDouble(r, "KitQty"),
+            PrcQty   = SafeDouble(r, "PrcQty"),
+            StkQty   = SafeDouble(r, "StkQty"),
+            Wt       = SafeDouble(r, "Wt"),
+            TotWt    = SafeDouble(r, "TotWt"),
+            Sqft     = SafeDouble(r, "Sqft"),
+            TotSqft  = SafeDouble(r, "TotSqft"),
+            Rate     = SafeDouble(r, "Rate"),
+            PartCode = SafeStr(r, "PartCode"),
+        };
+
+        private static CanopyProcessAssemblyKitRowDto ReadAssemblyKitRow(SqlDataReader r) => new()
+        {
+            Part     = SafeStr(r, "Part"),
+            Qty      = SafeDouble(r, "Qty"),
+            PrcQty   = SafeDouble(r, "PrcQty"),
+            StkQty   = SafeDouble(r, "StkQty"),
+            PartCode = SafeStr(r, "PartCode"),
+        };
+
+        private static void ValidateCanopyProcessSubmit(SubmitCanopyProcessRequest req)
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            if (string.IsNullOrWhiteSpace(req.PCCode))       throw new ArgumentException("PCCode is required.");
+            if (string.IsNullOrWhiteSpace(req.CompanyCode))  throw new ArgumentException("CompanyCode is required.");
+            if (string.IsNullOrWhiteSpace(req.EmpCode))      throw new ArgumentException("EmpCode is required.");
+            if (string.IsNullOrWhiteSpace(req.PFBCode))      throw new ArgumentException("PFBCode is required.");
+            if (string.IsNullOrWhiteSpace(req.MachineCodeSrNo)) throw new ArgumentException("MachineCodeSrNo is required.");
+            if (string.IsNullOrWhiteSpace(req.PlanCode))     throw new ArgumentException("PlanCode is required.");
+            if (string.IsNullOrWhiteSpace(req.ProductCode))  throw new ArgumentException("ProductCode is required.");
+            if (string.IsNullOrWhiteSpace(req.BOMCode))      throw new ArgumentException("BOMCode is required.");
+            if (req.PrcQty <= 0) throw new ArgumentException("PrcQty must be greater than 0.");
+        }
+
+        // Rate/PWt/PSqft lookup at LineWisePC (was hardcoded 01.005 in legacy —
+        // switched to the line-wise PC per user request).
+        private static async Task<(double rate, double wt, double sqft)> GetProductRateWtSqftAsync(
+            SqlConnection conn, SqlTransaction tx, string pc, string partCode)
+        {
+            using var cmd = new SqlCommand(@"
+SELECT TOP 1 ISNULL(Rate, 0) AS Rate, ISNULL(PSqFt, 0) AS PSqFt, ISNULL(PWt, 0) AS PWt
+FROM   ProfitcenterPlDetails WITH (NOLOCK)
+WHERE  ProfitcenterCode = @PC AND Partcode = @Part;",
+                conn, tx);
+            cmd.Parameters.AddWithValue("@PC",   pc);
+            cmd.Parameters.AddWithValue("@Part", partCode);
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+                return (SafeDouble(reader, "Rate"), SafeDouble(reader, "PWt"), SafeDouble(reader, "PSqFt"));
+            return (0, 0, 0);
+        }
+
+        // Legacy GetmaxPrc — ProcessFeedback max scan by CompanyCode + Yr.
+        // Prefix is passed but always "PSH" for this page.
+        private async Task<string> GetProcessFeedbackMaxNoAsync(
+            SqlTransaction tx, string prefix, string compCode)
+        {
+            var yearEnd = await GetYearEndAsync() ?? string.Empty;
+            int max = 0;
+            using (var cmd = new SqlCommand(@"
+SELECT MAX(SUBSTRING(PFBCode, 13, 7)) AS MX
+FROM   ProcessFeedback WITH (NOLOCK)
+WHERE  Yr = @Yr AND CompanyCode = @CompCode;",
+                (SqlConnection)_context.Database.GetDbConnection(), tx))
+            {
+                cmd.Parameters.AddWithValue("@Yr",       yearEnd);
+                cmd.Parameters.AddWithValue("@CompCode", compCode);
+                var result = await cmd.ExecuteScalarAsync();
+                if (result != null && result != DBNull.Value && int.TryParse(result.ToString(), out var n))
+                    max = n;
+            }
+            var next = (max + 1).ToString("D6");
+            return $"{prefix}/{yearEnd}/{compCode}{next}";
+        }
+
+        private static async Task InsertProcessFeedbackDetailsAsync(
+            SqlConnection conn, SqlTransaction tx,
+            string pfbCode, int srNo, CanopyProcessPartLine line)
+        {
+            using var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackDetails
+    (PFBCode, SrNo, PartCode, KITQty, TotQty, PFBRate, WtPerUt, SqftPerUt)
+VALUES (@PFBCode, @SrNo, @PartCode, @KitQty, @TotQty, @Rate, @Wt, @Sqft);",
+                conn, tx);
+            cmd.Parameters.AddWithValue("@PFBCode",  pfbCode);
+            cmd.Parameters.AddWithValue("@SrNo",     srNo);
+            cmd.Parameters.AddWithValue("@PartCode", line.PartCode);
+            cmd.Parameters.AddWithValue("@KitQty",   line.KitQty);
+            cmd.Parameters.AddWithValue("@TotQty",   line.PrcQty);
+            cmd.Parameters.AddWithValue("@Rate",     line.Rate);
+            cmd.Parameters.AddWithValue("@Wt",       line.Wt);
+            cmd.Parameters.AddWithValue("@Sqft",     line.Sqft);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Writes both the base (FromProfitCenterCode / ToProfitCenterCode) AND
+        // the line-rights (*_Act) column pair so a later filter on either
+        // convention sees the issue. The reads on this page filter by _Act,
+        // so keeping the base cols in sync is a compat safety net for any
+        // downstream page/report that still reads the base columns.
+        private static async Task InsertStockWipIssueAsync(
+            SqlConnection conn, SqlTransaction tx,
+            string pc, string partCode, string issueCode, double issueQty)
+        {
+            using var cmd = new SqlCommand(@"
+INSERT INTO StockWIP
+    (FromProfitCenterCode, FromProfitCenterCode_Act,
+     ToProfitCenterCode,   ToProfitCenterCode_Act,
+     PartCode, IssueCode, IssueDate, IssueQty, StockType)
+VALUES (@PC, @PC, @PC, @PC, @PartCode, @IssueCode, @Now, @IssueQty, 0);",
+                conn, tx);
+            cmd.Parameters.AddWithValue("@PC",        pc);
+            cmd.Parameters.AddWithValue("@PartCode",  partCode);
+            cmd.Parameters.AddWithValue("@IssueCode", issueCode);
+            cmd.Parameters.AddWithValue("@Now",       DateTime.Now);
+            cmd.Parameters.AddWithValue("@IssueQty",  issueQty);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Kit-Below-Standard-Rate substitution — only fires when the current
+        // kit line matches the top-rate part in CanopyplandtsSub. Uses spare-kit
+        // warehouse 01.007 for stock lookup (unchanged from legacy).
+        private static async Task<string?> ProcessKitBelowStdRateAsync(
+            SqlConnection conn, SqlTransaction tx,
+            string pc, string prcNo, int srNo,
+            string planCode, string productCode,
+            CanopyProcessPartLine line, double prcQty)
+        {
+            // Is this line the top-rate part for the plan?
+            string topRatePart;
+            using (var cmd = new SqlCommand(@"
+SELECT TOP 1 PartCode
+FROM   CanopyplandtsSub WITH (NOLOCK)
+WHERE  CPCode = @PlanCode AND CpyPartcode = @ProductCode
+ORDER BY Rate DESC;", conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@PlanCode",    planCode);
+                cmd.Parameters.AddWithValue("@ProductCode", productCode);
+                var scalar = await cmd.ExecuteScalarAsync();
+                topRatePart = scalar == null || scalar == DBNull.Value ? string.Empty : scalar.ToString()!.Trim();
+            }
+            if (!string.Equals(topRatePart, line.PartCode?.Trim(), StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var brRows = new List<(string PartCode, string AliseName, double PurRate, double Rate, double PWt, double PSqft, double Stock)>();
+            using (var cmd = new SqlCommand(@"
+SELECT Cd.Partcode,
+       AliseName,
+       ISNULL(pl.PurRate, 0) AS PurRate,
+       ISNULL(pl.Rate,    0) AS Rate,
+       ISNULL(pl.PWt,     0) AS PWt,
+       ISNULL(pl.PSqft,   0) AS PSqft,
+       ISNULL((
+           SELECT ROUND(ISNULL(SUM(Recqty) - SUM(IssueQty), 0), 0)
+           FROM (
+               SELECT SUM(ReceivedQty) AS Recqty, 0.0 AS IssueQty
+               FROM stockwip
+               WHERE ToProfitCenterCode_Act = @PC AND StockType = '0'
+                 AND Partcode = Cd.Partcode AND ReceivedQty > 0
+               UNION ALL
+               SELECT 0.0 AS Recqty, SUM(IssueQty) AS IssueQty
+               FROM stockwip
+               WHERE FromProfitCenterCode_Act = @PC AND StockType = '0'
+                 AND Partcode = Cd.Partcode AND IssueQty > 0
+           ) AS stk), 0) AS Stock
+FROM   CanopyPlanDtsSubBelowStdRate Cd WITH (NOLOCK)
+INNER JOIN Part P WITH (NOLOCK) ON Cd.Partcode = P.PartCode
+LEFT JOIN ProfitcenterPLDetails pl WITH (NOLOCK)
+       ON pl.PartCode = Cd.Partcode AND pl.ProfitcenterCode = @BrPC
+WHERE  CpyPartcode = @ProductCode AND CPCode = @PlanCode;",
+                conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@PC",          pc);
+                cmd.Parameters.AddWithValue("@BrPC",        BelowRateStockPC);
+                cmd.Parameters.AddWithValue("@ProductCode", productCode);
+                cmd.Parameters.AddWithValue("@PlanCode",    planCode);
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    brRows.Add((
+                        SafeStr(reader, "Partcode"),
+                        SafeStr(reader, "AliseName"),
+                        SafeDouble(reader, "PurRate"),
+                        SafeDouble(reader, "Rate"),
+                        SafeDouble(reader, "PWt"),
+                        SafeDouble(reader, "PSqft"),
+                        SafeDouble(reader, "Stock")));
+                }
+            }
+            if (brRows.Count == 0) return null;
+
+            var shortNames = brRows.Where(r => prcQty > r.Stock).Select(r => r.AliseName).ToList();
+            if (shortNames.Count > 0)
+                return "Insufficient Stock (BR) For Part: " + string.Join(", ", shortNames);
+
+            // Every alternate has enough → insert them all.
+            foreach (var b in brRows)
+            {
+                await InsertStockWipIssueAsync(conn, tx, pc, b.PartCode, prcNo, prcQty);
+                using var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackDetails
+    (PFBCode, SrNo, PartCode, KITQty, TotQty, PFBRate, SaleRate, WtPerUt, SqftPerUt)
+VALUES (@PFBCode, @SrNo, @PartCode, 1, @PrcQty, @PurRate, @Rate, @PWt, @PSqft);",
+                    conn, tx);
+                cmd.Parameters.AddWithValue("@PFBCode",  prcNo);
+                cmd.Parameters.AddWithValue("@SrNo",     srNo);
+                cmd.Parameters.AddWithValue("@PartCode", b.PartCode);
+                cmd.Parameters.AddWithValue("@PrcQty",   prcQty);
+                cmd.Parameters.AddWithValue("@PurRate",  b.PurRate);
+                cmd.Parameters.AddWithValue("@Rate",     b.Rate);
+                cmd.Parameters.AddWithValue("@PWt",      b.PWt);
+                cmd.Parameters.AddWithValue("@PSqft",    b.PSqft);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            return null;
+        }
+
+        // Serial pull — U1/U4 use GetCPYSerialNo (from CanopyPlanSerialNo).
+        // Bangalore (Company='28') uses GetCPYSerialNo_Bangalore (from upstream
+        // ProcessFeedbackDetailsSub) — that variant also returns the source
+        // PfbCode so we can flip JobCardStatus='B' on the upstream row.
+        private static async Task<List<CanopyProcessSerialRow>> GetCanopyProcessSerialsAsync(
+            SqlConnection conn, SqlTransaction tx,
+            string productCode, int prcQty, bool bangalore)
+        {
+            var rows = new List<CanopyProcessSerialRow>();
+            var spName = bangalore ? "GetCPYSerialNo_Bangalore" : "GetCPYSerialNo";
+
+            using var cmd = new SqlCommand(spName, conn, tx);
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.Parameters.Add("@ProductCode", SqlDbType.NVarChar, 50).Value = productCode;
+            cmd.Parameters.Add("@PrcQty",      SqlDbType.Int).Value          = prcQty;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessSerialRow
+                {
+                    SerialNo      = SafeStr(reader, "SerialNo"),
+                    BFMSrNo       = SafeStr(reader, "BFMSrNo"),
+                    FLKSrNo       = SafeStr(reader, "FLKSrNo"),
+                    SourcePfbCode = bangalore ? SafeStr(reader, "PFBCode") : string.Empty,
+                });
+            }
+            return rows;
+        }
+
+        // Assembly-kit stock read — inline replacement for the polymorphic
+        // GetPCKit SP so it works with any LineWisePC (SP hardcodes per-PC
+        // branches). Same kit filter as the SP for canopy stages.
+        private static async Task<List<AssemblyKitStockRow>> GetAssemblyKitStockAsync(
+            SqlConnection conn, SqlTransaction tx, string bomCode, string pc)
+        {
+            var rows = new List<AssemblyKitStockRow>();
+            // SuppRate lives on BOMDetails (matches the legacy GetPCKit SP body
+            // — it selects `SuppRate` unqualified from BOMDetails).
+            using var cmd = new SqlCommand(@"
+SELECT P.PartDesc                                                AS Partdesc,
+       Bd.PartCode                                               AS Partcode,
+       Bd.Qty                                                    AS Qty,
+       ISNULL(Bd.SuppRate, 0)                                    AS SuppRate,
+       ISNULL((
+           SELECT ROUND(ISNULL(SUM(Recqty) - SUM(IssueQty), 0), 2)
+           FROM (
+               SELECT SUM(ReceivedQty) AS Recqty, 0.0 AS IssueQty
+               FROM stockwip
+               WHERE ToProfitCenterCode_Act = @PC AND StockType = '0'
+                 AND Partcode = Bd.PartCode AND ReceivedQty > 0
+               UNION ALL
+               SELECT 0.0 AS Recqty, SUM(IssueQty) AS IssueQty
+               FROM stockwip
+               WHERE FromProfitCenterCode_Act = @PC AND StockType = '0'
+                 AND Partcode = Bd.PartCode AND IssueQty > 0
+           ) AS stk), 0)                                          AS Stock
+FROM   BOMDetails Bd
+INNER JOIN Part P ON Bd.PartCode = P.PartCode
+WHERE  Bd.BOMCode = @BOMCode
+   AND SUBSTRING(Bd.KitCode, 1, 4) IN ('0121','0122')
+   AND SUBSTRING(Bd.KitCode, 12, 2) = '12';",
+                conn, tx);
+            cmd.Parameters.AddWithValue("@BOMCode", bomCode);
+            cmd.Parameters.AddWithValue("@PC",      pc);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new AssemblyKitStockRow
+                {
+                    PartDesc = SafeStr(reader, "Partdesc"),
+                    PartCode = SafeStr(reader, "Partcode"),
+                    Qty      = SafeDouble(reader, "Qty"),
+                    SuppRate = SafeDouble(reader, "SuppRate"),
+                    Stock    = SafeDouble(reader, "Stock"),
+                });
+            }
+            return rows;
+        }
+
+        private sealed class CanopyProcessSerialRow
+        {
+            public string SerialNo      { get; set; } = string.Empty;
+            public string BFMSrNo       { get; set; } = string.Empty;
+            public string FLKSrNo       { get; set; } = string.Empty;
+            public string SourcePfbCode { get; set; } = string.Empty;
+        }
+
+        private sealed class AssemblyKitStockRow
+        {
+            public string PartDesc { get; set; } = string.Empty;
+            public string PartCode { get; set; } = string.Empty;
+            public double Qty      { get; set; }
+            public double SuppRate { get; set; }
+            public double Stock    { get; set; }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Canopy Assembly Process Checker (quality review side)
+        // ════════════════════════════════════════════════════════════════
+
+        // Decision codes we write to ProcessFeedbackDetailsSub.QPCStatus.
+        //   Accept -> 'D'   (approved, moves out of pending pool)
+        //   Rework -> 'RW'  (needs rework)
+        //   Reject -> 'R'   (soft reject in v1)
+        private const string CheckerDecisionAccept = "Accept";
+        private const string CheckerDecisionRework = "Rework";
+        private const string CheckerDecisionReject = "Reject";
+
+        // ── 1) Pending list ─────────────────────────────────────────────
+        public async Task<List<CanopyProcessCheckPendingRowDto>> GetCanopyProcessCheckPendingListAsync(
+            string pcCode)
+        {
+            var rows = new List<CanopyProcessCheckPendingRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            // "Pending" = QPCStatus has NOT been explicitly decided yet
+            // (Maker inserts 'OK' by default; checker sets 'D'/'RW'/'R').
+            // Returns EVERY PSH record for the line — decided rows stay
+            // visible with Status='Authorized' so operators can see
+            // per-line throughput at a glance. Pending rows sort first,
+            // then most recent Date first.
+            const string sql = @"
+SELECT pf.PFBCode,
+       CONVERT(varchar(19), pf.Dt, 120)                             AS Dt,
+       pf.ProductCode                                                AS ProductCode,
+       P.PartDesc + '-->' + pf.ProductCode                           AS ProductDesc,
+       ISNULL(P.KVA, 0)                                              AS KVA,
+       ISNULL(P.Model, '')                                           AS Model,
+       ISNULL(pf.ProcessQty, 0)                                      AS BatchQty,
+       ISNULL(pf.ProcessQty, 0)                                      AS PrcQty,
+       ISNULL(pf.MachineCode, '')                                    AS MachineCode,
+       ISNULL(pf.SerialNo, '')                                       AS SerialNo,
+       ISNULL(pf.PPWCode, '')                                        AS MakerCode,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode)                              AS TotalUnitCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode
+          AND pfd.QPCStatus IN ('D','RW','R'))                        AS DecidedUnitCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode
+          AND (pfd.QPCStatus IS NULL OR pfd.QPCStatus NOT IN ('D','RW','R')))
+                                                                     AS PendingUnitCount,
+       CASE WHEN (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+                  WHERE pfd.PFBCode = pf.PFBCode
+                    AND (pfd.QPCStatus IS NULL OR pfd.QPCStatus NOT IN ('D','RW','R'))) > 0
+            THEN 'Pending'
+            ELSE 'Authorized'
+       END                                                            AS Status
+FROM   ProcessFeedback pf  WITH (NOLOCK)
+INNER JOIN Part        P   WITH (NOLOCK) ON pf.ProductCode = P.PartCode
+WHERE  pf.PCCode_Act = @PC
+   AND pf.PFBCode LIKE 'PSH/%'
+ORDER BY
+    CASE WHEN EXISTS (SELECT 1 FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+                      WHERE pfd.PFBCode = pf.PFBCode
+                        AND (pfd.QPCStatus IS NULL OR pfd.QPCStatus NOT IN ('D','RW','R')))
+         THEN 0 ELSE 1 END,
+    pf.Dt DESC, pf.PFBCode DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PC", SqlDbType.NVarChar, 20).Value = pc;
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessCheckPendingRowDto
+                {
+                    PFBCode          = SafeStr(reader, "PFBCode"),
+                    Dt               = SafeStr(reader, "Dt"),
+                    ProductCode      = SafeStr(reader, "ProductCode"),
+                    ProductDesc      = SafeStr(reader, "ProductDesc"),
+                    KVA              = SafeDouble(reader, "KVA"),
+                    Model            = SafeStr(reader, "Model"),
+                    BatchQty         = SafeDouble(reader, "BatchQty"),
+                    PrcQty           = SafeDouble(reader, "PrcQty"),
+                    MachineCode      = SafeStr(reader, "MachineCode"),
+                    SerialNo         = SafeStr(reader, "SerialNo"),
+                    MakerCode        = SafeStr(reader, "MakerCode"),
+                    TotalUnitCount   = (int)SafeDecimal(reader, "TotalUnitCount"),
+                    DecidedUnitCount = (int)SafeDecimal(reader, "DecidedUnitCount"),
+                    PendingUnitCount = (int)SafeDecimal(reader, "PendingUnitCount"),
+                    Status           = SafeStr(reader, "Status"),
+                });
+            }
+            return rows;
+        }
+
+        // ── 2) Full context for the modal ───────────────────────────────
+        public async Task<CanopyProcessCheckContextDto?> GetCanopyProcessCheckContextAsync(string pfbCode)
+        {
+            var pfb = (pfbCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pfb)) return null;
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            await connection.OpenAsync();
+
+            // 2a) Header
+            CanopyProcessCheckHeaderDto? header = null;
+            const string sqlHeader = @"
+SELECT pf.PFBCode,
+       ISNULL(pf.GroupPFBCode, pf.PFBCode)                           AS GroupPFBCode,
+       ISNULL(pf.CanopyPlanCode, '')                                 AS PlanCode,
+       CONVERT(varchar(19), pf.Dt, 120)                              AS Dt,
+       ISNULL(pf.MachineCode, '')                                    AS MachineCode,
+       ISNULL(pf.SerialNo, '')                                       AS SerialNo,
+       pf.ProductCode                                                AS ProductCode,
+       P.PartDesc + '-->' + pf.ProductCode                           AS ProductDesc,
+       ISNULL(pf.TurretKitCode, '')                                  AS BOMCode,
+       ISNULL(P.KVA, 0)                                              AS KVA,
+       ISNULL(P.Model, '')                                           AS Model,
+       ISNULL(pf.ProcessQty, 0)                                      AS BatchQty,
+       ISNULL(pf.ProcessQty, 0)                                      AS PrcQty,
+       ISNULL(pf.PFBRate, 0)                                         AS Rate,
+       ISNULL(pf.WtPerUt, 0)                                         AS WtPerUt,
+       ISNULL(pf.SqftPerUt, 0)                                       AS SqftPerUt,
+       ISNULL(pf.ProfitCenterCode, '')                               AS PCCode,
+       ISNULL(pf.PCCode_Act, '')                                     AS PCCode_Act,
+       ISNULL(pf.PPWCode, '')                                        AS MakerCode,
+       ISNULL(pf.Remark, '')                                         AS Remark
+FROM   ProcessFeedback pf WITH (NOLOCK)
+INNER JOIN Part         P WITH (NOLOCK) ON pf.ProductCode = P.PartCode
+WHERE  pf.PFBCode = @PFBCode;";
+            using (var cmd = new SqlCommand(sqlHeader, connection))
+            {
+                cmd.Parameters.Add("@PFBCode", SqlDbType.NVarChar, 50).Value = pfb;
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    header = new CanopyProcessCheckHeaderDto
+                    {
+                        PFBCode      = SafeStr(reader, "PFBCode"),
+                        GroupPFBCode = SafeStr(reader, "GroupPFBCode"),
+                        PlanCode     = SafeStr(reader, "PlanCode"),
+                        Dt           = SafeStr(reader, "Dt"),
+                        MachineCode  = SafeStr(reader, "MachineCode"),
+                        SerialNo     = SafeStr(reader, "SerialNo"),
+                        ProductCode  = SafeStr(reader, "ProductCode"),
+                        ProductDesc  = SafeStr(reader, "ProductDesc"),
+                        BOMCode      = SafeStr(reader, "BOMCode"),
+                        KVA          = SafeDouble(reader, "KVA"),
+                        Model        = SafeStr(reader, "Model"),
+                        BatchQty     = SafeDouble(reader, "BatchQty"),
+                        PrcQty       = SafeDouble(reader, "PrcQty"),
+                        Rate         = SafeDouble(reader, "Rate"),
+                        WtPerUt      = SafeDouble(reader, "WtPerUt"),
+                        SqftPerUt    = SafeDouble(reader, "SqftPerUt"),
+                        PCCode       = SafeStr(reader, "PCCode"),
+                        PCCode_Act   = SafeStr(reader, "PCCode_Act"),
+                        MakerCode    = SafeStr(reader, "MakerCode"),
+                        Remark       = SafeStr(reader, "Remark"),
+                    };
+                }
+            }
+            if (header == null) return null;
+
+            // 2b) Consumed parts — single unified read of ProcessFeedbackDetails
+            // for the PFB. Legacy split kit vs. assembly-kit via a `MOB` column
+            // (`MOB='B'` == assembly body), but the migrated Maker path never
+            // sets that column, and it may not even exist on newer schemas —
+            // so we skip the split. Both DTO buckets get the same rows to
+            // preserve the response contract; the UI hides the duplicate
+            // "Assembly Kit" panel when both lists are equal.
+            var kitLines = new List<CanopyProcessCheckKitLineDto>();
+            const string sqlKit = @"
+SELECT pfd.SrNo,
+       pfd.PartCode,
+       ISNULL(P.PartDesc, '')                                        AS PartDesc,
+       ISNULL(pfd.KITQty, 0)                                         AS KitQty,
+       ISNULL(pfd.TotQty, 0)                                         AS TotQty,
+       ISNULL(pfd.PFBRate, 0)                                        AS Rate
+FROM   ProcessFeedbackDetails pfd WITH (NOLOCK)
+LEFT JOIN Part                P  WITH (NOLOCK) ON pfd.PartCode = P.PartCode
+WHERE  pfd.PFBCode = @PFBCode
+ORDER BY pfd.SrNo;";
+            using (var cmd = new SqlCommand(sqlKit, connection))
+            {
+                cmd.Parameters.Add("@PFBCode", SqlDbType.NVarChar, 50).Value = pfb;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    kitLines.Add(new CanopyProcessCheckKitLineDto
+                    {
+                        SrNo     = (int)SafeDecimal(reader, "SrNo"),
+                        PartCode = SafeStr(reader, "PartCode"),
+                        PartDesc = SafeStr(reader, "PartDesc"),
+                        KitQty   = SafeDouble(reader, "KitQty"),
+                        TotQty   = SafeDouble(reader, "TotQty"),
+                        Rate     = SafeDouble(reader, "Rate"),
+                    });
+                }
+            }
+
+            // AssemblyKitLines stays empty — the UI's Panel C is hidden when
+            // this list is empty, so only the unified Kit panel shows.
+            var asslyLines = new List<CanopyProcessCheckKitLineDto>();
+
+            // 2d) Per-unit serial rows.
+            var units = new List<CanopyProcessCheckSerialUnitDto>();
+            const string sqlUnits = @"
+SELECT pfd.SrNo,
+       ISNULL(pfd.SerialNo, '')  AS SerialNo,
+       ISNULL(pfd.BFMSrNo, '')   AS BFMSrNo,
+       ISNULL(pfd.FLKSrNo, '')   AS FLKSrNo,
+       ISNULL(pfd.Status, '')    AS Status,
+       ISNULL(pfd.QPCStatus, '') AS QPCStatus,
+       ISNULL(pfd.RWStatus, '')  AS RWStatus
+FROM   ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+WHERE  pfd.PFBCode = @PFBCode
+ORDER BY pfd.SrNo;";
+            using (var cmd = new SqlCommand(sqlUnits, connection))
+            {
+                cmd.Parameters.Add("@PFBCode", SqlDbType.NVarChar, 50).Value = pfb;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    units.Add(new CanopyProcessCheckSerialUnitDto
+                    {
+                        SrNo      = (int)SafeDecimal(reader, "SrNo"),
+                        SerialNo  = SafeStr(reader, "SerialNo"),
+                        BFMSrNo   = SafeStr(reader, "BFMSrNo"),
+                        FLKSrNo   = SafeStr(reader, "FLKSrNo"),
+                        Status    = SafeStr(reader, "Status"),
+                        QPCStatus = SafeStr(reader, "QPCStatus"),
+                        RWStatus  = SafeStr(reader, "RWStatus"),
+                    });
+                }
+            }
+
+            return new CanopyProcessCheckContextDto
+            {
+                Header           = header,
+                KitLines         = kitLines,
+                AssemblyKitLines = asslyLines,
+                Units            = units,
+            };
+        }
+
+        // ── 3) Save per-unit decisions ──────────────────────────────────
+        // Soft reject (v1): flip QPCStatus and log the activity. Serials are
+        // NOT returned to the pool, WIP is NOT reversed. If Reject semantics
+        // need to escalate (hard reject) later, extend this method behind a
+        // config flag.
+        public async Task<SaveCanopyProcessCheckResponse> SaveCanopyProcessCheckAsync(
+            SaveCanopyProcessCheckRequest request)
+        {
+            ValidateCanopyProcessCheckRequest(request);
+
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open) await conn.OpenAsync();
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            var sqlTx = (SqlTransaction)tx.GetDbTransaction();
+
+            var pfb = request.PFBCode.Trim();
+            var emp = request.EmpCode.Trim();
+            var company = request.CompanyCode.Trim();
+
+            int accepted = 0, rework = 0, rejected = 0;
+
+            try
+            {
+                foreach (var d in request.Decisions)
+                {
+                    if (string.IsNullOrWhiteSpace(d.SerialNo)) continue;
+                    var qpc = MapDecisionToStatus(d.Decision);
+                    if (qpc == null) continue;
+
+                    // For Rework we also mark RWStatus='P' so the rework tracker
+                    // can pick these up; Accept leaves RWStatus as 'OK'; Reject
+                    // sets RWStatus='NA' (v1 — soft reject, not scheduled for RW).
+                    string rwStatus = d.Decision switch
+                    {
+                        CheckerDecisionAccept => "OK",
+                        CheckerDecisionRework => "P",
+                        CheckerDecisionReject => "NA",
+                        _ => "OK",
+                    };
+
+                    using (var cmd = new SqlCommand(@"
+UPDATE ProcessFeedbackDetailsSub
+   SET QPCStatus = @QPC,
+       RWStatus  = @RW
+ WHERE PFBCode  = @PFBCode
+   AND SerialNo = @SerialNo;",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@QPC",      qpc);
+                        cmd.Parameters.AddWithValue("@RW",       rwStatus);
+                        cmd.Parameters.AddWithValue("@PFBCode",  pfb);
+                        cmd.Parameters.AddWithValue("@SerialNo", d.SerialNo.Trim());
+                        var affected = await cmd.ExecuteNonQueryAsync();
+                        if (affected == 0) continue;
+                    }
+
+                    switch (d.Decision)
+                    {
+                        case CheckerDecisionAccept: accepted++; break;
+                        case CheckerDecisionRework: rework++;   break;
+                        case CheckerDecisionReject: rejected++; break;
+                    }
+                }
+
+                // ─── Kanban trigger — moved from Maker (see commented Step 8
+                //     block in SubmitCanopyProcessNewAsync). Fires only when
+                //     the plan is fully consumed AND hasn't already been
+                //     marked done. The CPYWIPStatus='D' flip is the
+                //     idempotency guard so multi-PFB / multi-checker
+                //     sequences fire the Kanban REQ exactly once per plan.
+                //     Only meaningful when at least one Accept happened —
+                //     Rework/Reject decisions don't move the plan forward.
+                if (accepted > 0)
+                {
+                    var pc          = request.PCCode.Trim();          // LineWisePC
+                    var pcOld       = request.ParentDgPC.Trim();      // ParentDgPC
+                    var planCode    = request.PlanCode.Trim();
+                    var productCode = request.ProductCode.Trim();
+
+                    // Single read: (remaining balance, current CPYWIPStatus).
+                    double planBal = 0;
+                    string planCurStatus = string.Empty;
+                    using (var cmd = new SqlCommand(@"
+SELECT ISNULL(Qty - CPYWIPQty, 0)      AS BalQty,
+       ISNULL(CPYWIPStatus,   '')      AS CPYWIPStatus
+FROM   CanopyPlanDetails WITH (UPDLOCK, ROWLOCK)
+WHERE  CPCode   = @PlanCode
+   AND Partcode = @ProductCode;",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@PlanCode",    planCode);
+                        cmd.Parameters.AddWithValue("@ProductCode", productCode);
+                        using var reader = await cmd.ExecuteReaderAsync();
+                        if (await reader.ReadAsync())
+                        {
+                            planBal       = SafeDouble(reader, "BalQty");
+                            planCurStatus = SafeStr(reader, "CPYWIPStatus");
+                        }
+                    }
+
+                    if (planBal <= 0 && planCurStatus != "D")
+                    {
+                        // Flip plan status first — the idempotency guard for
+                        // the next checker that touches units on this plan.
+                        using (var cmd = new SqlCommand(@"
+UPDATE CanopyPlanDetails
+   SET CPYWIPStatus = 'D', CPYWOPStatus = 'D'
+ WHERE CPCode   = @PlanCode
+   AND Partcode = @ProductCode;",
+                            (SqlConnection)conn, sqlTx))
+                        {
+                            cmd.Parameters.AddWithValue("@PlanCode",    planCode);
+                            cmd.Parameters.AddWithValue("@ProductCode", productCode);
+                            await cmd.ExecuteNonQueryAsync();
+                        }
+
+                        var kbRows = await GetInternalTOCRowsAsync(
+                            (SqlConnection)conn, sqlTx, pc);
+                        if (kbRows.Count > 0)
+                        {
+                            // Kanban destination mirrors Plan-submit Step 6.
+                            string kbToPCCodeAct;
+                            string kbToPCCode;
+                            if (pc == "01.190" || pc == "03.069" || pc == "03.181")
+                            {
+                                kbToPCCodeAct = "23.001";
+                                kbToPCCode    = "23.001";
+                            }
+                            else if (pc == "28.025" || pc == "28.039" || pc == "28.116")
+                            {
+                                kbToPCCodeAct = "28.020";
+                                kbToPCCode    = "28.020";
+                            }
+                            else
+                            {
+                                kbToPCCodeAct = "23.001";
+                                kbToPCCode    = "23.001";
+                            }
+
+                            var yearEnd = await GetYearEndAsync() ?? string.Empty;
+                            var kbReqCode = await GetMaxNoAsync(
+                                prefix: "REQ",
+                                compCode: company,
+                                tblName: "MaterialRequisitionWithOutPlan",
+                                tx: sqlTx);
+                            var kbMaxSrNo = ExtractSequencePart(kbReqCode);
+
+                            using (var cmd = new SqlCommand(@"
+INSERT INTO MaterialRequisitionWithOutPlan
+    (REQCode, MaxSrNo, Dt, Yr,
+     ProfitCenterCode, ToProfitCenterCode,
+     ProfitCenterCode_Act, ToProfitCenterCode_Act,
+     ClassCode,
+     CompanyCode, ActNo, REQStatus, ReqType, Remark, Discard, Active, Auth,
+     SourceCode, RequisitionFor)
+VALUES (@REQCode, @MaxSrNo, @Dt, @Yr,
+        @PCCode, @ToPCCode,
+        @PCCodeAct, @ToPCCodeAct,
+        @ProductCode,
+        @CompanyCode, @ActNo, 'P', 'WIP', @Remark, 1, 1, 1,
+        'KanBan', '0');",
+                                (SqlConnection)conn, sqlTx))
+                            {
+                                cmd.Parameters.AddWithValue("@REQCode",     kbReqCode);
+                                cmd.Parameters.AddWithValue("@MaxSrNo",     kbMaxSrNo);
+                                cmd.Parameters.AddWithValue("@Dt",          DateTime.Now);
+                                cmd.Parameters.AddWithValue("@Yr",          yearEnd);
+                                cmd.Parameters.AddWithValue("@PCCode",      pcOld);         // ParentDgPC -> ProfitCenterCode
+                                cmd.Parameters.AddWithValue("@ToPCCode",    kbToPCCode);
+                                cmd.Parameters.AddWithValue("@PCCodeAct",   pc);            // LineWisePC -> ProfitCenterCode_Act
+                                cmd.Parameters.AddWithValue("@ToPCCodeAct", kbToPCCodeAct);
+                                cmd.Parameters.AddWithValue("@ProductCode", productCode);
+                                cmd.Parameters.AddWithValue("@CompanyCode", company);
+                                cmd.Parameters.AddWithValue("@ActNo",       request.BatchQty.ToString());
+                                cmd.Parameters.AddWithValue("@Remark",
+                                    $"Auto Req For Plan No: {productCode} and Prc No: {pfb}");
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+
+                            int kbSr = 0;
+                            foreach (var k in kbRows)
+                            {
+                                kbSr++;
+                                using var cmd = new SqlCommand("insertMaterialRequisitionWithOutPlanDetails",
+                                    (SqlConnection)conn, sqlTx);
+                                cmd.CommandType = CommandType.StoredProcedure;
+                                cmd.Parameters.AddWithValue("@REQCode",   kbReqCode);
+                                cmd.Parameters.AddWithValue("@SrNo",      kbSr);
+                                cmd.Parameters.AddWithValue("@PartCode",  k.Partcode);
+                                cmd.Parameters.AddWithValue("@Qty",       (double)k.RaiseReqQty);
+                                cmd.Parameters.AddWithValue("@REQStatus", "P");
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+
+                            await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                                emp, "S", "MaterialRequisitionWithoutPlan", kbReqCode, company);
+                        }
+                    }
+                }
+                // ─── End Kanban trigger ───
+
+                // Activity log — one row per check submission.
+                await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                    emp, "S", "Canopy Process Checker", pfb, company);
+
+                await tx.CommitAsync();
+
+                var msg = $"Check saved for {pfb} — Accepted: {accepted}, Rework: {rework}, Rejected: {rejected}.";
+                return new SaveCanopyProcessCheckResponse
+                {
+                    Message       = msg,
+                    PFBCode       = pfb,
+                    AcceptedCount = accepted,
+                    ReworkCount   = rework,
+                    RejectedCount = rejected,
+                };
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { /* already rolled back */ }
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error saving Canopy Process check: {inner}", ex);
+            }
+        }
+
+        // ── 4) Date-range Report (for Excel export) ─────────────────────
+        public async Task<List<CanopyProcessCheckReportRowDto>> GetCanopyProcessCheckReportAsync(
+            string pcCode, DateTime fromDate, DateTime toDate)
+        {
+            var rows = new List<CanopyProcessCheckReportRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            var from = fromDate.Date;
+            var to   = toDate.Date.AddDays(1).AddTicks(-1);   // include full end day
+
+            const string sql = @"
+SELECT pf.PFBCode,
+       CONVERT(varchar(19), pf.Dt, 120)                             AS Dt,
+       pf.ProductCode                                                AS ProductCode,
+       P.PartDesc + '-->' + pf.ProductCode                           AS ProductDesc,
+       ISNULL(P.KVA, 0)                                              AS KVA,
+       ISNULL(P.Model, '')                                           AS Model,
+       ISNULL(pf.ProcessQty, 0)                                      AS BatchQty,
+       ISNULL(pf.ProcessQty, 0)                                      AS PrcQty,
+       ISNULL(pf.MachineCode, '')                                    AS MachineCode,
+       ISNULL(pf.SerialNo, '')                                       AS SerialNo,
+       ISNULL(pf.PPWCode, '')                                        AS MakerCode,
+       ISNULL(pf.CanopyPlanCode, '')                                 AS PlanCode,
+       ISNULL(pf.TurretKitCode, '')                                  AS BOMCode,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode)                              AS TotalUnitCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode
+          AND (pfd.QPCStatus IS NULL OR pfd.QPCStatus NOT IN ('D','RW','R')))
+                                                                     AS PendingUnitCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode AND pfd.QPCStatus = 'D')       AS AcceptedCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode AND pfd.QPCStatus = 'RW')      AS ReworkCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode AND pfd.QPCStatus = 'R')       AS RejectedCount,
+       (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+        WHERE pfd.PFBCode = pf.PFBCode AND pfd.QPCStatus IN ('D','RW','R'))
+                                                                     AS DecidedUnitCount,
+       CASE WHEN (SELECT COUNT(*) FROM ProcessFeedbackDetailsSub pfd WITH (NOLOCK)
+                  WHERE pfd.PFBCode = pf.PFBCode
+                    AND (pfd.QPCStatus IS NULL OR pfd.QPCStatus NOT IN ('D','RW','R'))) > 0
+            THEN 'Pending'
+            ELSE 'Authorized'
+       END                                                            AS Status
+FROM   ProcessFeedback pf  WITH (NOLOCK)
+INNER JOIN Part        P   WITH (NOLOCK) ON pf.ProductCode = P.PartCode
+WHERE  pf.PCCode_Act = @PC
+   AND pf.PFBCode LIKE 'PSH/%'
+   AND pf.Dt >= @FromDate
+   AND pf.Dt <= @ToDate
+ORDER BY pf.Dt DESC, pf.PFBCode DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PC",       SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value     = from;
+            cmd.Parameters.Add("@ToDate",   SqlDbType.DateTime).Value     = to;
+
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyProcessCheckReportRowDto
+                {
+                    PFBCode          = SafeStr(reader, "PFBCode"),
+                    Dt               = SafeStr(reader, "Dt"),
+                    ProductCode      = SafeStr(reader, "ProductCode"),
+                    ProductDesc      = SafeStr(reader, "ProductDesc"),
+                    KVA              = SafeDouble(reader, "KVA"),
+                    Model            = SafeStr(reader, "Model"),
+                    BatchQty         = SafeDouble(reader, "BatchQty"),
+                    PrcQty           = SafeDouble(reader, "PrcQty"),
+                    MachineCode      = SafeStr(reader, "MachineCode"),
+                    SerialNo         = SafeStr(reader, "SerialNo"),
+                    MakerCode        = SafeStr(reader, "MakerCode"),
+                    PlanCode         = SafeStr(reader, "PlanCode"),
+                    BOMCode          = SafeStr(reader, "BOMCode"),
+                    TotalUnitCount   = (int)SafeDecimal(reader, "TotalUnitCount"),
+                    PendingUnitCount = (int)SafeDecimal(reader, "PendingUnitCount"),
+                    AcceptedCount    = (int)SafeDecimal(reader, "AcceptedCount"),
+                    ReworkCount      = (int)SafeDecimal(reader, "ReworkCount"),
+                    RejectedCount    = (int)SafeDecimal(reader, "RejectedCount"),
+                    DecidedUnitCount = (int)SafeDecimal(reader, "DecidedUnitCount"),
+                    Status           = SafeStr(reader, "Status"),
+                });
+            }
+            return rows;
+        }
+
+        private static string? MapDecisionToStatus(string? decision) => decision switch
+        {
+            CheckerDecisionAccept => "D",
+            CheckerDecisionRework => "RW",
+            CheckerDecisionReject => "R",
+            _ => null,
+        };
+
+        private static void ValidateCanopyProcessCheckRequest(SaveCanopyProcessCheckRequest req)
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            if (string.IsNullOrWhiteSpace(req.PFBCode))     throw new ArgumentException("PFBCode is required.");
+            if (string.IsNullOrWhiteSpace(req.EmpCode))     throw new ArgumentException("EmpCode is required.");
+            if (string.IsNullOrWhiteSpace(req.CompanyCode)) throw new ArgumentException("CompanyCode is required.");
+            if (req.Decisions == null || req.Decisions.Count == 0)
+                throw new ArgumentException("At least one unit decision is required.");
         }
     }
 }
