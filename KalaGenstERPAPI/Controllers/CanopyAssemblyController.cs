@@ -381,6 +381,60 @@ namespace KalaGenset.ERP.API.Controllers
             }
         }
 
+        // ── Canopy Plan Checker (plan-authorization side) ───────────
+        [HttpGet("GetCanopyPlanCheckPendingList")]
+        public async Task<IActionResult> GetCanopyPlanCheckPendingList([FromQuery] string pcCode)
+        {
+            if (string.IsNullOrWhiteSpace(pcCode))
+                return BadRequest("pcCode is required.");
+            var rows = await _canopyAssemblyService.GetCanopyPlanCheckPendingListAsync(pcCode.Trim());
+            return Ok(rows ?? new List<CanopyPlanCheckPendingRowDto>());
+        }
+
+        [HttpGet("GetCanopyPlanCheckContext")]
+        public async Task<IActionResult> GetCanopyPlanCheckContext([FromQuery] string cpCode)
+        {
+            if (string.IsNullOrWhiteSpace(cpCode))
+                return BadRequest("cpCode is required.");
+            var ctx = await _canopyAssemblyService.GetCanopyPlanCheckContextAsync(cpCode.Trim());
+            return Ok(ctx);
+        }
+
+        [HttpPost("SaveCanopyPlanCheck")]
+        public async Task<IActionResult> SaveCanopyPlanCheck(
+            [FromBody] SaveCanopyPlanCheckRequest req)
+        {
+            if (req == null) return BadRequest("Request body is required.");
+            try
+            {
+                var resp = await _canopyAssemblyService.SaveCanopyPlanCheckAsync(req);
+                return Ok(resp);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("GetCanopyPlanCheckReport")]
+        public async Task<IActionResult> GetCanopyPlanCheckReport(
+            [FromQuery] string pcCode,
+            [FromQuery] DateTime fromDate,
+            [FromQuery] DateTime toDate)
+        {
+            if (string.IsNullOrWhiteSpace(pcCode))
+                return BadRequest("pcCode is required.");
+            if (fromDate == default || toDate == default)
+                return BadRequest("fromDate and toDate are required.");
+            var rows = await _canopyAssemblyService.GetCanopyPlanCheckReportAsync(
+                pcCode.Trim(), fromDate, toDate);
+            return Ok(rows ?? new List<CanopyPlanCheckReportRowDto>());
+        }
+
         // Multipart upload — matches legacy CpyPrc/UploadFiles: multipart form with
         // fileUpload (or file field), FrmEcode, FileUploadType=Save|Delete.
         // Files land in C:\TempERPFile\TempPrcCpy\{FrmEcode}\ and are moved to

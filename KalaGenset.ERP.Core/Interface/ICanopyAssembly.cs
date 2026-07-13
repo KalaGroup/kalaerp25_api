@@ -113,5 +113,25 @@ namespace KalaGenset.ERP.Core.Interface
         // with per-decision unit counts for Excel export.
         Task<List<CanopyProcessCheckReportRowDto>> GetCanopyProcessCheckReportAsync(
             string pcCode, DateTime fromDate, DateTime toDate);
+
+        // ── Canopy Plan Checker (plan-authorization side) ───────────
+        // Pending-list table: CanopyPlan records on the given LineWisePC.
+        // PlanStatus='P' rows land as "Pending"; PlanStatus='D' rows stay
+        // visible as "Authorized" for throughput visibility.
+        Task<List<CanopyPlanCheckPendingRowDto>> GetCanopyPlanCheckPendingListAsync(
+            string pcCode);
+
+        // Full detail for one plan: header + all CanopyPlanDetails rows.
+        Task<CanopyPlanCheckContextDto?> GetCanopyPlanCheckContextAsync(
+            string cpCode);
+
+        // Save the checker's decision — v1 only handles Accept (flips
+        // CanopyPlan.PlanStatus 'P' -> 'D' + writes an activity log row).
+        Task<SaveCanopyPlanCheckResponse> SaveCanopyPlanCheckAsync(
+            SaveCanopyPlanCheckRequest request);
+
+        // Date-range report for the plan checker (Excel export uses this).
+        Task<List<CanopyPlanCheckReportRowDto>> GetCanopyPlanCheckReportAsync(
+            string pcCode, DateTime fromDate, DateTime toDate);
     }
 }

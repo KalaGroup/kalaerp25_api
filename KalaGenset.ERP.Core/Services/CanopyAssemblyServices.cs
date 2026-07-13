@@ -1091,21 +1091,27 @@ FROM (
                         await cmd.ExecuteNonQueryAsync();
                     }
 
-                    // 3b) Logistics-Kit REQ (uses InternalReqLogisticsKit @PartCode, 3, '029')
+                    // ─────────────────────────────────────────────────────────
+                    // 3b + 3c) [MOVED TO CHECKER] Steps 6 & 11 auto-REQs.
+                    //
+                    // Previously fired here per plan detail row — but raising
+                    // material REQs at plan-save time meant logistics started
+                    // pulling material before QC had approved the plan. If the
+                    // checker later rejects/reworks a plan, the REQs were
+                    // speculative.
+                    //
+                    // Both blocks (Logistics-Kit REQ + Wiring-Harness REQ) now
+                    // fire from SaveCanopyPlanCheckAsync's FirePlanCheckerAutoReqsAsync
+                    // helper, only on the fresh Checker1 0->1 transition.
+                    //
+                    // Kept commented here as the reference implementation and
+                    // an easy rollback point.
+                    /*
                     var reqCompCode = company;
                     var logReqCode = await GetMaxNoAsync(
-                        prefix: "REQ",
-                        compCode: reqCompCode,
-                        tblName: "MaterialRequisitionWithOutPlan",
-                        tx: sqlTx);
+                        prefix: "REQ", compCode: reqCompCode,
+                        tblName: "MaterialRequisitionWithOutPlan", tx: sqlTx);
                     var logMaxSrNo = ExtractSequencePart(logReqCode);
-
-                    // Step 6: master REQ via SP (matches SubmitJobCardAsync pattern).
-                    // Writes the new PCCode_Act / ToPCCode_Act columns:
-                    //   @ProfitCenterCode      = pcOld          (ParentDgPC — old PC)
-                    //   @ProfitCenterCode_Act  = pc             (LineWisePC — active PC)
-                    //   @ToProfitCenterCode    = toprofitCenterCode
-                    //   @ToProfitCenterCode_Act = profitCenterCodeAct
                     await _context.Database.ExecuteSqlRawAsync(
                         "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
                         "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
@@ -1130,7 +1136,6 @@ FROM (
                         new SqlParameter("@Discard",                1),
                         new SqlParameter("@Active",                 1),
                         new SqlParameter("@Auth",                   1));
-
                     var logKitRows = await GetInternalReqLogisticsKitAsync(
                         (SqlConnection)conn, sqlTx, rowPartCode, pcCodeStage: 3, requisitionFor: "029");
                     int logSr = 0;
@@ -1148,20 +1153,10 @@ FROM (
                         await cmd.ExecuteNonQueryAsync();
                     }
 
-                    // 3c) Wiring-Harness REQ (uses InternalReqLogisticsdetailsWHKIT_Canopy)
                     var whReqCode = await GetMaxNoAsync(
-                        prefix: "REQ",
-                        compCode: reqCompCode,
-                        tblName: "MaterialRequisitionWithOutPlan",
-                        tx: sqlTx);
+                        prefix: "REQ", compCode: reqCompCode,
+                        tblName: "MaterialRequisitionWithOutPlan", tx: sqlTx);
                     var whMaxSrNo = ExtractSequencePart(whReqCode);
-
-                    // Step 11: master REQ via SP (matches Step 6 pattern for WH team).
-                    // Writes the new PCCode_Act / ToPCCode_Act columns:
-                    //   @ProfitCenterCode       = pcOld                    (ParentDgPC — old PC)
-                    //   @ProfitCenterCode_Act   = pc                       (LineWisePC — active PC)
-                    //   @ToProfitCenterCode     = whToProfitCenterCode     (Wiring-Harness team)
-                    //   @ToProfitCenterCode_Act = whProfitCenterCodeAct    (same routing)
                     await _context.Database.ExecuteSqlRawAsync(
                         "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
                         "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
@@ -1186,7 +1181,6 @@ FROM (
                         new SqlParameter("@Discard",                1),
                         new SqlParameter("@Active",                 1),
                         new SqlParameter("@Auth",                   1));
-
                     var whRows = await GetInternalReqWHKitAsync(
                         (SqlConnection)conn, sqlTx, rowPartCode);
                     int whSr = 0;
@@ -1203,6 +1197,8 @@ FROM (
                         cmd.Parameters.AddWithValue("@REQStatus", "P");
                         await cmd.ExecuteNonQueryAsync();
                     }
+                    */
+                    // ─────────────────────────────────────────────────────────
                 }
 
                 // 4) Activity log
@@ -1397,7 +1393,7 @@ INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
 INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
 WHERE    cp.PlanPCCode = @PCCode
   AND    ISNULL(cp.Active, '1')       = '1'
-  AND    ISNULL(cp.PlanStatus, 'P')   = 'P'
+  AND    ISNULL(cp.Checker1, 0)       = 1
   AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
   AND    (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
   AND    P.KVA IS NOT NULL
@@ -1441,7 +1437,7 @@ INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
 INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
 WHERE    cp.PlanPCCode = @PCCode
   AND    ISNULL(cp.Active, '1')     = '1'
-  AND    ISNULL(cp.PlanStatus, 'P') = 'P'
+  AND    ISNULL(cp.Checker1, 0)     = 1
   AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
   AND    (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
   AND    P.KVA   = @KVA
@@ -1513,7 +1509,7 @@ LEFT   JOIN ProcessFeedback pf WITH (NOLOCK)
        AND pf.PFBCode LIKE 'PSH/%'
 WHERE  cp.PlanPCCode = @PCCode
    AND ISNULL(cp.Active, '1')     = '1'
-   AND ISNULL(cp.PlanStatus, 'P') = 'P'
+   AND ISNULL(cp.Checker1, 0)     = 1
    AND CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
    AND (ISNULL(d.Qty, 0) - ISNULL(d.CpyWIPQty, 0)) > 0
    AND P.KVA   = @KVA
@@ -3213,6 +3209,550 @@ ORDER BY pf.Dt DESC, pf.PFBCode DESC;";
             if (string.IsNullOrWhiteSpace(req.CompanyCode)) throw new ArgumentException("CompanyCode is required.");
             if (req.Decisions == null || req.Decisions.Count == 0)
                 throw new ArgumentException("At least one unit decision is required.");
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  Canopy Plan Checker (plan-authorization side)
+        // ════════════════════════════════════════════════════════════════
+
+        // ── 1) Pending / Authorized plan list ──────────────────────────
+        public async Task<List<CanopyPlanCheckPendingRowDto>> GetCanopyPlanCheckPendingListAsync(
+            string pcCode)
+        {
+            var rows = new List<CanopyPlanCheckPendingRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            // Pending rows sort first (by CASE WHEN in ORDER BY), then most
+            // recent Dt. Authorized rows stay visible for throughput visibility.
+            // Maker code isn't a column on CanopyPlan — sourced from the
+            // Plan save's audit row in LoginTransactionDetails.
+            // Authorization is tracked via the Checker1 bit column
+            // (0 = pending, 1 = authorized) — PlanStatus is ignored per
+            // business direction.
+            const string sql = @"
+SELECT cp.CPCode,
+       CONVERT(varchar(19), cp.Dt,     120)                          AS Dt,
+       CONVERT(varchar(10), cp.FromDt, 120)                          AS FromDt,
+       CONVERT(varchar(10), cp.ToDt,   120)                          AS ToDt,
+       ISNULL(cp.PlanPCCode,  '')                                    AS PlanPCCode,
+       ISNULL(cp.PlanType,    '')                                    AS PlanType,
+       CAST(ISNULL(cp.Checker1, 0) AS varchar(1))                    AS PlanStatus,
+       ISNULL((SELECT TOP 1 EmpID FROM LoginTransactionDetails WITH (NOLOCK)
+               WHERE TransactionNo = cp.CPCode
+                 AND TransactionFrom = 'CanopyPlan'
+               ORDER BY TransactionDtTime ASC), '')                  AS MakerCode,
+       ISNULL(cp.CompanyCode, '')                                    AS CompanyCode,
+       (SELECT COUNT(*) FROM CanopyPlanDetails cpd WITH (NOLOCK)
+        WHERE cpd.CPCode = cp.CPCode)                                AS DetailRowCount,
+       ISNULL((SELECT SUM(ISNULL(cpd.Qty, 0)) FROM CanopyPlanDetails cpd WITH (NOLOCK)
+               WHERE cpd.CPCode = cp.CPCode), 0)                     AS TotalPlanQty,
+       -- Aggregate distinct KVAs across the plan's parts using the classic
+       -- STUFF+FOR XML pattern (works on SQL Server 2005+ — no STRING_AGG
+       -- dependency). Empty when none of the parts carry a KVA.
+       ISNULL(STUFF((
+              SELECT DISTINCT ', ' + CONVERT(varchar(10), P.KVA)
+              FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+              INNER JOIN Part P WITH (NOLOCK) ON P.PartCode = cpd.Partcode
+              WHERE  cpd.CPCode = cp.CPCode
+                AND  P.KVA IS NOT NULL
+              FOR XML PATH(''), TYPE
+       ).value('.', 'varchar(max)'), 1, 2, ''), '')                  AS KVAs,
+       -- Same STUFF+FOR XML pattern for distinct Partcodes.
+       ISNULL(STUFF((
+              SELECT DISTINCT ', ' + cpd.Partcode
+              FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+              WHERE  cpd.CPCode = cp.CPCode
+                AND  cpd.Partcode IS NOT NULL
+                AND  LTRIM(RTRIM(cpd.Partcode)) <> ''
+              FOR XML PATH(''), TYPE
+       ).value('.', 'varchar(max)'), 1, 2, ''), '')                  AS PartCodes,
+       CASE WHEN ISNULL(cp.Checker1, 0) = 1 THEN 'Authorized' ELSE 'Pending' END
+                                                                     AS StatusLabel
+FROM   CanopyPlan cp WITH (NOLOCK)
+WHERE  cp.PCCode_Act = @PC
+ORDER BY
+    CASE WHEN ISNULL(cp.Checker1, 0) = 1 THEN 1 ELSE 0 END,
+    cp.Dt DESC, cp.CPCode DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PC", SqlDbType.NVarChar, 20).Value = pc;
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyPlanCheckPendingRowDto
+                {
+                    CPCode          = SafeStr(reader, "CPCode"),
+                    Dt              = SafeStr(reader, "Dt"),
+                    FromDt          = SafeStr(reader, "FromDt"),
+                    ToDt            = SafeStr(reader, "ToDt"),
+                    PlanPCCode      = SafeStr(reader, "PlanPCCode"),
+                    PlanType        = SafeStr(reader, "PlanType"),
+                    PlanStatus      = SafeStr(reader, "PlanStatus"),
+                    MakerCode       = SafeStr(reader, "MakerCode"),
+                    CompanyCode     = SafeStr(reader, "CompanyCode"),
+                    DetailRowCount  = (int)SafeDecimal(reader, "DetailRowCount"),
+                    TotalPlanQty    = SafeDouble(reader, "TotalPlanQty"),
+                    KVAs            = SafeStr(reader, "KVAs"),
+                    PartCodes       = SafeStr(reader, "PartCodes"),
+                    Status          = SafeStr(reader, "StatusLabel"),
+                });
+            }
+            return rows;
+        }
+
+        // ── 2) Full plan context (header + details) ────────────────────
+        public async Task<CanopyPlanCheckContextDto?> GetCanopyPlanCheckContextAsync(string cpCode)
+        {
+            var cp = (cpCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(cp)) return null;
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            await connection.OpenAsync();
+
+            // Header
+            CanopyPlanCheckHeaderDto? header = null;
+            const string sqlHeader = @"
+SELECT cp.CPCode,
+       CONVERT(varchar(19), cp.Dt,     120) AS Dt,
+       CONVERT(varchar(10), cp.FromDt, 120) AS FromDt,
+       CONVERT(varchar(10), cp.ToDt,   120) AS ToDt,
+       ISNULL(cp.PlanPCCode,  '')           AS PlanPCCode,
+       ISNULL(cp.PCCode_Act,  '')           AS PCCode_Act,
+       ISNULL(cp.CompanyCode, '')           AS CompanyCode,
+       ISNULL(cp.PlanType,    '')           AS PlanType,
+       CAST(ISNULL(cp.Checker1, 0) AS varchar(1)) AS PlanStatus,
+       ISNULL((SELECT TOP 1 EmpID FROM LoginTransactionDetails WITH (NOLOCK)
+               WHERE TransactionNo = cp.CPCode
+                 AND TransactionFrom = 'CanopyPlan'
+               ORDER BY TransactionDtTime ASC), '')
+                                            AS MakerCode,
+       ISNULL(cp.Yr,          '')           AS Yr
+FROM   CanopyPlan cp WITH (NOLOCK)
+WHERE  cp.CPCode = @CPCode;";
+            using (var cmd = new SqlCommand(sqlHeader, connection))
+            {
+                cmd.Parameters.Add("@CPCode", SqlDbType.NVarChar, 50).Value = cp;
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    header = new CanopyPlanCheckHeaderDto
+                    {
+                        CPCode      = SafeStr(reader, "CPCode"),
+                        Dt          = SafeStr(reader, "Dt"),
+                        FromDt      = SafeStr(reader, "FromDt"),
+                        ToDt        = SafeStr(reader, "ToDt"),
+                        PlanPCCode  = SafeStr(reader, "PlanPCCode"),
+                        PCCode_Act  = SafeStr(reader, "PCCode_Act"),
+                        CompanyCode = SafeStr(reader, "CompanyCode"),
+                        PlanType    = SafeStr(reader, "PlanType"),
+                        PlanStatus  = SafeStr(reader, "PlanStatus"),
+                        MakerCode   = SafeStr(reader, "MakerCode"),
+                        Yr          = SafeStr(reader, "Yr"),
+                    };
+                }
+            }
+            if (header == null) return null;
+
+            // Details
+            var details = new List<CanopyPlanCheckDetailRowDto>();
+            const string sqlDetails = @"
+SELECT ISNULL(cpd.SrNo, 0)                     AS SrNo,
+       CONVERT(varchar(10), cpd.Dt, 120)       AS Dt,
+       ISNULL(cpd.Partcode,    '')             AS Partcode,
+       ISNULL(p.PartDesc,      '')             AS PartDesc,
+       ISNULL(cpd.BomCode,     '')             AS BomCode,
+       ISNULL(cpd.PartCodeWOP, '')             AS PartCodeWOP,
+       ISNULL(cpd.Qty,          0)             AS Qty,
+       ISNULL(cpd.CPYWIPQty,    0)             AS CpyWIPQty,
+       ISNULL(cpd.CPYWOPQty,    0)             AS CpyWOPQty,
+       ISNULL(cpd.CPYWIPStatus,'')             AS CpyWIPStatus,
+       ISNULL(cpd.CPYWOPStatus,'')             AS CpyWOPStatus
+FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+LEFT   JOIN Part            p   WITH (NOLOCK) ON p.PartCode = cpd.Partcode
+WHERE  cpd.CPCode = @CPCode
+ORDER BY cpd.SrNo;";
+            using (var cmd = new SqlCommand(sqlDetails, connection))
+            {
+                cmd.Parameters.Add("@CPCode", SqlDbType.NVarChar, 50).Value = cp;
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    details.Add(new CanopyPlanCheckDetailRowDto
+                    {
+                        SrNo         = (int)SafeDecimal(reader, "SrNo"),
+                        Dt           = SafeStr(reader, "Dt"),
+                        Partcode     = SafeStr(reader, "Partcode"),
+                        PartDesc     = SafeStr(reader, "PartDesc"),
+                        BomCode      = SafeStr(reader, "BomCode"),
+                        PartCodeWOP  = SafeStr(reader, "PartCodeWOP"),
+                        Qty          = SafeDouble(reader, "Qty"),
+                        CpyWIPQty    = SafeDouble(reader, "CpyWIPQty"),
+                        CpyWOPQty    = SafeDouble(reader, "CpyWOPQty"),
+                        CpyWIPStatus = SafeStr(reader, "CpyWIPStatus"),
+                        CpyWOPStatus = SafeStr(reader, "CpyWOPStatus"),
+                    });
+                }
+            }
+
+            return new CanopyPlanCheckContextDto
+            {
+                Header  = header,
+                Details = details,
+            };
+        }
+
+        // ── 3) Save checker's decision ─────────────────────────────────
+        // v1 handles Accept only — flips CanopyPlan.Checker1 0 -> 1 and, on the
+        // fresh 0->1 transition, fires the Logistics-Kit + Wiring-Harness REQs
+        // for every plan detail row (Steps 6 & 11 — moved here from the Maker's
+        // SubmitCanopyPlanAsync so REQs only exist once QC has authorized the
+        // plan). Rework / Reject values are accepted at the DTO level for
+        // future use but no DB state changes for them today.
+        public async Task<SaveCanopyPlanCheckResponse> SaveCanopyPlanCheckAsync(
+            SaveCanopyPlanCheckRequest request)
+        {
+            ValidateCanopyPlanCheckRequest(request);
+
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open) await conn.OpenAsync();
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            var sqlTx = (SqlTransaction)tx.GetDbTransaction();
+
+            var cp       = request.CPCode.Trim();
+            var emp      = request.EmpCode.Trim();
+            var company  = request.CompanyCode.Trim();
+            var pc       = request.PCCode.Trim();        // LineWisePC
+            var pcOld    = request.ParentDgPC.Trim();    // ParentDgPC
+            var decision = (request.Decision ?? "Accept").Trim();
+
+            try
+            {
+                string finalStatus = "0";
+
+                if (string.Equals(decision, "Accept", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Idempotency guard — only flip if Checker1 is currently 0.
+                    // @@ROWCOUNT tells us whether we actually transitioned.
+                    int affectedRows;
+                    using (var cmd = new SqlCommand(@"
+UPDATE CanopyPlan
+   SET Checker1 = 1
+ WHERE CPCode = @CPCode
+   AND ISNULL(Checker1, 0) = 0;",
+                        (SqlConnection)conn, sqlTx))
+                    {
+                        cmd.Parameters.AddWithValue("@CPCode", cp);
+                        affectedRows = await cmd.ExecuteNonQueryAsync();
+                    }
+                    finalStatus = "1";
+
+                    // Fire Steps 6 & 11 only on the fresh 0->1 transition.
+                    // If the plan was already authorized, the UPDATE returns 0
+                    // and we skip — no duplicate REQs.
+                    if (affectedRows > 0)
+                    {
+                        await FirePlanCheckerAutoReqsAsync(
+                            (SqlConnection)conn, sqlTx, cp, pc, pcOld, company, emp);
+                    }
+                }
+                else
+                {
+                    // Rework / Reject — reserved for future. Read current
+                    // status back so the response is truthful.
+                    finalStatus = await ExecuteScalarStringAsync(
+                        (SqlConnection)conn,
+                        "SELECT CAST(ISNULL(Checker1, 0) AS varchar(1)) FROM CanopyPlan WHERE CPCode = @CPCode;",
+                        ("@CPCode", cp));
+                }
+
+                await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
+                    emp, "S", "Canopy Plan Checker", cp, company);
+
+                await tx.CommitAsync();
+
+                return new SaveCanopyPlanCheckResponse
+                {
+                    Message    = $"Plan {cp} — {decision} recorded (Checker1='{finalStatus}').",
+                    CPCode     = cp,
+                    PlanStatus = finalStatus,
+                };
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { /* already rolled back */ }
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error saving Canopy Plan check: {inner}", ex);
+            }
+        }
+
+        // Steps 6 & 11 from SubmitCanopyPlanAsync — moved here so the auto-REQs
+        // (Logistics-Kit + Wiring-Harness) only fire once QC has authorized
+        // the plan. Loops through every CanopyPlanDetails row for the plan.
+        private async Task FirePlanCheckerAutoReqsAsync(
+            SqlConnection conn, SqlTransaction sqlTx,
+            string cpCode, string pc, string pcOld, string company, string emp)
+        {
+            // PC mapping — matches Plan-submit's Step 6 driver.
+            string profitCenterCodeAct;
+            string toprofitCenterCode;
+            if (pc == "01.190" || pc == "03.069" || pc == "03.181")
+            {
+                profitCenterCodeAct = "23.001";
+                toprofitCenterCode  = "23.001";
+            }
+            else if (pc == "28.025" || pc == "28.039" || pc == "28.116")
+            {
+                profitCenterCodeAct = "28.020";
+                toprofitCenterCode  = "28.020";
+            }
+            else
+            {
+                profitCenterCodeAct = "23.001";
+                toprofitCenterCode  = "23.001";
+            }
+
+            // Same for Wiring-Harness (different team) — Step 11 driver.
+            string whProfitCenterCodeAct;
+            string whToProfitCenterCode;
+            if (pc == "01.190" || pc == "03.069" || pc == "03.181")
+            {
+                whProfitCenterCodeAct = "01.091";
+                whToProfitCenterCode  = "01.091";
+            }
+            else if (pc == "28.025" || pc == "28.039" || pc == "28.116")
+            {
+                whProfitCenterCodeAct = "28.020";
+                whToProfitCenterCode  = "28.020";
+            }
+            else
+            {
+                whProfitCenterCodeAct = "01.091";
+                whToProfitCenterCode  = "01.091";
+            }
+
+            // Load every detail row (Partcode + Qty) for the plan.
+            var rows = new List<(string PartCode, double Qty)>();
+            using (var cmd = new SqlCommand(@"
+SELECT ISNULL(cpd.Partcode, '') AS Partcode,
+       ISNULL(cpd.Qty,       0) AS Qty
+FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+WHERE  cpd.CPCode = @CPCode
+ORDER BY cpd.SrNo;",
+                conn, sqlTx))
+            {
+                cmd.Parameters.AddWithValue("@CPCode", cpCode);
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    rows.Add((SafeStr(reader, "Partcode"), SafeDouble(reader, "Qty")));
+                }
+            }
+
+            var yearEnd = await GetYearEndAsync() ?? string.Empty;
+
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.PartCode)) continue;
+
+                // Step 6 — Logistics-Kit REQ
+                var logReqCode = await GetMaxNoAsync(
+                    prefix: "REQ",
+                    compCode: company,
+                    tblName: "MaterialRequisitionWithOutPlan",
+                    tx: sqlTx);
+                var logMaxSrNo = ExtractSequencePart(logReqCode);
+
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
+                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
+                    "@ProfitCenterCode_Act, @ToProfitCenterCode_Act, " +
+                    "@ClassCode, @ActNo, @SourceCode, @CompanyCode, " +
+                    "@REQStatus, @REQType, @Remark, @Discard, @Active, @Auth",
+                    new SqlParameter("@REQCode",                logReqCode),
+                    new SqlParameter("@MaxSrNo",                logMaxSrNo),
+                    new SqlParameter("@Dt",                     DateTime.Now),
+                    new SqlParameter("@Yr",                     yearEnd),
+                    new SqlParameter("@ProfitCenterCode",       pcOld),
+                    new SqlParameter("@ToProfitCenterCode",     toprofitCenterCode),
+                    new SqlParameter("@ProfitCenterCode_Act",   pc),
+                    new SqlParameter("@ToProfitCenterCode_Act", profitCenterCodeAct),
+                    new SqlParameter("@ClassCode",              row.PartCode),
+                    new SqlParameter("@ActNo",                  row.Qty.ToString()),
+                    new SqlParameter("@SourceCode",             cpCode),
+                    new SqlParameter("@CompanyCode",            company),
+                    new SqlParameter("@REQStatus",              "P"),
+                    new SqlParameter("@REQType",                "WIP"),
+                    new SqlParameter("@Remark",                 $"Auto Req For : {row.PartCode} and Plan No: {cpCode}"),
+                    new SqlParameter("@Discard",                1),
+                    new SqlParameter("@Active",                 1),
+                    new SqlParameter("@Auth",                   1));
+
+                var logKitRows = await GetInternalReqLogisticsKitAsync(
+                    conn, sqlTx, row.PartCode, pcCodeStage: 3, requisitionFor: "029");
+                int logSr = 0;
+                foreach (var k in logKitRows)
+                {
+                    logSr++;
+                    using var cmd = new SqlCommand("insertMaterialRequisitionWithOutPlanDetails",
+                        conn, sqlTx);
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@REQCode",   logReqCode);
+                    cmd.Parameters.AddWithValue("@SrNo",      logSr);
+                    cmd.Parameters.AddWithValue("@PartCode",  k.PartCode);
+                    cmd.Parameters.AddWithValue("@Qty",       k.RaiseReqQty * row.Qty);
+                    cmd.Parameters.AddWithValue("@REQStatus", "P");
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Step 11 — Wiring-Harness REQ
+                var whReqCode = await GetMaxNoAsync(
+                    prefix: "REQ",
+                    compCode: company,
+                    tblName: "MaterialRequisitionWithOutPlan",
+                    tx: sqlTx);
+                var whMaxSrNo = ExtractSequencePart(whReqCode);
+
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC insertMaterialRequisitionWithOutPlanProcessVsPlan " +
+                    "@REQCode, @MaxSrNo, @Dt, @Yr, @ProfitCenterCode, @ToProfitCenterCode, " +
+                    "@ProfitCenterCode_Act, @ToProfitCenterCode_Act, " +
+                    "@ClassCode, @ActNo, @SourceCode, @CompanyCode, " +
+                    "@REQStatus, @REQType, @Remark, @Discard, @Active, @Auth",
+                    new SqlParameter("@REQCode",                whReqCode),
+                    new SqlParameter("@MaxSrNo",                whMaxSrNo),
+                    new SqlParameter("@Dt",                     DateTime.Now),
+                    new SqlParameter("@Yr",                     yearEnd),
+                    new SqlParameter("@ProfitCenterCode",       pcOld),
+                    new SqlParameter("@ToProfitCenterCode",     whToProfitCenterCode),
+                    new SqlParameter("@ProfitCenterCode_Act",   pc),
+                    new SqlParameter("@ToProfitCenterCode_Act", whProfitCenterCodeAct),
+                    new SqlParameter("@ClassCode",              row.PartCode),
+                    new SqlParameter("@ActNo",                  row.Qty.ToString()),
+                    new SqlParameter("@SourceCode",             cpCode),
+                    new SqlParameter("@CompanyCode",            company),
+                    new SqlParameter("@REQStatus",              "P"),
+                    new SqlParameter("@REQType",                "WIP"),
+                    new SqlParameter("@Remark",                 $"Auto Req For : {row.PartCode} and Plan No: {cpCode}"),
+                    new SqlParameter("@Discard",                1),
+                    new SqlParameter("@Active",                 1),
+                    new SqlParameter("@Auth",                   1));
+
+                var whRows = await GetInternalReqWHKitAsync(conn, sqlTx, row.PartCode);
+                int whSr = 0;
+                foreach (var w in whRows)
+                {
+                    whSr++;
+                    using var cmd = new SqlCommand("insertMaterialRequisitionWithOutPlanDetails",
+                        conn, sqlTx);
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@REQCode",   whReqCode);
+                    cmd.Parameters.AddWithValue("@SrNo",      whSr);
+                    cmd.Parameters.AddWithValue("@PartCode",  w.PartCode);
+                    cmd.Parameters.AddWithValue("@Qty",       w.RaiseReqQty * row.Qty);
+                    cmd.Parameters.AddWithValue("@REQStatus", "P");
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
+        // ── 4) Date-range report ────────────────────────────────────────
+        public async Task<List<CanopyPlanCheckReportRowDto>> GetCanopyPlanCheckReportAsync(
+            string pcCode, DateTime fromDate, DateTime toDate)
+        {
+            var rows = new List<CanopyPlanCheckReportRowDto>();
+            var pc = (pcCode ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(pc)) return rows;
+
+            var from = fromDate.Date;
+            var to   = toDate.Date.AddDays(1).AddTicks(-1);
+
+            const string sql = @"
+SELECT cp.CPCode,
+       CONVERT(varchar(19), cp.Dt,     120)                          AS Dt,
+       CONVERT(varchar(10), cp.FromDt, 120)                          AS FromDt,
+       CONVERT(varchar(10), cp.ToDt,   120)                          AS ToDt,
+       ISNULL(cp.PlanPCCode,  '')                                    AS PlanPCCode,
+       ISNULL(cp.PlanType,    '')                                    AS PlanType,
+       CAST(ISNULL(cp.Checker1, 0) AS varchar(1))                    AS PlanStatus,
+       ISNULL((SELECT TOP 1 EmpID FROM LoginTransactionDetails WITH (NOLOCK)
+               WHERE TransactionNo = cp.CPCode
+                 AND TransactionFrom = 'CanopyPlan'
+               ORDER BY TransactionDtTime ASC), '')                  AS MakerCode,
+       ISNULL(cp.CompanyCode, '')                                    AS CompanyCode,
+       (SELECT COUNT(*) FROM CanopyPlanDetails cpd WITH (NOLOCK)
+        WHERE cpd.CPCode = cp.CPCode)                                AS DetailRowCount,
+       ISNULL((SELECT SUM(ISNULL(cpd.Qty, 0)) FROM CanopyPlanDetails cpd WITH (NOLOCK)
+               WHERE cpd.CPCode = cp.CPCode), 0)                     AS TotalPlanQty,
+       -- Aggregate distinct KVAs across the plan's parts using the classic
+       -- STUFF+FOR XML pattern (works on SQL Server 2005+ — no STRING_AGG
+       -- dependency). Empty when none of the parts carry a KVA.
+       ISNULL(STUFF((
+              SELECT DISTINCT ', ' + CONVERT(varchar(10), P.KVA)
+              FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+              INNER JOIN Part P WITH (NOLOCK) ON P.PartCode = cpd.Partcode
+              WHERE  cpd.CPCode = cp.CPCode
+                AND  P.KVA IS NOT NULL
+              FOR XML PATH(''), TYPE
+       ).value('.', 'varchar(max)'), 1, 2, ''), '')                  AS KVAs,
+       -- Same STUFF+FOR XML pattern for distinct Partcodes.
+       ISNULL(STUFF((
+              SELECT DISTINCT ', ' + cpd.Partcode
+              FROM   CanopyPlanDetails cpd WITH (NOLOCK)
+              WHERE  cpd.CPCode = cp.CPCode
+                AND  cpd.Partcode IS NOT NULL
+                AND  LTRIM(RTRIM(cpd.Partcode)) <> ''
+              FOR XML PATH(''), TYPE
+       ).value('.', 'varchar(max)'), 1, 2, ''), '')                  AS PartCodes,
+       ISNULL((SELECT SUM(ISNULL(cpd.CPYWIPQty, 0)) FROM CanopyPlanDetails cpd WITH (NOLOCK)
+               WHERE cpd.CPCode = cp.CPCode), 0)                     AS TotalWIPQty,
+       CASE WHEN ISNULL(cp.Checker1, 0) = 1 THEN 'Authorized' ELSE 'Pending' END
+                                                                     AS StatusLabel
+FROM   CanopyPlan cp WITH (NOLOCK)
+WHERE  cp.PCCode_Act = @PC
+   AND cp.Dt >= @FromDt
+   AND cp.Dt <= @ToDt
+ORDER BY cp.Dt DESC, cp.CPCode DESC;";
+
+            using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.Add("@PC",     SqlDbType.NVarChar, 20).Value = pc;
+            cmd.Parameters.Add("@FromDt", SqlDbType.DateTime).Value     = from;
+            cmd.Parameters.Add("@ToDt",   SqlDbType.DateTime).Value     = to;
+            await connection.OpenAsync();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                rows.Add(new CanopyPlanCheckReportRowDto
+                {
+                    CPCode         = SafeStr(reader, "CPCode"),
+                    Dt             = SafeStr(reader, "Dt"),
+                    FromDt         = SafeStr(reader, "FromDt"),
+                    ToDt           = SafeStr(reader, "ToDt"),
+                    PlanPCCode     = SafeStr(reader, "PlanPCCode"),
+                    PlanType       = SafeStr(reader, "PlanType"),
+                    PlanStatus     = SafeStr(reader, "PlanStatus"),
+                    MakerCode      = SafeStr(reader, "MakerCode"),
+                    CompanyCode    = SafeStr(reader, "CompanyCode"),
+                    DetailRowCount = (int)SafeDecimal(reader, "DetailRowCount"),
+                    TotalPlanQty   = SafeDouble(reader, "TotalPlanQty"),
+                    TotalWIPQty    = SafeDouble(reader, "TotalWIPQty"),
+                    KVAs           = SafeStr(reader, "KVAs"),
+                    PartCodes      = SafeStr(reader, "PartCodes"),
+                    Status         = SafeStr(reader, "StatusLabel"),
+                });
+            }
+            return rows;
+        }
+
+        private static void ValidateCanopyPlanCheckRequest(SaveCanopyPlanCheckRequest req)
+        {
+            if (req == null) throw new ArgumentNullException(nameof(req));
+            if (string.IsNullOrWhiteSpace(req.CPCode))      throw new ArgumentException("CPCode is required.");
+            if (string.IsNullOrWhiteSpace(req.EmpCode))     throw new ArgumentException("EmpCode is required.");
+            if (string.IsNullOrWhiteSpace(req.CompanyCode)) throw new ArgumentException("CompanyCode is required.");
         }
     }
 }
