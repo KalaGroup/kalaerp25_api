@@ -45,10 +45,12 @@ namespace KalaGenset.ERP.Core.ResponseDTO
     public class MachineDownTimeTrendDTO
     {
         public string Date { get; set; } = string.Empty;          // yyyy-MM-dd
+        public string CompanyCode { get; set; } = string.Empty;   // owning company (LEFT(PCCode,2)) for the chart picker
         public string DeptName { get; set; } = string.Empty;
         public string MachineName { get; set; } = string.Empty;
         public int TotalMin { get; set; }                          // machine down time (computed)
         public int LineTotalMin { get; set; }                      // line down time (computed)
         public string Status { get; set; } = string.Empty;
+        public string Remark { get; set; } = string.Empty;         // reason (for the dated breakdown grid)
     }
 }

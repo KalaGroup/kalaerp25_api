@@ -8,6 +8,9 @@ namespace KalaGenset.ERP.Core.Interface
 {
     public interface IMachineDownTime
     {
+        /// <summary>Companies the login may view charts for (33 -> 01/03/28, else self).</summary>
+        Task<List<CompanyOptionDTO>> GetViewCompaniesAsync(string companyCode);
+
         /// <summary>Departments for the company (AssignMachineToPC joined to ProfitCenter).</summary>
         Task<List<MachineDeptDTO>> GetDepartmentsAsync(string companyCode);
 
