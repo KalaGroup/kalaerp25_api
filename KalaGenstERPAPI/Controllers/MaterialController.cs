@@ -18,6 +18,48 @@ namespace KalaGenset.ERP.API.Controllers
         }
 
         // GET api/Material/GetDepartments?companyCode=01
+        [HttpGet("GetViewCompanies")]
+        public async Task<IActionResult> GetViewCompanies(string companyCode)
+        {
+            var result = await _service.GetViewCompaniesAsync(companyCode);
+            return Ok(result);
+        }
+
+        [HttpGet("GetPartsByKva")]
+        public async Task<IActionResult> GetPartsByKva(string kva)
+        {
+            var result = await _service.GetPartsByKvaAsync(kva);
+            return Ok(result);
+        }
+
+        [HttpGet("GetEmployees")]
+        public async Task<IActionResult> GetEmployees()
+        {
+            var result = await _service.GetEmployeesAsync();
+            return Ok(result);
+        }
+
+        [HttpGet("GetTrend")]
+        public async Task<IActionResult> GetTrend(string companyCode, DateTime fromDate, DateTime toDate)
+        {
+            var result = await _service.GetTrendAsync(companyCode, fromDate, toDate);
+            return Ok(result);
+        }
+
+        [HttpGet("GetEspEmployees")]
+        public async Task<IActionResult> GetEspEmployees()
+        {
+            var result = await _service.GetEspEmployeesAsync();
+            return Ok(result);
+        }
+
+        [HttpPost("RaiseEsp")]
+        public async Task<IActionResult> RaiseEsp([FromBody] EspRaiseRequest request)
+        {
+            var result = await _service.RaiseEspAsync(request);
+            return Ok(new { message = result });
+        }
+
         [HttpGet("GetDepartments")]
         public async Task<IActionResult> GetDepartments(string companyCode)
         {

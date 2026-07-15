@@ -19,9 +19,29 @@ namespace KalaGenset.ERP.Core.Request
     public class MaterialEntry
     {
         public string Plan { get; set; } = string.Empty;          // KVA
+        public double PlanQuantity { get; set; }                   // renamed from Quantity
         public string MaterialType { get; set; } = string.Empty;  // Raw / Consumable / Spares / Tools
-        public double Quantity { get; set; }
-        public string? Status { get; set; }
-        public string? Person { get; set; }
+        public string? PartCode { get; set; }                      // Raw: Part.PartCode; others: blank
+        public string? PartName { get; set; }                      // Raw -> dropdown; else free text / blank
+        public int ShortageQty { get; set; }                       // 0 = none; 1-100 otherwise
+        public string? Status { get; set; }                        // Open / Closed / InProcess
+        public string? Remark { get; set; }
+        public string? Person { get; set; }                        // employee display name
+    }
+
+    /// <summary>Raise an ESP (Corporate Requisition) — proxied to the ERP20 API's
+    /// /Corporate/CorporateReq/Submit with strType="Save", ReqCode="0".</summary>
+    public class EspRaiseRequest
+    {
+        public string EmpCode { get; set; } = string.Empty;       // raiser's employee code (session user)
+        public string FromPCCode { get; set; } = string.Empty;    // requesting department (record's PC code)
+        public string ToEmpCode { get; set; } = string.Empty;     // target employee
+        public string ToPCCode { get; set; } = string.Empty;      // target employee's PC code
+        public string Priority { get; set; } = string.Empty;      // High Priority / Medium Priority / Low Priority
+        public string ReqMsg { get; set; } = string.Empty;        // the (editable) shortage message
+        public string CompanyCode { get; set; } = string.Empty;   // login company
+        public string TargetDate { get; set; } = string.Empty;    // "yyyy-MM-dd" — selected by the user
+        public string? MCode { get; set; }                          // material line to stamp with the ReqCode
+        public int? SrNo { get; set; }
     }
 }

@@ -56,6 +56,29 @@ namespace KalaGenset.ERP.Core.Services
         private static double ToDbl(object v) => v == null || v == DBNull.Value ? 0d : Convert.ToDouble(v);
         private static string ToStr(object v) => v == null || v == DBNull.Value ? string.Empty : v.ToString()!;
 
+        /// <summary>Companies the login may view charts for (usp_GetChildCompanies): 33 -> 01/03/28, else self.</summary>
+        public async Task<List<CompanyOptionDTO>> GetViewCompaniesAsync(string companyCode)
+        {
+            var list = new List<CompanyOptionDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_GetChildCompanies";
+            AddParam(cmd, "@CompanyCode", companyCode ?? string.Empty);
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new CompanyOptionDTO
+                {
+                    CompanyCode = ToStr(rd["CompanyCode"]),
+                    CompanyName = ToStr(rd["CompanyName"]),
+                    ShortName = ToStr(rd["ShortName"]),
+                });
+            }
+            return list;
+        }
+
         /// <summary>Departments = profit centers with at least one W1/W2/W3 sanctioned station.</summary>
         public async Task<List<ManpowerDeptDTO>> GetDepartmentsAsync(string companyCode)
         {
@@ -127,6 +150,7 @@ namespace KalaGenset.ERP.Core.Services
                     MCode = ToStr(rd["MCode"]),
                     SrNo = ToInt(rd["SrNo"]),
                     Date = ToStr(rd["Date"]),
+                    CompanyCode = ToStr(rd["CompanyCode"]),
                     Shift = ToStr(rd["Shift"]),
                     PcId = ToInt(rd["PcId"]),
                     PcName = ToStr(rd["PcName"]),
@@ -167,6 +191,7 @@ namespace KalaGenset.ERP.Core.Services
                 list.Add(new ManpowerShortageTrendDTO
                 {
                     Date = ToStr(rd["Date"]),
+                    CompanyCode = ToStr(rd["CompanyCode"]),
                     PcName = ToStr(rd["PcName"]),
                     WorkStationName = ToStr(rd["WorkStationName"]),
                     ShortTotal = ToDbl(rd["ShortTotal"]),

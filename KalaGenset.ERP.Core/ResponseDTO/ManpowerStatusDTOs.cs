@@ -30,6 +30,7 @@ namespace KalaGenset.ERP.Core.ResponseDTO
         public string MCode { get; set; } = string.Empty;         // 6MManpowerStatus.MCode
         public int SrNo { get; set; }                              // 6MManpowerStatusDetails.SrNo
         public string Date { get; set; } = string.Empty;          // yyyy-MM-dd
+        public string CompanyCode { get; set; } = string.Empty;    // owning company (LEFT(PCCode,2)) for the chart picker
         public string Shift { get; set; } = string.Empty;         // F / S
         public int PcId { get; set; }                              // resolved from ProfitCenter (by PcCode)
         public string PcName { get; set; } = string.Empty;
@@ -52,6 +53,7 @@ namespace KalaGenset.ERP.Core.ResponseDTO
     public class ManpowerShortageTrendDTO
     {
         public string Date { get; set; } = string.Empty;          // yyyy-MM-dd
+        public string CompanyCode { get; set; } = string.Empty;   // owning company (LEFT(PCCode,2)) for the chart picker
         public string PcName { get; set; } = string.Empty;
         public string WorkStationName { get; set; } = string.Empty;
         public double ShortTotal { get; set; }                     // (Sanc - Avail) summed over skills

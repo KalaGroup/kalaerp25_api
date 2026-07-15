@@ -17,6 +17,14 @@ namespace KalaGenset.ERP.API.Controllers
             _service = service;
         }
 
+        // GET api/MachineDownTime/GetViewCompanies?companyCode=33
+        [HttpGet("GetViewCompanies")]
+        public async Task<IActionResult> GetViewCompanies(string companyCode)
+        {
+            var result = await _service.GetViewCompaniesAsync(companyCode);
+            return Ok(result);
+        }
+
         // GET api/MachineDownTime/GetDepartments?companyCode=01
         [HttpGet("GetDepartments")]
         public async Task<IActionResult> GetDepartments(string companyCode)

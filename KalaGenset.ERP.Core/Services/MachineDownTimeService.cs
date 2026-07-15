@@ -52,6 +52,29 @@ namespace KalaGenset.ERP.Core.Services
         private static int ToInt(object v) => v == null || v == DBNull.Value ? 0 : Convert.ToInt32(v);
         private static string ToStr(object v) => v == null || v == DBNull.Value ? string.Empty : v.ToString()!;
 
+        /// <summary>Companies the login may view charts for (usp_GetChildCompanies): 33 -> 01/03/28, else self.</summary>
+        public async Task<List<CompanyOptionDTO>> GetViewCompaniesAsync(string companyCode)
+        {
+            var list = new List<CompanyOptionDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_GetChildCompanies";
+            AddParam(cmd, "@CompanyCode", companyCode ?? string.Empty);
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new CompanyOptionDTO
+                {
+                    CompanyCode = ToStr(rd["CompanyCode"]),
+                    CompanyName = ToStr(rd["CompanyName"]),
+                    ShortName = ToStr(rd["ShortName"]),
+                });
+            }
+            return list;
+        }
+
         /// <summary>Departments = profit centers that have machines assigned, for the session company.</summary>
         public async Task<List<MachineDeptDTO>> GetDepartmentsAsync(string companyCode)
         {
@@ -153,11 +176,13 @@ namespace KalaGenset.ERP.Core.Services
                 list.Add(new MachineDownTimeTrendDTO
                 {
                     Date = ToStr(rd["Date"]),
+                    CompanyCode = ToStr(rd["CompanyCode"]),
                     DeptName = ToStr(rd["DeptName"]),
                     MachineName = ToStr(rd["MachineName"]),
                     TotalMin = ToInt(rd["TotalMin"]),
                     LineTotalMin = ToInt(rd["LineTotalMin"]),
                     Status = ToStr(rd["Status"]),
+                    Remark = ToStr(rd["Remark"]),
                 });
             }
             return list;

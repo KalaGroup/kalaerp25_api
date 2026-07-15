@@ -98,13 +98,19 @@ namespace KalaGenset.ERP.Core.Services
                     MCode = ToStr(rd["MCode"]),
                     SrNo = ToInt(rd["SrNo"]),
                     Date = ToStr(rd["Date"]),
+                    CompanyCode = ToStr(rd["CompanyCode"]),
                     DeptCode = ToStr(rd["DeptCode"]),
                     DeptName = ToStr(rd["DeptName"]),
                     Plan = ToStr(rd["Plan"]),
+                    PlanQuantity = ToDbl(rd["PlanQuantity"]),
                     MaterialType = ToStr(rd["MaterialType"]),
-                    Quantity = ToDbl(rd["Quantity"]),
+                    PartCode = ToStr(rd["PartCode"]),
+                    PartName = ToStr(rd["PartName"]),
+                    ShortageQty = ToInt(rd["ShortageQty"]),
                     Status = ToStr(rd["Status"]),
+                    Remark = ToStr(rd["Remark"]),
                     Person = ToStr(rd["Person"]),
+                    EspReqCode = ToStr(rd["EspReqCode"]),
                 });
             }
             return list;
@@ -161,9 +167,13 @@ namespace KalaGenset.ERP.Core.Services
         {
             var t = new DataTable();
             t.Columns.Add("Plan", typeof(string));
+            t.Columns.Add("PlanQuantity", typeof(double));
             t.Columns.Add("MaterialType", typeof(string));
-            t.Columns.Add("Quantity", typeof(double));
+            t.Columns.Add("PartCode", typeof(string));
+            t.Columns.Add("PartName", typeof(string));
+            t.Columns.Add("ShortageQty", typeof(int));
             t.Columns.Add("Status", typeof(string));
+            t.Columns.Add("Remark", typeof(string));
             t.Columns.Add("Person", typeof(string));
 
             foreach (var e in entries)
@@ -172,11 +182,152 @@ namespace KalaGenset.ERP.Core.Services
                 var type = (e.MaterialType ?? string.Empty).Trim();
                 if (plan.Length == 0 || type.Length == 0) continue;   // skip blank lines
                 t.Rows.Add(
-                    plan, type, e.Quantity,
+                    plan, e.PlanQuantity, type,
+                    (object?)e.PartCode ?? DBNull.Value,
+                    (object?)e.PartName ?? DBNull.Value,
+                    e.ShortageQty,
                     (object?)e.Status ?? DBNull.Value,
+                    (object?)e.Remark ?? DBNull.Value,
                     (object?)e.Person ?? DBNull.Value);
             }
             return t;
+        }
+
+        /// <summary>Companies the login may view for (usp_GetChildCompanies): 33 -> 01/03/28, else self.</summary>
+        public async Task<List<CompanyOptionDTO>> GetViewCompaniesAsync(string companyCode)
+        {
+            var list = new List<CompanyOptionDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_GetChildCompanies";
+            AddParam(cmd, "@CompanyCode", companyCode ?? string.Empty);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new CompanyOptionDTO
+                {
+                    CompanyCode = ToStr(rd["CompanyCode"]),
+                    CompanyName = ToStr(rd["CompanyName"]),
+                    ShortName = ToStr(rd["ShortName"]),
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Parts for a Plan (KVA) — the Raw part dropdown (usp_6MMaterial_GetPartsByKVA).</summary>
+        public async Task<List<PartOptionDTO>> GetPartsByKvaAsync(string kva)
+        {
+            var list = new List<PartOptionDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_6MMaterial_GetPartsByKVA";
+            AddParam(cmd, "@KVA", (kva ?? string.Empty).Trim());
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new PartOptionDTO { PartCode = ToStr(rd["PartCode"]), PartName = ToStr(rd["PartName"]) });
+            }
+            return list;
+        }
+
+        /// <summary>Employees for the "person to communicate" dropdown (usp_6MMaterial_GetEmployees:
+        /// EmployeeType '01', grade hierarchy >= 12, active/auth'd on new ERP).</summary>
+        public async Task<List<EmployeeOptionDTO>> GetEmployeesAsync()
+        {
+            var list = new List<EmployeeOptionDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_6MMaterial_GetEmployees";
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new EmployeeOptionDTO { ECode = ToStr(rd["ECode"]), EmpName = ToStr(rd["EmpName"]) });
+            }
+            return list;
+        }
+
+        /* ---- ESP (Corporate Requisition) — direct DB, same pipeline the ERP20 Submit uses ---- */
+
+        /// <summary>Target employees for the ESP (CPRTReqEmpNamePCName_Sp — the ESP screen's own list).</summary>
+        public async Task<List<EspEmployeeDTO>> GetEspEmployeesAsync()
+        {
+            var list = new List<EspEmployeeDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "CPRTReqEmpNamePCName_Sp";
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new EspEmployeeDTO
+                {
+                    ECode = ToStr(rd["ECode"]),
+                    FullName = ToStr(rd["FullName"]),
+                    ProfitCenter = ToStr(rd["ProfitCenter"]),
+                    Pccode = ToStr(rd["Pccode"]),
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Raise the ESP via usp_6MMaterial_RaiseESP (replicates the ERP20 Submit transaction).</summary>
+        public async Task<string> RaiseEspAsync(EspRaiseRequest req)
+        {
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_6MMaterial_RaiseESP";
+            AddParam(cmd, "@EmpCode", (req.EmpCode ?? string.Empty).Trim());
+            AddParam(cmd, "@FromPCCode", (req.FromPCCode ?? string.Empty).Trim());
+            AddParam(cmd, "@ToEmpCode", (req.ToEmpCode ?? string.Empty).Trim());
+            AddParam(cmd, "@ToPCCode", (req.ToPCCode ?? string.Empty).Trim());
+            AddParam(cmd, "@Priority", (req.Priority ?? string.Empty).Trim());
+            AddParam(cmd, "@ReqMsg", (req.ReqMsg ?? string.Empty).Trim());
+            AddParam(cmd, "@CompanyCode", (req.CompanyCode ?? string.Empty).Trim());
+            if (DateTime.TryParse((req.TargetDate ?? string.Empty).Trim(),
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var targetDt))
+                AddParam(cmd, "@TargetDate", targetDt, DbType.DateTime);
+            else
+                AddParam(cmd, "@TargetDate", DBNull.Value, DbType.DateTime);
+            AddParam(cmd, "@MCode", (object?)req.MCode ?? DBNull.Value);
+            AddParam(cmd, "@SrNo", (object?)req.SrNo ?? DBNull.Value, DbType.Int32);
+            var result = await cmd.ExecuteScalarAsync();       // proc returns the new ReqCode
+            return result?.ToString() ?? string.Empty;
+        }
+
+        /// <summary>Dated shortage rows for the charts (usp_6MMaterial_GetTrend).</summary>
+        public async Task<List<MaterialTrendDTO>> GetTrendAsync(string companyCode, DateTime fromDate, DateTime toDate)
+        {
+            var list = new List<MaterialTrendDTO>();
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_6MMaterial_GetTrend";
+            AddParam(cmd, "@CompanyCode", (companyCode ?? string.Empty).Trim());
+            AddParam(cmd, "@FromDate", fromDate.Date, DbType.Date);
+            AddParam(cmd, "@ToDate", toDate.Date, DbType.Date);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                list.Add(new MaterialTrendDTO
+                {
+                    Date = ToStr(rd["Date"]),
+                    CompanyCode = ToStr(rd["CompanyCode"]),
+                    DeptName = ToStr(rd["DeptName"]),
+                    Plan = ToStr(rd["Plan"]),
+                    MaterialType = ToStr(rd["MaterialType"]),
+                    PartCode = ToStr(rd["PartCode"]),
+                    PartName = ToStr(rd["PartName"]),
+                    ShortageQty = ToInt(rd["ShortageQty"]),
+                    Status = ToStr(rd["Status"]),
+                    Person = ToStr(rd["Person"]),
+                });
+            }
+            return list;
         }
     }
 }

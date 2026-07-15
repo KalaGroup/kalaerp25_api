@@ -8,6 +8,9 @@ namespace KalaGenset.ERP.Core.Interface
 {
     public interface IManpowerStatus
     {
+        /// <summary>Companies the login may view charts for (33 -> 01/03/28, else self).</summary>
+        Task<List<CompanyOptionDTO>> GetViewCompaniesAsync(string companyCode);
+
         /// <summary>Departments (ProfitCenters) that have W1/W2/W3 sanctioned stations, for the company.</summary>
         Task<List<ManpowerDeptDTO>> GetDepartmentsAsync(string companyCode);
 
