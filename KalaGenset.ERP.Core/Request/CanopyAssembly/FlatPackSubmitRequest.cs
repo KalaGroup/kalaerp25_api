@@ -9,7 +9,8 @@ namespace KalaGenset.ERP.Core.Request.CanopyAssembly
     // serials + (for PC=01.093) Kanban auto-REQ + login transaction logs.
     public class FlatPackSubmitRequest
     {
-        public string PCCode { get; set; } = string.Empty;          // ProfitCenterCode (selected line)
+        public string PCCode { get; set; } = string.Empty;          // LineWisePC of selected line → PCCode_Act on ProcessFeedBack
+        public string ParentDgPC { get; set; } = string.Empty;      // Parent DG PC of selected line → ProfitCenterCode on ProcessFeedBack (legacy: hardcoded '01.093')
         public string CompanyCode { get; set; } = string.Empty;     // "01"
         public string EmpCode { get; set; } = string.Empty;         // for LoginTransactionDetails
         public string ProcessType { get; set; } = string.Empty;     // "CPY" or "CPY(BF_FT)"

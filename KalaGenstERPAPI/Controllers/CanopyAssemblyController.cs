@@ -41,10 +41,11 @@ namespace KalaGenset.ERP.API.Controllers
         }
 
         // ── Flat Pack Canopy Assembly Process ─────────────────────────
+        // pcCode = selected line's LineWisePC — controls the KVA band shown.
         [HttpGet("GetFlatPackCanopyOptions")]
-        public async Task<IActionResult> GetFlatPackCanopyOptions()
+        public async Task<IActionResult> GetFlatPackCanopyOptions([FromQuery] string? pcCode)
         {
-            var rows = await _canopyAssemblyService.GetFlatPackCanopyOptionsAsync();
+            var rows = await _canopyAssemblyService.GetFlatPackCanopyOptionsAsync(pcCode ?? string.Empty);
             return Ok(rows ?? new List<FlatPackCanopyOptionDto>());
         }
 

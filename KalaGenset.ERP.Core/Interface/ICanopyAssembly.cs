@@ -15,8 +15,14 @@ namespace KalaGenset.ERP.Core.Interface
             DateTime toDate);
 
         // ── Flat Pack Canopy Assembly Process ───────────────────────
-        // Canopy dropdown (PartToCDetailsSupplier ∪ MTODts)
-        Task<List<FlatPackCanopyOptionDto>> GetFlatPackCanopyOptionsAsync();
+        // Canopy dropdown (PartToCDetailsSupplier ∪ MTODts) — filtered by
+        // the selected line's LineWisePC so each line only sees the KVA band
+        // it processes:
+        //   01.124 → KVA 0 – 58.5
+        //   01.125 → KVA 58.5 – 250
+        //   01.126 → KVA 58.5 – 250
+        // Any other pcCode returns the full list (no KVA band applied).
+        Task<List<FlatPackCanopyOptionDto>> GetFlatPackCanopyOptionsAsync(string pcCode);
 
         // Derive the "Part Desc" textbox value once Canopy + ProcessType picked
         Task<FlatPackBindPrimaryResponse> GetFlatPackBindPrimaryAsync(
