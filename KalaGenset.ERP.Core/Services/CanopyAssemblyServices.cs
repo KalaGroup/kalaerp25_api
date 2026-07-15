@@ -18,11 +18,15 @@ namespace KalaGenset.ERP.Core.Services
     {
         private readonly KalaDbContext _context;
 
-        // Three "production-line" PCs that the legacy page silently locks the
-        // grid + save flow to. Other PCs render nothing.
+        // Production-line PCs that the grid + save flow accept. The first
+        // three are the legacy ones the .aspx page silently locked to; the
+        // 01.124-126 entries are the LineWisePC values now surfaced by the
+        // Line dropdown (line-rights migration). Anything else short-circuits
+        // the grid load / save with no rows / an "invalid PC" error.
         private static readonly HashSet<string> AllowedProductionPCs = new(StringComparer.OrdinalIgnoreCase)
         {
             "01.005", "03.038", "01.093",
+            "01.124", "01.125", "01.126",
         };
 
         // PC = 01.093 (KanBan / Flat-Pack-Bhosari) triggers the auto-REQ branch.
@@ -99,10 +103,27 @@ ORDER BY PF.Dt DESC, PF.PFBCode;";
         // ════════════════════════════════════════════════════════════════
         //  Flat Pack Canopy Assembly Process — dropdown
         // ════════════════════════════════════════════════════════════════
-        // Replaces legacy BindDDLCanopyPartDesc() — UNION ALL of two sources,
-        // both filtered to canopy parts (PartCode LIKE '4%').
-        public async Task<List<FlatPackCanopyOptionDto>> GetFlatPackCanopyOptionsAsync()
+        // Replaces legacy BindDDLCanopyPartDesc(). UNION ALL of two sources,
+        // both filtered to canopy parts (PartCode LIKE '4%'). The user-selected
+        // LineWisePC controls the KVA band shown — each line processes only
+        // its own tier (see interface comment for the mapping).
+        public async Task<List<FlatPackCanopyOptionDto>> GetFlatPackCanopyOptionsAsync(string pcCode)
         {
+            // KVA band lookup driven by LineWisePC. Lower bound is split so
+            // callers can pick inclusive (>=) or exclusive (>) — 01.125 needs
+            // "above 58.5" and must not overlap with 01.124's ceiling of 58.5.
+            //   01.124 → 0     <= KVA <= 58.5   (both inclusive)
+            //   01.125 → 58.5  <  KVA <= 250    (lower EXCLUSIVE)
+            //   01.126 → 250   <= KVA           (no upper cap)
+            // For any other pcCode all three bounds stay null → no KVA filter.
+            decimal? kvaMinInc = null, kvaMinExc = null, kvaMax = null;
+            switch ((pcCode ?? string.Empty).Trim())
+            {
+                case "01.124": kvaMinInc = 0m;    kvaMax = 58.5m; break;
+                case "01.125": kvaMinExc = 58.5m; kvaMax = 250m;  break;
+                case "01.126": kvaMinInc = 250m;                  break;
+            }
+
             const string sql = @"
 SELECT DISTINCT Pt.Partcode,
        Partdesc + '-->' + Pt.Partcode AS Partdesc,
@@ -111,13 +132,16 @@ FROM PartToCDetailsSupplier Pt WITH (NOLOCK)
 INNER JOIN Part P WITH (NOLOCK) ON Pt.partcode = P.Partcode
 WHERE Pt.CompanyCode IN ('01','03')
   AND Pt.TMatType = 'REQ'
-  AND Pt.ForPCCode IN ('01.005','01.004','03.051')
-  AND Pt.SuppCode IN ('23.001','01.005')
+  AND Pt.ForPCCode_Act IN ('01.115','01.175')
+  AND Pt.SuppCode_Act IN ('23.001','01.115')
   AND Pt.active = '1'
   AND P.Active = '1'
   AND P.Discard = '1'
   AND Pt.POper > 0
   AND Pt.partcode LIKE '4%'
+  AND (@KvaMinInc IS NULL OR P.KVA >= @KvaMinInc)
+  AND (@KvaMinExc IS NULL OR P.KVA >  @KvaMinExc)
+  AND (@KvaMax    IS NULL OR P.KVA <= @KvaMax)
 UNION ALL
 SELECT Pt.Partcode,
        Partdesc + '-->' + Pt.Partcode AS Partdesc,
@@ -129,11 +153,19 @@ WHERE Pt.active = '1'
   AND P.Active = '1'
   AND P.Discard = '1'
   AND Pt.partcode LIKE '4%'
-  AND Pt.DtValidity >= GETDATE();";
+  AND Pt.DtValidity >= GETDATE()
+  AND (@KvaMinInc IS NULL OR Pt.KVA >= @KvaMinInc)
+  AND (@KvaMinExc IS NULL OR Pt.KVA >  @KvaMinExc)
+  AND (@KvaMax    IS NULL OR Pt.KVA <= @KvaMax);";
 
             var results = new List<FlatPackCanopyOptionDto>();
             using var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString);
             using var command = new SqlCommand(sql, connection);
+            // Precision/Scale must match the SQL side (DECIMAL(10,2)) — otherwise
+            // SqlDbType.Decimal defaults to (18,0) and silently truncates 58.5 → 58.
+            command.Parameters.Add(new SqlParameter("@KvaMinInc", SqlDbType.Decimal) { Precision = 10, Scale = 2, Value = (object?)kvaMinInc ?? DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@KvaMinExc", SqlDbType.Decimal) { Precision = 10, Scale = 2, Value = (object?)kvaMinExc ?? DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@KvaMax",    SqlDbType.Decimal) { Precision = 10, Scale = 2, Value = (object?)kvaMax    ?? DBNull.Value });
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -321,8 +353,15 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
         {
             ValidateSubmit(req);
 
-            var pc       = req.PCCode.Trim();
-            var company  = req.CompanyCode.Trim();
+            var pc          = req.PCCode.Trim();                 // LineWisePC → PCCode_Act
+            var parentDgPc  = (req.ParentDgPC ?? string.Empty).Trim();  // ParentDgPC → ProfitCenterCode
+            // Fallback: if the client didn't send ParentDgPC (legacy caller), keep behaviour identical
+            // to before by using pc for the ProfitCenterCode. New flat-pack lines always send it.
+            if (string.IsNullOrEmpty(parentDgPc)) parentDgPc = pc;
+            // CompanyCode is derived from the first two chars of LineWisePC — that's the
+            // authoritative source (01.124 → '01', 03.xxx → '03'). Prevents client-side
+            // drift between PCCode and CompanyCode. Same convention as reqCompCode below.
+            var company  = pc.Length >= 2 ? pc.Substring(0, 2) : req.CompanyCode.Trim();
             var emp      = req.EmpCode.Trim();
             var type     = req.ProcessType.Trim();
             var canopy   = req.CanopyPartCode.Trim();
@@ -392,7 +431,7 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                     cmd.Parameters.AddWithValue("@MaxSrNo",          maxSrNo);
                     cmd.Parameters.AddWithValue("@Dt",               DateTime.Now);
                     cmd.Parameters.AddWithValue("@Yr",               await GetYearEndAsync());
-                    cmd.Parameters.AddWithValue("@ProfitCenterCode", pc);
+                    cmd.Parameters.AddWithValue("@ProfitCenterCode", parentDgPc);   // ParentDgPC ('01.093' for flat-pack lines)
                     cmd.Parameters.AddWithValue("@MachineCode",      "0");
                     cmd.Parameters.AddWithValue("@SerialNo",         "0");
                     cmd.Parameters.AddWithValue("@CpyStageType",     heading);
@@ -422,16 +461,22 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // 3) Patch CR/HR fields onto the master row.
+                // 3) Patch CR/HR fields + PCCode_Act onto the master row.
+                //    PCCode_Act stores the LineWisePC (01.124/125/126) so downstream
+                //    line-wise stock filters can distinguish which line produced this
+                //    feedback, while ProfitCenterCode stays at ParentDgPC (01.093).
                 using (var cmd = new SqlCommand(
-                    @"UPDATE ProcessFeedBack SET CRWt = @CRWt, HRWt = @HRWt, CRRate = @CRRate, HRRate = @HRRate
-                      WHERE PFBCode = @PFBCode;", (SqlConnection)conn, sqlTx))
+                    @"UPDATE ProcessFeedBack
+                         SET CRWt = @CRWt, HRWt = @HRWt, CRRate = @CRRate, HRRate = @HRRate,
+                             PCCode_Act = @PCCodeAct
+                       WHERE PFBCode = @PFBCode;", (SqlConnection)conn, sqlTx))
                 {
-                    cmd.Parameters.AddWithValue("@CRWt",    req.CRWt);
-                    cmd.Parameters.AddWithValue("@HRWt",    req.HRWt);
-                    cmd.Parameters.AddWithValue("@CRRate",  req.CRRate);
-                    cmd.Parameters.AddWithValue("@HRRate",  req.HRRate);
-                    cmd.Parameters.AddWithValue("@PFBCode", pfbCode);
+                    cmd.Parameters.AddWithValue("@CRWt",      req.CRWt);
+                    cmd.Parameters.AddWithValue("@HRWt",      req.HRWt);
+                    cmd.Parameters.AddWithValue("@CRRate",    req.CRRate);
+                    cmd.Parameters.AddWithValue("@HRRate",    req.HRRate);
+                    cmd.Parameters.AddWithValue("@PCCodeAct", pc);           // LineWisePC
+                    cmd.Parameters.AddWithValue("@PFBCode",   pfbCode);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -483,17 +528,28 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    // StockWIP — Option A split (matches ProcessFeedBack):
+                    //   From/To ProfitCenterCode      = ParentDgPC (01.093) — legacy semantic
+                    //   From/To ProfitCenterCode_Act  = LineWisePC (01.124/125/126) — line-wise stock ownership
                     using (var cmd = new SqlCommand(
-                        @"INSERT INTO StockWIP (FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType)
-                          VALUES (@FromPC, @PartCode, @IssueCode, @IssueDate, @IssueQty, @ToPC, @StockType);",
+                        @"INSERT INTO StockWIP
+                            (FromProfitCenterCode, FromProfitCenterCode_Act,
+                             ToProfitCenterCode,   ToProfitCenterCode_Act,
+                             PartCode, IssueCode, IssueDate, IssueQty, StockType)
+                          VALUES
+                            (@FromPC, @FromPCAct,
+                             @ToPC,   @ToPCAct,
+                             @PartCode, @IssueCode, @IssueDate, @IssueQty, @StockType);",
                         (SqlConnection)conn, sqlTx))
                     {
-                        cmd.Parameters.AddWithValue("@FromPC",    pc);
+                        cmd.Parameters.AddWithValue("@FromPC",    parentDgPc);
+                        cmd.Parameters.AddWithValue("@FromPCAct", pc);
+                        cmd.Parameters.AddWithValue("@ToPC",      parentDgPc);
+                        cmd.Parameters.AddWithValue("@ToPCAct",   pc);
                         cmd.Parameters.AddWithValue("@PartCode",  rowPartCode);
                         cmd.Parameters.AddWithValue("@IssueCode", pfbCode);
                         cmd.Parameters.AddWithValue("@IssueDate", DateTime.Now);
                         cmd.Parameters.AddWithValue("@IssueQty",  row.TotalQty);
-                        cmd.Parameters.AddWithValue("@ToPC",      pc);   // To == From in legacy
                         cmd.Parameters.AddWithValue("@StockType", 0);
                         await cmd.ExecuteNonQueryAsync();
                     }
@@ -533,9 +589,14 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                     }
                 }
 
-                // 7) Kanban auto-REQ block (PC = 01.093 only).
-                if (pc.Equals(KanbanPC, StringComparison.OrdinalIgnoreCase))
+                // 7) Kanban auto-REQ block — fires for every flat-pack line whose
+                //    ParentDgPC == KanbanPC (01.093). Covers legacy 01.093 as well
+                //    as the new lines 01.124 / 01.125 / 01.126.
+                if (parentDgPc.Equals(KanbanPC, StringComparison.OrdinalIgnoreCase))
                 {
+                    // Shortage query is driven by LineWisePC — each line calculates
+                    // its own shortage list from its own line-wise stock (StockWIP
+                    // FromProfitCenterCode_Act = @PC filter).
                     var kanbanRows = await GetInternalTOCRowsAsync((SqlConnection)conn, sqlTx, pc);
                     if (kanbanRows.Count > 0)
                     {
@@ -547,20 +608,31 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                             tx: sqlTx);
                         var maxSrNoReq = ExtractSequencePart(reqCode);
 
+                        // Header split — same idiom as ProcessFeedBack / StockWIP:
+                        //   ProfitCenterCode      = ParentDgPC (01.093) — legacy semantic
+                        //   ProfitCenterCode_Act  = LineWisePC (01.124/125/126) — line classification
+                        //   ToProfitCenterCode(_Act) = '23.001' literal (parts store)
                         using (var cmd = new SqlCommand(
                             @"INSERT INTO MaterialRequisitionWithOutPlan
-                              (REQCode, MaxSrNo, Dt, Yr, ProfitCenterCode, ToProfitCenterCode, ClassCode,
-                               CompanyCode, ActNo, REQStatus, ReqType, Remark, Discard, Active, Auth, SourceCode)
+                              (REQCode, MaxSrNo, Dt, Yr,
+                               ProfitCenterCode,   ProfitCenterCode_Act,
+                               ToProfitCenterCode, ToProfitCenterCode_Act,
+                               ClassCode, CompanyCode, ActNo, REQStatus, ReqType, Remark,
+                               Discard, Active, Auth, SourceCode)
                               VALUES
-                              (@REQCode, @MaxSrNo, @Dt, @Yr, @PC, '23.001', @ClassCode, @CompCode, @ActNo,
-                               'P', 'WIP', @Remark, '1', '1', '1', 'KanBan');",
+                              (@REQCode, @MaxSrNo, @Dt, @Yr,
+                               @PC,     @PCAct,
+                               '23.001','23.001',
+                               @ClassCode, @CompCode, @ActNo, 'P', 'WIP', @Remark,
+                               '1', '1', '1', 'KanBan');",
                             (SqlConnection)conn, sqlTx))
                         {
                             cmd.Parameters.AddWithValue("@REQCode",   reqCode);
                             cmd.Parameters.AddWithValue("@MaxSrNo",   maxSrNoReq);
                             cmd.Parameters.AddWithValue("@Dt",        DateTime.Now);
                             cmd.Parameters.AddWithValue("@Yr",        await GetYearEndAsync());
-                            cmd.Parameters.AddWithValue("@PC",        pc);
+                            cmd.Parameters.AddWithValue("@PC",        parentDgPc);   // ParentDgPC (01.093)
+                            cmd.Parameters.AddWithValue("@PCAct",     pc);           // LineWisePC (01.124/125/126)
                             cmd.Parameters.AddWithValue("@ClassCode", canopy);
                             cmd.Parameters.AddWithValue("@CompCode",  reqCompCode);
                             cmd.Parameters.AddWithValue("@ActNo",     qty);

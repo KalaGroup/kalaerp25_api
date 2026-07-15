@@ -128,7 +128,7 @@ namespace KalaGenset.ERP.API.Controllers
             var month = now.ToString("MM") + " " + now.ToString("MMMM"); // "03 March"
 
             // Build path: F:\ERP\2026\03 March\Kaizen\before
-            var basePath = @"D:\ERP";
+            var basePath = @"F:\ERP";
             var uploadsFolder = Path.Combine(basePath, year, month, "Kaizen", subFolder);
             Directory.CreateDirectory(uploadsFolder);
 
