@@ -27,7 +27,8 @@ namespace KalaGenset.ERP.Core.ResponseDTO
         public string PartCode { get; set; } = string.Empty;      // Raw -> Part.PartCode; else blank
         public string PartName { get; set; } = string.Empty;      // Raw -> Part.PartDesc; else free text
         public int ShortageQty { get; set; }                       // 0 = no shortage
-        public string Status { get; set; } = string.Empty;        // Open / Closed / InProcess
+        public string IssueType { get; set; } = string.Empty;     // Wrong / Damaged / Shortage
+        public string Status { get; set; } = string.Empty;        // Open / Closed (auto via ESP feedback)
         public string Remark { get; set; } = string.Empty;
         public string Person { get; set; } = string.Empty;        // person to communicate (employee)
         public string EspReqCode { get; set; } = string.Empty;     // COR number if an ESP was raised; '' = not yet
@@ -44,8 +45,10 @@ namespace KalaGenset.ERP.Core.ResponseDTO
         public string PartCode { get; set; } = string.Empty;
         public string PartName { get; set; } = string.Empty;
         public int ShortageQty { get; set; }
+        public string IssueType { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string Person { get; set; } = string.Empty;
+        public string Remark { get; set; } = string.Empty;        // Reason for the charts grid
     }
 
     /// <summary>Part option for the Raw part dropdown (usp_6MMaterial_GetPartsByKVA).</summary>

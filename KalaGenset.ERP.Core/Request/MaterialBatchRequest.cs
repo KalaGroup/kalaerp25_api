@@ -18,15 +18,36 @@ namespace KalaGenset.ERP.Core.Request
 
     public class MaterialEntry
     {
+        public string DeptCode { get; set; } = string.Empty;      // department per ROW now
         public string Plan { get; set; } = string.Empty;          // KVA
         public double PlanQuantity { get; set; }                   // renamed from Quantity
         public string MaterialType { get; set; } = string.Empty;  // Raw / Consumable / Spares / Tools
         public string? PartCode { get; set; }                      // Raw: Part.PartCode; others: blank
         public string? PartName { get; set; }                      // Raw -> dropdown; else free text / blank
         public int ShortageQty { get; set; }                       // 0 = none; 1-100 otherwise
-        public string? Status { get; set; }                        // Open / Closed / InProcess
+        public string? IssueType { get; set; }                      // Wrong / Damaged / Shortage
+        public string? Status { get; set; }                        // Open (auto-Closed via ESP feedback)
         public string? Remark { get; set; }
         public string? Person { get; set; }                        // employee display name
+    }
+
+    /// <summary>Update ONE material line in place (proper per-row edit).</summary>
+    public class MaterialRowUpdateRequest
+    {
+        public string MCode { get; set; } = string.Empty;
+        public int SrNo { get; set; }
+        public string Plan { get; set; } = string.Empty;
+        public double PlanQuantity { get; set; }
+        public string MaterialType { get; set; } = string.Empty;
+        public string? PartCode { get; set; }
+        public string? PartName { get; set; }
+        public int ShortageQty { get; set; }
+        public string? IssueType { get; set; }
+        public string? Status { get; set; }
+        public string? Remark { get; set; }
+        public string? Person { get; set; }
+        public string? ModifiedBy { get; set; }
+        public string CompanyCode { get; set; } = string.Empty;
     }
 
     /// <summary>Raise an ESP (Corporate Requisition) — proxied to the ERP20 API's
