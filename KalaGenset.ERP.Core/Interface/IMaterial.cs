@@ -26,6 +26,9 @@ namespace KalaGenset.ERP.Core.Interface
         /// <summary>Raise an ESP (Corporate Requisition) for a shortage line.</summary>
         Task<string> RaiseEspAsync(EspRaiseRequest req);
 
+        /// <summary>Update ONE material line in place (per-row edit).</summary>
+        Task<bool> UpdateRowAsync(MaterialRowUpdateRequest req);
+
         /// <summary>Dated shortage rows for the charts.</summary>
         Task<List<MaterialTrendDTO>> GetTrendAsync(string companyCode, DateTime fromDate, DateTime toDate);
 

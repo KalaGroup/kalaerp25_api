@@ -60,6 +60,13 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(new { message = result });
         }
 
+        [HttpPost("UpdateMaterialRow")]
+        public async Task<IActionResult> UpdateMaterialRow([FromBody] MaterialRowUpdateRequest request)
+        {
+            var result = await _service.UpdateRowAsync(request);
+            return Ok(new { success = result });
+        }
+
         [HttpGet("GetDepartments")]
         public async Task<IActionResult> GetDepartments(string companyCode)
         {

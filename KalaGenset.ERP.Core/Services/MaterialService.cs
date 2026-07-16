@@ -107,6 +107,7 @@ namespace KalaGenset.ERP.Core.Services
                     PartCode = ToStr(rd["PartCode"]),
                     PartName = ToStr(rd["PartName"]),
                     ShortageQty = ToInt(rd["ShortageQty"]),
+                    IssueType = ToStr(rd["IssueType"]),
                     Status = ToStr(rd["Status"]),
                     Remark = ToStr(rd["Remark"]),
                     Person = ToStr(rd["Person"]),
@@ -133,7 +134,6 @@ namespace KalaGenset.ERP.Core.Services
             cmd.CommandText = "usp_6MMaterial_SaveBatch";
             AddParam(cmd, "@CompanyCode", (request.CompanyCode ?? string.Empty).Trim());
             AddParam(cmd, "@Dt", dt, DbType.Date);
-            AddParam(cmd, "@ProfitCenterCode", (request.DeptCode ?? string.Empty).Trim());
             AddParam(cmd, "@CreatedBy", (object?)request.CreatedBy ?? string.Empty);
             cmd.Parameters.Add(new SqlParameter("@Details", SqlDbType.Structured)
             {
@@ -166,12 +166,14 @@ namespace KalaGenset.ERP.Core.Services
         private static DataTable BuildDetailTable(IEnumerable<MaterialEntry> entries)
         {
             var t = new DataTable();
+            t.Columns.Add("DeptCode", typeof(string));
             t.Columns.Add("Plan", typeof(string));
             t.Columns.Add("PlanQuantity", typeof(double));
             t.Columns.Add("MaterialType", typeof(string));
             t.Columns.Add("PartCode", typeof(string));
             t.Columns.Add("PartName", typeof(string));
             t.Columns.Add("ShortageQty", typeof(int));
+            t.Columns.Add("IssueType", typeof(string));
             t.Columns.Add("Status", typeof(string));
             t.Columns.Add("Remark", typeof(string));
             t.Columns.Add("Person", typeof(string));
@@ -182,10 +184,12 @@ namespace KalaGenset.ERP.Core.Services
                 var type = (e.MaterialType ?? string.Empty).Trim();
                 if (plan.Length == 0 || type.Length == 0) continue;   // skip blank lines
                 t.Rows.Add(
+                    (e.DeptCode ?? string.Empty).Trim(),
                     plan, e.PlanQuantity, type,
                     (object?)e.PartCode ?? DBNull.Value,
                     (object?)e.PartName ?? DBNull.Value,
                     e.ShortageQty,
+                    (object?)e.IssueType ?? DBNull.Value,
                     (object?)e.Status ?? DBNull.Value,
                     (object?)e.Remark ?? DBNull.Value,
                     (object?)e.Person ?? DBNull.Value);
@@ -258,16 +262,20 @@ namespace KalaGenset.ERP.Core.Services
             var conn = await GetOpenConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandType = CommandType.StoredProcedure;
-            cmd.CommandText = "CPRTReqEmpNamePCName_Sp";
+            cmd.CommandText = "usp_6MMaterial_GetEspEmployees";   // broad list — matches the Responsible-person dropdown
             await using var rd = await cmd.ExecuteReaderAsync();
             while (await rd.ReadAsync())
             {
+                var rawPc = ToStr(rd["Pccode"]);
+                // the SP returns "PC Name-->01.192" — keep only the CODE (after the last -->)
+                var pcTail = rawPc.Contains("-->") ? rawPc.Substring(rawPc.LastIndexOf("-->") + 3) : rawPc;
+                var pcMatch = System.Text.RegularExpressions.Regex.Match(pcTail, @"\d{2}\.\d+");
                 list.Add(new EspEmployeeDTO
                 {
                     ECode = ToStr(rd["ECode"]),
                     FullName = ToStr(rd["FullName"]),
                     ProfitCenter = ToStr(rd["ProfitCenter"]),
-                    Pccode = ToStr(rd["Pccode"]),
+                    Pccode = pcMatch.Success ? pcMatch.Value : pcTail.Trim(),
                 });
             }
             return list;
@@ -299,6 +307,31 @@ namespace KalaGenset.ERP.Core.Services
             return result?.ToString() ?? string.Empty;
         }
 
+        /// <summary>Update ONE material line in place (usp_6MMaterial_UpdateRow).</summary>
+        public async Task<bool> UpdateRowAsync(MaterialRowUpdateRequest req)
+        {
+            var conn = await GetOpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "usp_6MMaterial_UpdateRow";
+            AddParam(cmd, "@MCode", (req.MCode ?? string.Empty).Trim());
+            AddParam(cmd, "@SrNo", req.SrNo, DbType.Int32);
+            AddParam(cmd, "@Plan", (req.Plan ?? string.Empty).Trim());
+            AddParam(cmd, "@PlanQuantity", req.PlanQuantity, DbType.Double);
+            AddParam(cmd, "@MaterialType", (req.MaterialType ?? string.Empty).Trim());
+            AddParam(cmd, "@PartCode", (object?)req.PartCode ?? DBNull.Value);
+            AddParam(cmd, "@PartName", (object?)req.PartName ?? DBNull.Value);
+            AddParam(cmd, "@ShortageQty", req.ShortageQty, DbType.Int32);
+            AddParam(cmd, "@IssueType", (object?)req.IssueType ?? DBNull.Value);
+            AddParam(cmd, "@Status", (object?)req.Status ?? DBNull.Value);
+            AddParam(cmd, "@Remark", (object?)req.Remark ?? DBNull.Value);
+            AddParam(cmd, "@Person", (object?)req.Person ?? DBNull.Value);
+            AddParam(cmd, "@ModifiedBy", (object?)req.ModifiedBy ?? DBNull.Value);
+            AddParam(cmd, "@CompanyCode", (req.CompanyCode ?? string.Empty).Trim());
+            var updated = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(updated ?? 0) > 0;
+        }
+
         /// <summary>Dated shortage rows for the charts (usp_6MMaterial_GetTrend).</summary>
         public async Task<List<MaterialTrendDTO>> GetTrendAsync(string companyCode, DateTime fromDate, DateTime toDate)
         {
@@ -323,8 +356,10 @@ namespace KalaGenset.ERP.Core.Services
                     PartCode = ToStr(rd["PartCode"]),
                     PartName = ToStr(rd["PartName"]),
                     ShortageQty = ToInt(rd["ShortageQty"]),
+                    IssueType = ToStr(rd["IssueType"]),
                     Status = ToStr(rd["Status"]),
                     Person = ToStr(rd["Person"]),
+                    Remark = ToStr(rd["Remark"]),
                 });
             }
             return list;
