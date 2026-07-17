@@ -239,6 +239,7 @@ namespace KalaGenset.ERP.Core.Services
         {
             var t = new DataTable();
             t.Columns.Add("MachineCode", typeof(string));
+            t.Columns.Add("MachineSerialNo", typeof(string));   // which physical machine (AliseSerialNo)
             t.Columns.Add("Shift1Min", typeof(int));
             t.Columns.Add("Shift2Min", typeof(int));
             t.Columns.Add("LineShift1Min", typeof(int));
@@ -252,6 +253,7 @@ namespace KalaGenset.ERP.Core.Services
                 if (mc.Length == 0) continue;   // skip rows with no machine selected
                 t.Rows.Add(
                     mc,
+                    (object?)e.MachineName ?? DBNull.Value,   // several machines share one MachineCode
                     e.Shift1Min, e.Shift2Min, e.LineShift1Min, e.LineShift2Min,
                     (object?)e.Status ?? DBNull.Value,
                     (object?)e.Remark ?? DBNull.Value);
