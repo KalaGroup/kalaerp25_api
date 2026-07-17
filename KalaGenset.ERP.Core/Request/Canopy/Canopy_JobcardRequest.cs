@@ -3,10 +3,11 @@
     public class JobCard_CpyRequest
     {
         public string EmpCode { get; set; }
-        public string PcCode { get; set; }
+        public string PCCode_Act { get; set; }
+        public string PCCode { get; set; }
         public string CompCode { get; set; }
         public string Remark { get; set; }
-        public List<CanopyPlanLineItem> LineItems { get; set; } = new();
+        public string JobCard_CpyDts { get; set; }
     }
 
     public class CanopyPlanLineItem

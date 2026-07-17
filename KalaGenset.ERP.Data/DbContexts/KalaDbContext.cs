@@ -24,7 +24,21 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<Bomdetail> Bomdetails { get; set; }
 
+    public virtual DbSet<BracketMst> BracketMsts { get; set; }
+
     public virtual DbSet<CalibrationMst> CalibrationMsts { get; set; }
+
+    public virtual DbSet<CanopyPlan> CanopyPlans { get; set; }
+
+    public virtual DbSet<CanopyPlanDetail> CanopyPlanDetails { get; set; }
+
+    public virtual DbSet<CanopyPlanDtsSub> CanopyPlanDtsSubs { get; set; }
+
+    public virtual DbSet<CanopyPlanDtsSubBelowStdRate> CanopyPlanDtsSubBelowStdRates { get; set; }
+
+    public virtual DbSet<CanopyPlanOsdetail> CanopyPlanOsdetails { get; set; }
+
+    public virtual DbSet<CanopyPlanSerialNo> CanopyPlanSerialNos { get; set; }
 
     public virtual DbSet<Company> Companies { get; set; }
 
@@ -47,6 +61,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<GatereceiptInternalDetailsSub> GatereceiptInternalDetailsSubs { get; set; }
 
     public virtual DbSet<GetMaxCode> GetMaxCodes { get; set; }
+
+    public virtual DbSet<GetMaxSerialNo> GetMaxSerialNos { get; set; }
 
     public virtual DbSet<Giir> Giirs { get; set; }
 
@@ -75,6 +91,8 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<LinePcmst> LinePcmsts { get; set; }
 
     public virtual DbSet<LoginMst> LoginMsts { get; set; }
+
+    public virtual DbSet<LoginTransactionDetail> LoginTransactionDetails { get; set; }
 
     public virtual DbSet<MaterialRequisitionWithOutPlan> MaterialRequisitionWithOutPlans { get; set; }
 
@@ -110,6 +128,8 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<ProductWip> ProductWips { get; set; }
 
+    public virtual DbSet<ProductionPlanMaster> ProductionPlanMasters { get; set; }
+
     public virtual DbSet<ProfitCenter> ProfitCenters { get; set; }
 
     public virtual DbSet<ProfitCenterPldetail> ProfitCenterPldetails { get; set; }
@@ -136,6 +156,14 @@ public partial class KalaDbContext : DbContext
 
     public virtual DbSet<TestReport> TestReports { get; set; }
 
+    public virtual DbSet<TurretKit> TurretKits { get; set; }
+
+    public virtual DbSet<TurretKitForPrc> TurretKitForPrcs { get; set; }
+
+    public virtual DbSet<TurretKitForPrcDt> TurretKitForPrcDts { get; set; }
+
+    public virtual DbSet<TurretKitdetail> TurretKitdetails { get; set; }
+
     public virtual DbSet<Uom> Uoms { get; set; }
 
     public virtual DbSet<Video> Videos { get; set; }
@@ -145,6 +173,7 @@ public partial class KalaDbContext : DbContext
     public virtual DbSet<YearEnd> YearEnds { get; set; }
 
     public virtual DbSet<_6m> _6ms { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -543,6 +572,27 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.TotalPrcCostUnitKg).HasColumnName("TotalPrcCostUnitKG");
         });
 
+        modelBuilder.Entity<BracketMst>(entity =>
+        {
+            entity.HasKey(e => e.Bid);
+
+            entity.ToTable("BracketMst");
+
+            entity.Property(e => e.Bid).HasColumnName("BID");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.BracketName).HasMaxLength(50);
+            entity.Property(e => e.BracketPointageAopSales).HasColumnName("BracketPointage_AOP_Sales");
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.FromKva).HasColumnName("FromKVA");
+            entity.Property(e => e.ProductId)
+                .HasMaxLength(50)
+                .HasColumnName("ProductID");
+            entity.Property(e => e.Remark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.ToKva).HasColumnName("ToKVA");
+        });
+
         modelBuilder.Entity<CalibrationMst>(entity =>
         {
             entity.HasKey(e => e.InstrumentId).HasName("PK__Calibrat__430A5386891A20E2");
@@ -586,6 +636,314 @@ public partial class KalaDbContext : DbContext
             entity.Property(e => e.Unit)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<CanopyPlan>(entity =>
+        {
+            entity.HasKey(e => e.Cpcode);
+
+            entity.ToTable("CanopyPlan");
+
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(50)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.CpyStatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.FromDt).HasColumnType("datetime");
+            entity.Property(e => e.HoldStatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.PlanPccode)
+                .HasMaxLength(10)
+                .HasDefaultValueSql("((1.041))")
+                .IsFixedLength()
+                .HasColumnName("PlanPCCode");
+            entity.Property(e => e.PlanStatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.PlanType)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.ToDt).HasColumnType("datetime");
+            entity.Property(e => e.Yr).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<CanopyPlanDetail>(entity =>
+        {
+            entity.HasNoKey();
+
+            entity.Property(e => e.BomCode).HasMaxLength(50);
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(50)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.CpyWipStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.CpyWopStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.DayPlanQty).HasDefaultValue(0.0);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.NestingLockStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("N")
+                .IsFixedLength();
+            entity.Property(e => e.PartCodeWop)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("PartCodeWOP");
+            entity.Property(e => e.Partcode).HasMaxLength(50);
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(50)
+                .HasDefaultValue("OLD");
+            entity.Property(e => e.PlanDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ShiftType)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+        });
+
+        modelBuilder.Entity<CanopyPlanDtsSub>(entity =>
+        {
+            entity.HasKey(e => new { e.Cpcode, e.CpyPartCode, e.Partcode });
+
+            entity.ToTable("CanopyPlanDtsSub");
+
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.CpyPartCode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Partcode).HasMaxLength(50);
+            entity.Property(e => e.Bending).HasDefaultValue(true);
+            entity.Property(e => e.CatId)
+                .HasMaxLength(20)
+                .HasColumnName("CatID");
+            entity.Property(e => e.CompCode).HasMaxLength(50);
+            entity.Property(e => e.Cpbqty).HasColumnName("CPBQty");
+            entity.Property(e => e.Cpbstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPBStatus");
+            entity.Property(e => e.Cpfqty).HasColumnName("CPFQty");
+            entity.Property(e => e.Cpfstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPFStatus");
+            entity.Property(e => e.CppartCutQty).HasColumnName("CPPartCutQty");
+            entity.Property(e => e.CppartCutStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPPartCutStatus");
+            entity.Property(e => e.Cppcqty).HasColumnName("CPPCQty");
+            entity.Property(e => e.Cppcstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPPCStatus");
+            entity.Property(e => e.Cpqty).HasColumnName("CPQty");
+            entity.Property(e => e.Cptqty).HasColumnName("CPTQty");
+            entity.Property(e => e.Cptstatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPTStatus");
+            entity.Property(e => e.Fabrication).HasDefaultValue(true);
+            entity.Property(e => e.PartCutting).HasDefaultValue(true);
+            entity.Property(e => e.PowderCoating).HasDefaultValue(true);
+            entity.Property(e => e.ProductionType)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasDefaultValue("IH")
+                .IsFixedLength();
+            entity.Property(e => e.Turret).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<CanopyPlanDtsSubBelowStdRate>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("CanopyPlanDtsSubBelowStdRate");
+
+            entity.Property(e => e.CatId)
+                .HasMaxLength(20)
+                .HasColumnName("CatID");
+            entity.Property(e => e.CompCode).HasMaxLength(20);
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.Cpqty).HasColumnName("CPQty");
+            entity.Property(e => e.CpyPartCode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Partcode).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<CanopyPlanOsdetail>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("CanopyPlanOSDetails");
+
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(50)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.CpyPartCode).HasMaxLength(50);
+            entity.Property(e => e.Osfqty).HasColumnName("OSFQty");
+            entity.Property(e => e.Osfstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("OSFStatus");
+            entity.Property(e => e.Osmtfqty).HasColumnName("OSMTFQty");
+            entity.Property(e => e.Osmtfstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("OSMTFStatus");
+            entity.Property(e => e.Ospcqty).HasColumnName("OSPCQty");
+            entity.Property(e => e.Ospcstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("OSPCStatus");
+            entity.Property(e => e.ParentPart)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.Partcode).HasMaxLength(50);
+            entity.Property(e => e.Scode)
+                .HasMaxLength(50)
+                .HasColumnName("SCode");
+        });
+
+        modelBuilder.Entity<CanopyPlanSerialNo>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("CanopyPlanSerialNo");
+
+            entity.Property(e => e.BfmsrNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("BFMSrNo");
+            entity.Property(e => e.CpbserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPBSerialStatus");
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(50)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.CpfpserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPFPSerialStatus");
+            entity.Property(e => e.CpfserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPFSerialStatus");
+            entity.Property(e => e.CppcserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPPCSerialStatus");
+            entity.Property(e => e.CptserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPTSerialStatus");
+            entity.Property(e => e.CpyserialStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("CPYSerialStatus");
+            entity.Property(e => e.FlksrNo)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("FLKSrNo");
+            entity.Property(e => e.JobCardStatus)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.PartCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Qpcstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("QPCStatus");
+            entity.Property(e => e.Rwstatus)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("RWStatus");
+            entity.Property(e => e.SerialNo)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Trfcode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("((0))")
+                .HasColumnName("TRFCode");
+            entity.Property(e => e.Trfstatus)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength()
+                .HasColumnName("TRFStatus");
         });
 
         modelBuilder.Entity<Company>(entity =>
@@ -1512,6 +1870,20 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(50)
                 .HasDefaultValue("NIL");
             entity.Property(e => e.TblName).HasMaxLength(50);
+            entity.Property(e => e.Yr).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<GetMaxSerialNo>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("getMaxSerialNo");
+
+            entity.Property(e => e.CompCode).HasMaxLength(50);
+            entity.Property(e => e.Prefix)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.Yr).HasMaxLength(50);
         });
 
@@ -2726,6 +3098,32 @@ public partial class KalaDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("E")
                 .IsFixedLength();
+        });
+
+        modelBuilder.Entity<LoginTransactionDetail>(entity =>
+        {
+            entity.HasKey(e => new { e.Ltid, e.EmpId, e.TransactionFrom, e.TransactionType, e.TransactionNo });
+
+            entity.Property(e => e.Ltid)
+                .ValueGeneratedOnAdd()
+                .HasColumnName("LTID");
+            entity.Property(e => e.EmpId)
+                .HasMaxLength(50)
+                .HasColumnName("EmpID");
+            entity.Property(e => e.TransactionFrom)
+                .HasMaxLength(100)
+                .HasComment("LedgerID");
+            entity.Property(e => e.TransactionType)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("S")
+                .IsFixedLength();
+            entity.Property(e => e.TransactionNo).HasMaxLength(50);
+            entity.Property(e => e.AttendanceDt).HasMaxLength(50);
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.TransactionDtTime)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
         });
 
         modelBuilder.Entity<MaterialRequisitionWithOutPlan>(entity =>
@@ -4221,6 +4619,35 @@ public partial class KalaDbContext : DbContext
                 .HasColumnName("ToProfitCenterCode_Act");
         });
 
+        modelBuilder.Entity<ProductionPlanMaster>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("ProductionPlanMaster");
+
+            entity.Property(e => e.Active)
+                .HasDefaultValue(true)
+                .HasComment("1 - Active 0- UnActive");
+            entity.Property(e => e.BracketId)
+                .HasMaxLength(10)
+                .IsFixedLength()
+                .HasColumnName("BracketID");
+            entity.Property(e => e.CatId)
+                .HasMaxLength(50)
+                .HasColumnName("CatID");
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.Id)
+                .ValueGeneratedOnAdd()
+                .HasColumnName("ID");
+            entity.Property(e => e.Location).HasMaxLength(50);
+            entity.Property(e => e.ProcessType)
+                .HasMaxLength(7)
+                .IsFixedLength();
+            entity.Property(e => e.Remark)
+                .HasMaxLength(500)
+                .IsFixedLength();
+        });
+
         modelBuilder.Entity<ProfitCenter>(entity =>
         {
             entity.HasKey(e => e.PcId).HasName("PK_ProfitCenter_NEW_1");
@@ -4804,6 +5231,156 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasDefaultValue("10-11");
+        });
+
+        modelBuilder.Entity<TurretKit>(entity =>
+        {
+            entity.HasKey(e => e.Tkitid);
+
+            entity.ToTable("TurretKIT");
+
+            entity.Property(e => e.Tkitid)
+                .HasMaxLength(50)
+                .HasColumnName("TKITID");
+            entity.Property(e => e.Active).HasDefaultValue(true);
+            entity.Property(e => e.BomCode)
+                .HasMaxLength(50)
+                .HasDefaultValue("Nil");
+            entity.Property(e => e.Bomtype)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasDefaultValue("WIB")
+                .IsFixedLength()
+                .HasColumnName("BOMType");
+            entity.Property(e => e.CanopyPartCode).HasMaxLength(50);
+            entity.Property(e => e.CatId)
+                .HasMaxLength(20)
+                .HasColumnName("CatID");
+            entity.Property(e => e.CompanyCode).HasMaxLength(50);
+            entity.Property(e => e.CpyCompleteStatus)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.Discard).HasDefaultValue(true);
+            entity.Property(e => e.Dt).HasColumnType("datetime");
+            entity.Property(e => e.Kittype)
+                .HasMaxLength(50)
+                .HasColumnName("KITType");
+            entity.Property(e => e.MaxSrNo).HasMaxLength(50);
+            entity.Property(e => e.NestingForPartcode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.NestingType)
+                .HasMaxLength(50)
+                .HasDefaultValue("Turret");
+            entity.Property(e => e.Remark)
+                .HasMaxLength(300)
+                .HasDefaultValue("NIL");
+            entity.Property(e => e.SaveAsBomCode)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.SheetPartCode).HasMaxLength(50);
+            entity.Property(e => e.Tlength).HasColumnName("TLength");
+            entity.Property(e => e.Tthickness).HasColumnName("TThickness");
+            entity.Property(e => e.Twidth).HasColumnName("TWidth");
+            entity.Property(e => e.VersionNo).HasDefaultValue(1);
+        });
+
+        modelBuilder.Entity<TurretKitForPrc>(entity =>
+        {
+            entity.HasKey(e => new { e.Cpcode, e.Tkitid });
+
+            entity.ToTable("TurretKitForPrc");
+
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.Tkitid)
+                .HasMaxLength(20)
+                .HasColumnName("TKITID");
+            entity.Property(e => e.Bomcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("BOMCode");
+            entity.Property(e => e.CanopyPartCode).HasMaxLength(20);
+            entity.Property(e => e.CatId)
+                .HasMaxLength(20)
+                .HasColumnName("CatID");
+            entity.Property(e => e.CompCode).HasMaxLength(20);
+            entity.Property(e => e.Kittype)
+                .HasMaxLength(20)
+                .HasColumnName("KITType");
+            entity.Property(e => e.Partcutstatus)
+                .HasMaxLength(10)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.PrcStatus)
+                .HasMaxLength(10)
+                .HasDefaultValue("P")
+                .IsFixedLength();
+            entity.Property(e => e.SheetPartCode).HasMaxLength(20);
+            entity.Property(e => e.Tlength).HasColumnName("TLength");
+            entity.Property(e => e.Tthickness).HasColumnName("TThickness");
+            entity.Property(e => e.TurretKitPartcode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("((0))");
+            entity.Property(e => e.Twidth).HasColumnName("TWidth");
+        });
+
+        modelBuilder.Entity<TurretKitForPrcDt>(entity =>
+        {
+            entity.HasKey(e => new { e.Cpcode, e.Tkitid, e.PartCode }).HasName("PK_TurretkitforPrcDts");
+
+            entity.Property(e => e.Cpcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("CPCode");
+            entity.Property(e => e.Tkitid)
+                .HasMaxLength(20)
+                .HasColumnName("TKITID");
+            entity.Property(e => e.PartCode).HasMaxLength(20);
+            entity.Property(e => e.Tcatagorycode)
+                .HasMaxLength(10)
+                .HasDefaultValue("Nil")
+                .HasColumnName("TCatagorycode");
+            entity.Property(e => e.Theight).HasColumnName("THeight");
+            entity.Property(e => e.Tlength).HasColumnName("TLength");
+            entity.Property(e => e.Tlength1).HasColumnName("TLength1");
+            entity.Property(e => e.Tlength2).HasColumnName("TLength2");
+            entity.Property(e => e.TlossWt).HasColumnName("TLossWt");
+            entity.Property(e => e.Tlosssqft).HasColumnName("TLosssqft");
+            entity.Property(e => e.Tthickness).HasColumnName("TTHickness");
+            entity.Property(e => e.Twidth).HasColumnName("TWidth");
+            entity.Property(e => e.Twidth1).HasColumnName("TWidth1");
+            entity.Property(e => e.Twidth2).HasColumnName("TWidth2");
+        });
+
+        modelBuilder.Entity<TurretKitdetail>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("TurretKITDetails");
+
+            entity.Property(e => e.PartCode).HasMaxLength(50);
+            entity.Property(e => e.Tcatagorycode)
+                .HasMaxLength(50)
+                .HasDefaultValue("Nil")
+                .HasColumnName("TCatagorycode");
+            entity.Property(e => e.Theight).HasColumnName("THeight");
+            entity.Property(e => e.Tkitid)
+                .HasMaxLength(50)
+                .HasColumnName("TKITID");
+            entity.Property(e => e.Tlength).HasColumnName("TLength");
+            entity.Property(e => e.Tlength1).HasColumnName("TLength1");
+            entity.Property(e => e.Tlength2).HasColumnName("TLength2");
+            entity.Property(e => e.TlossWt).HasColumnName("TLossWt");
+            entity.Property(e => e.Tlosssqft).HasColumnName("TLosssqft");
+            entity.Property(e => e.Tthickness).HasColumnName("TTHickness");
+            entity.Property(e => e.Twidth).HasColumnName("TWidth");
+            entity.Property(e => e.Twidth1).HasColumnName("TWidth1");
+            entity.Property(e => e.Twidth2).HasColumnName("TWidth2");
         });
 
         modelBuilder.Entity<Uom>(entity =>

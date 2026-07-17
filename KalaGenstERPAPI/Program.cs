@@ -93,6 +93,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "My API", Version = "v1" });
+    c.CustomSchemaIds(type => type.FullName!.Replace("+", "."));
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -137,10 +138,19 @@ builder.Services.AddScoped<ILogistic, LogisticService>();
 builder.Services.AddScoped<IKalaService, KalaService>();
 builder.Services.AddScoped<IDgStageChecker, DgStageCheckerService>();
 builder.Services.AddScoped<IQuality, QualityService>();
-builder.Services.AddScoped<ICanopy, CanopyService>();
+//builder.Services.AddScoped<ICanopy, CanopyService>();
 builder.Services.AddScoped<ICanopyAssembly, CanopyAssemblyServices>();
 builder.Services.AddScoped<IJobcard, JobcardService>();
 builder.Services.AddScoped<I_invoiceScan, InvoiceScanService>();
+builder.Services.AddScoped<ICommonService, CommonService>();
+builder.Services.AddScoped<ICanopy, CanopyService>();// <-- ADD
+builder.Services.AddScoped<CommonCon>();
+builder.Services.AddScoped<ICNC, CNCServices>();
+builder.Services.AddScoped<IBending, BendingService>();
+builder.Services.AddScoped<IFabrication, FabricationService>();
+builder.Services.AddScoped<IPowderCoating, PowderCoatingService>();
+builder.Services.AddScoped<IReverse, ReverseService>();
+
 builder.Services.AddScoped<IMachineDownTime, MachineDownTimeService>();
 builder.Services.AddScoped<IManpowerStatus, ManpowerStatusService>();
 builder.Services.AddScoped<IMaterial, MaterialService>();
@@ -191,3 +201,5 @@ catch (Exception ex)
     Console.WriteLine(ex.ToString());
     Console.ReadLine(); // Keep console open to read the error
 }
+
+
