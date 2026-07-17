@@ -8,6 +8,7 @@ using KalaGenset.ERP.Core.Request.CanopyAssembly;
 using KalaGenset.ERP.Core.ResponseDTO;
 using KalaGenset.ERP.Core.ResponseDTO.CanopyAssembly;
 using KalaGenset.ERP.Data.DbContexts;
+using KalaGenset.ERP.Data.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -55,6 +56,9 @@ namespace KalaGenset.ERP.Core.Services
             var fromDateTime = fromDate.Date;
             var toDateTime   = toDate.Date.AddDays(1).AddTicks(-1);
 
+            // Filter + display are line-wise: PCCode_Act carries the LineWisePC
+            // (01.124/125/126). ProfitCenterCode still stores the ParentDgPC
+            // (01.093) and isn't used here, so line A/B/C rows split cleanly.
             const string sql = @"
 SELECT  PF.PFBCode,
         CONVERT(NVARCHAR(10), PF.Dt, 103)                          AS PrcDt,
@@ -63,15 +67,15 @@ SELECT  PF.PFBCode,
         P.Model,
         P.PartDesc + '-->' + PF.ProductCode                        AS CanopyPartCode,
         P.PartDesc + '-->' + PF.PartCode                           AS NestingPartCode,
-        PC.PCName  + '-->' + PF.ProfitCenterCode                   AS ProfitCenter,
+        PC.PCName  + '-->' + PF.PCCode_Act                         AS ProfitCenter,
         PF.TurretKitCode                                           AS BOMCode,
         PF.ProcessQty,
         PF.pfbrate                                                 AS Rate,
         ROUND(ISNULL(PF.PFBRate, 0) * ISNULL(PF.ProcessQty, 0), 2) AS Amount
 FROM ProcessFeedBack PF WITH (NOLOCK)
-INNER JOIN Part         P  WITH (NOLOCK) ON PF.ProductCode      = P.PartCode
-INNER JOIN ProfitCenter PC WITH (NOLOCK) ON PF.ProfitCenterCode = PC.PCCode
-WHERE PF.ProfitCenterCode = @PCCode
+INNER JOIN Part         P  WITH (NOLOCK) ON PF.ProductCode = P.PartCode
+INNER JOIN ProfitCenter PC WITH (NOLOCK) ON PF.PCCode_Act  = PC.PCCode
+WHERE PF.PCCode_Act = @PCCode
   AND PF.PartCode LIKE '004%'
   AND PF.Dt >= @FromDate
   AND PF.Dt <= @ToDate
@@ -315,9 +319,16 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
             if (!AllowedProductionPCs.Contains(pc))
                 return resp;
 
+            // TEMP: reverted to base SPs while the *_Checker_Maker variants are debugged.
+            // Once the _Checker_Maker SPs return rows for LineWisePC (01.124/125/126),
+            // swap the names back so per-line Stk populates.
             var spName = type.Equals("CPY(BF_FT)", StringComparison.OrdinalIgnoreCase)
-                ? "sp_GetFlatPackProcessDetailsCPY"
-                : "sp_GetFlatPackProcessDetails";
+                ? "sp_GetFlatPackProcessDetailsCPY_Checker_Maker"
+                : "sp_GetFlatPackProcessDetails_Checker_Maker";
+
+            //var spName = type.Equals("CPY(BF_FT)", StringComparison.OrdinalIgnoreCase)
+            //    ? "sp_GetFlatPackProcessDetailsCPY"
+            //    : "sp_GetFlatPackProcessDetails";
 
             using (var cmd = new SqlCommand(spName, connection))
             {
@@ -410,13 +421,13 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
             {
                 var sqlTx = (SqlTransaction)tx.GetDbTransaction();
 
-                // 1) Generate new PFBCode via the standard GetMaxCode flow.
-                var pfbCode = await GetMaxNoAsync(
-                    prefix: "PSH",
-                    compCode: company,
-                    tblName: "ProcessFeedBack",
-                    tx: sqlTx);
+                string yr = await GetYearEndAsync();
 
+                // 1) Generate new PFBCode via the standard GetMaxCode flow.
+                //    sqlTx is passed explicitly so the MAX read runs inside our transaction
+                //    (and is serialized against parallel Saves via UPDLOCK inside the SP).
+                var pfbCode = await GetMaxPrcAsync(yr, company, sqlTx);
+                
                 // MaxSrNo = "<CompCode><6-digit sequence>" — everything AFTER the
                 // last '/' in the generated PFBCode (e.g. "PSH/26-27/27000001" → "27000001").
                 // Using LastIndexOf is robust against prefix / yearEnd length changes.
@@ -458,6 +469,7 @@ WHERE BOMCode = @BomCode AND Thickness > 1.5 AND SteelRate > 0;",
                     cmd.Parameters.AddWithValue("@CompanyCode",      company);
                     cmd.Parameters.AddWithValue("@Remark",           "OK");
                     cmd.Parameters.AddWithValue("@DivertStatus",     false);
+                    cmd.Parameters.AddWithValue("@Checker1", true);                
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -1792,7 +1804,7 @@ SELECT P.PartDesc + '-->' + Bd.PartCode                          AS Part,
 FROM   BOMDetails Bd
 INNER JOIN Part   P  ON Bd.PartCode = P.PartCode
 LEFT  JOIN ProfitcenterPLDetails pl WITH (NOLOCK)
-       ON pl.PartCode = Bd.PartCode AND pl.ProfitcenterCode = @PCCode
+       ON pl.PartCode = Bd.PartCode AND pl.ProfitcenterCode ='01.005'
 WHERE  Bd.BOMCode = @BOMCode
    AND SUBSTRING(Bd.KitCode, 1, 4) IN ('0121','0122')
    AND SUBSTRING(Bd.KitCode, 12, 2) = '12';";
@@ -3825,6 +3837,50 @@ ORDER BY cp.Dt DESC, cp.CPCode DESC;";
             if (string.IsNullOrWhiteSpace(req.CPCode))      throw new ArgumentException("CPCode is required.");
             if (string.IsNullOrWhiteSpace(req.EmpCode))     throw new ArgumentException("EmpCode is required.");
             if (string.IsNullOrWhiteSpace(req.CompanyCode)) throw new ArgumentException("CompanyCode is required.");
+        }
+
+        // Generates the next PFBCode ("PSH/<Yr>/<CompCode><seq>") by reading the
+        // MAX sequence already stored in ProcessFeedback for the given (Yr, CompCode).
+        //
+        // Transaction handling: takes an explicit SqlTransaction (matches the sibling
+        // GetMaxNoAsync). This ensures the SELECT runs inside the caller's transaction
+        // and can see writes made earlier in the same transaction — unlike the previous
+        // implicit form which fell back to null when _context.Database.CurrentTransaction
+        // wasn't set.
+        //
+        // Concurrency: WITH (UPDLOCK, HOLDLOCK) serializes the MAX read against parallel
+        // Saves, preventing two concurrent transactions from generating the same PFBCode.
+        public async Task<string> GetMaxPrcAsync(string Yr, string CompCode, SqlTransaction tx)
+        {
+            Yr       = Yr.Trim();
+            CompCode = CompCode.Trim();
+
+            const string query = @"
+SELECT MAX(SUBSTRING(PFbCode, 13, 7))
+FROM   ProcessFeedback WITH (UPDLOCK, HOLDLOCK)
+WHERE  Yr = @Yr AND CompanyCode = @CompCode;";
+
+            var connection = (SqlConnection)_context.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+
+            using var command = new SqlCommand(query, connection, tx);
+            command.Parameters.Add(new SqlParameter("@Yr",       SqlDbType.NVarChar, 10) { Value = Yr });
+            command.Parameters.Add(new SqlParameter("@CompCode", SqlDbType.NVarChar, 10) { Value = CompCode });
+
+            var result = await command.ExecuteScalarAsync();
+
+            string formattedMax;
+            if (result == null || result == DBNull.Value)
+            {
+                formattedMax = "000001";
+            }
+            else
+            {
+                int next = Convert.ToInt32(result) + 1;
+                formattedMax = next.ToString("D6");
+            }
+            return $"PSH/{Yr}/{CompCode}{formattedMax}";
         }
     }
 }
