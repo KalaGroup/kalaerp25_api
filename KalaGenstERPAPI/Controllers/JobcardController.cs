@@ -161,6 +161,42 @@ namespace KalaGenset.ERP.API.Controllers
             return Ok(data);
         }
 
+        // GET api/Jobcard/GetJobCardMttrReport
+        //     ?companyCode=03              (first two chars of assemblyLine — client-derived)
+        //     &assemblyLine=03.092         (LineWisePC from the hardcoded Line dropdown)
+        //     &searchCode=JobCard1         (dropdown selection — see UI stageList)
+        //     &fromDate=2026-07-01
+        //     &toDate=2026-07-21
+        // Wraps SP getJobCardMttrRptNew_sp (currently _Checker_Maker variant).
+        // Type is fixed to "RPT" server-side.
+        [HttpGet("GetJobCardMttrReport")]
+        public async Task<IActionResult> GetJobCardMttrReport(
+            [FromQuery] string companyCode,
+            [FromQuery] string assemblyLine,
+            [FromQuery] string searchCode,
+            [FromQuery] DateTime fromDate,
+            [FromQuery] DateTime toDate)
+        {
+            if (string.IsNullOrWhiteSpace(companyCode))
+                return BadRequest("companyCode is required.");
+            if (string.IsNullOrWhiteSpace(assemblyLine))
+                return BadRequest("assemblyLine is required.");
+            if (string.IsNullOrWhiteSpace(searchCode))
+                return BadRequest("searchCode is required.");
+            if (fromDate == default)
+                return BadRequest("fromDate is required.");
+            if (toDate == default)
+                return BadRequest("toDate is required.");
+            if (fromDate > toDate)
+                return BadRequest("fromDate cannot be later than toDate.");
+
+            var data = await _jobcardService.GetJobCardMttrReportAsync(
+                companyCode.Trim(), assemblyLine.Trim(), searchCode.Trim(), fromDate, toDate);
+
+            // Return an empty array (not 404) so the grid renders "no records" cleanly.
+            return Ok(data ?? new List<Dictionary<string, object?>>());
+        }
+
         [HttpGet("GetJobCard1CheckerDetails/{jobCode}")]
         public async Task<IActionResult> GetJobCard1CheckerDetails(string jobCode)
         {
