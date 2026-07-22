@@ -41,5 +41,16 @@ namespace KalaGenset.ERP.Core.Interface
         public Task<List<Dictionary<string, object>>> GetJobCard1ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
 
         public Task<List<Dictionary<string, object>>> GetJobCard2ReportAsync(string companyCode, string assemblyLine, DateTime fromDate, DateTime toDate);
+
+        // JobCard MTTR report — calls SP getJobCardMttrRptNew_sp.
+        // - searchCode  = the dropdown "Search By" selection ('JobCard1', 'Stage1Start',
+        //                 'Stage1End', ..., 'Invoice'). Maps to SP @Code.
+        // - assemblyLine = the LineWisePC of the selected assembly line
+        //                 (e.g. '01.106', '03.092', '28.037'). Maps to SP @AssemblyLine.
+        // - companyCode  = first two chars of assemblyLine ('01' / '03' / '28').
+        //                 Maps to SP @CompanyCode.
+        // @Type is fixed to "RPT" server-side.
+        public Task<List<Dictionary<string, object?>>> GetJobCardMttrReportAsync(
+            string companyCode, string assemblyLine, string searchCode, DateTime fromDate, DateTime toDate);
     }
 }

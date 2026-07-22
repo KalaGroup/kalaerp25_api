@@ -2344,5 +2344,51 @@ namespace KalaGenset.ERP.Core.Services
 
             return result;
         }
+
+        // JobCard MTTR report — thin wrapper over legacy SP getJobCardMttrRptNew_sp
+        // (currently pointing at the _Checker_Maker variant per the migration).
+        // All SP parameters are CHAR — the legacy client passed pre-formatted date
+        // strings ("yyyy-MM-dd HH:mm:ss"), which we preserve here.
+        // @AssemblyLine is new — the SP is expected to accept it and filter by
+        // LineWisePC (01.106 / 03.092 / 03.123 / 28.037 / 28.040 / 28.117).
+        public async Task<List<Dictionary<string, object?>>> GetJobCardMttrReportAsync(
+            string companyCode, string assemblyLine, string searchCode, DateTime fromDate, DateTime toDate)
+        {
+            var data = new List<Dictionary<string, object?>>();
+
+            // Format matches the legacy call site verbatim:
+            //   P_FromDt = datePipe.transform(fromdate, "yyyy-MM-dd") + " 00:00:00"
+            //   P_ToDt   = datePipe.transform(todate,   "yyyy-MM-dd") + " 23:59:59"
+            var fromDt = fromDate.Date.ToString("yyyy-MM-dd") + " 00:00:00";
+            var toDt   = toDate.Date.ToString("yyyy-MM-dd")   + " 23:59:59";
+
+            using var conn = _context.Database.GetDbConnection();
+            using var cmd  = conn.CreateCommand();
+            //cmd.CommandText    = "getJobCardMttrRptNew_sp";
+            cmd.CommandText = "getJobCardMttrRptNew_Checker_Maker";
+            cmd.CommandType    = CommandType.StoredProcedure;
+            cmd.CommandTimeout = 0;
+
+            // Fixed 'RPT' matches the legacy front-end that only ever sent Type=RPT.
+            cmd.Parameters.Add(new SqlParameter("@Type",         SqlDbType.Char) { Value = "RPT" });
+            cmd.Parameters.Add(new SqlParameter("@Code",         SqlDbType.Char) { Value = searchCode   ?? string.Empty });
+            cmd.Parameters.Add(new SqlParameter("@FromDt",       SqlDbType.Char) { Value = fromDt });
+            cmd.Parameters.Add(new SqlParameter("@ToDt",         SqlDbType.Char) { Value = toDt });
+            cmd.Parameters.Add(new SqlParameter("@CompanyCode",  SqlDbType.Char) { Value = companyCode  ?? string.Empty });
+            cmd.Parameters.Add(new SqlParameter("@AssemblyLine", SqlDbType.Char) { Value = assemblyLine ?? string.Empty });
+
+            if (conn.State == ConnectionState.Closed)
+                await conn.OpenAsync();
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < reader.FieldCount; i++)
+                    row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                data.Add(row);
+            }
+            return data;
+        }
     }
 }
