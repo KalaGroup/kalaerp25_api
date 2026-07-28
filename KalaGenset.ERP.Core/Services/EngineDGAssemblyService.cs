@@ -3564,20 +3564,34 @@ ORDER BY SrNo";
                                  '11', '12', '13', '14', @DieselRate, @PerUnitQty, 'P', @CompanyCode, @TimeFieldValue
                                 )";
 
+                        //     var Parameters = new[]
+                        //    {
+                        //             new SqlParameter("@TRCode", StrTRCode.Trim()),
+                        //             new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
+                        //             new SqlParameter("@Yr", yearEnd),
+                        //             new SqlParameter("@MaxSrNo", StrTRCode.Substring(10, 8)),
+                        //             new SqlParameter("@ProcessCode", testReportSubmitDetailsDTO.PFBCode.Trim()),
+                        //             new SqlParameter("@MachineNo", testReportSubmitDetailsDTO.DGSrNo.Trim()),
+                        //             new SqlParameter("@Remark", testReportSubmitDetailsDTO.Remark.Trim()),
+                        //             new SqlParameter("@DieselRate", testReportSubmitDetailsDTO.DieselRate),
+                        //             new SqlParameter("@PerUnitQty", testReportSubmitDetailsDTO.DieselQty),
+                        //             new SqlParameter("@CompanyCode", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2)),
+                        //             new SqlParameter("@TimeFieldValue", SqlDbType.DateTime) { Value = DateTime.Now }
+                        //};
                         var Parameters = new[]
-                       {
-                                new SqlParameter("@TRCode", StrTRCode.Trim()),
-                                new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
-                                new SqlParameter("@Yr", yearEnd),
-                                new SqlParameter("@MaxSrNo", StrTRCode.Substring(10, 8)),
-                                new SqlParameter("@ProcessCode", testReportSubmitDetailsDTO.PFBCode.Trim()),
-                                new SqlParameter("@MachineNo", testReportSubmitDetailsDTO.DGSrNo.Trim()),
-                                new SqlParameter("@Remark", testReportSubmitDetailsDTO.Remark.Trim()),
-                                new SqlParameter("@DieselRate", testReportSubmitDetailsDTO.DieselRate),
-                                new SqlParameter("@PerUnitQty", testReportSubmitDetailsDTO.DieselQty),
-                                new SqlParameter("@CompanyCode", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2)),
-                                new SqlParameter("@TimeFieldValue", SqlDbType.DateTime) { Value = DateTime.Now }
-                   };
+                        {
+                             new SqlParameter("@TRCode", StrTRCode.Trim()),
+                             new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
+                             new SqlParameter("@Yr", yearEnd),
+                             new SqlParameter("@MaxSrNo", StrTRCode.Substring(10, 8)),
+                             new SqlParameter("@ProcessCode", testReportSubmitDetailsDTO.PFBCode.Trim()),
+                             new SqlParameter("@MachineNo", testReportSubmitDetailsDTO.DGSrNo.Trim()),
+                             new SqlParameter("@Remark", testReportSubmitDetailsDTO.Remark.Trim()),
+                             new SqlParameter("@DieselRate", testReportSubmitDetailsDTO.DieselRate),
+                             new SqlParameter("@PerUnitQty", testReportSubmitDetailsDTO.DieselQty),
+                             new SqlParameter("@CompanyCode", testReportSubmitDetailsDTO.PFBCode.Trim().Substring(10, 2)),
+                             new SqlParameter("@TimeFieldValue", SqlDbType.DateTime) { Value = DateTime.Now }
+                        };
 
                         await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
 
