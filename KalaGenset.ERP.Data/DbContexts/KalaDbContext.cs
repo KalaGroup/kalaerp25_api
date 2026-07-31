@@ -2938,67 +2938,11 @@ public partial class KalaDbContext : DbContext
 
             entity.HasIndex(e => e.KaizenSheetNo, "UQ_KaizenSheetNo").IsUnique();
 
-            entity.Property(e => e.AfterPhotoName).HasMaxLength(255);
-            entity.Property(e => e.AfterPhotoPath).HasMaxLength(500);
-            entity.Property(e => e.AuthRemark)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.BeforePhotoName).HasMaxLength(255);
-            entity.Property(e => e.BeforePhotoPath).HasMaxLength(500);
-            entity.Property(e => e.Benefit)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-            entity.Property(e => e.CountermeasureRemark).HasMaxLength(2000);
-            entity.Property(e => e.DataSubmittedBy).HasMaxLength(200);
-            entity.Property(e => e.DepartmentCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.DepartmentName).HasMaxLength(200);
-            entity.Property(e => e.DivisionName).HasMaxLength(200);
-            entity.Property(e => e.EmpCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.HorizontalDeployment).HasMaxLength(1000);
-            entity.Property(e => e.Idea)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.IdeaRemark).HasMaxLength(2000);
-            entity.Property(e => e.ImpactGraphName).HasMaxLength(255);
-            entity.Property(e => e.ImpactGraphPath).HasMaxLength(500);
-            entity.Property(e => e.Improvement)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.InvestmentArea).HasMaxLength(1000);
+            entity.Property(e => e.Improvement).IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.KaizenSheetNo)
                 .HasMaxLength(30)
                 .IsUnicode(false);
-            entity.Property(e => e.KaizenTheme)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.ProblemHow).HasMaxLength(1000);
-            entity.Property(e => e.ProblemHowMuch).HasMaxLength(1000);
-            entity.Property(e => e.ProblemWhat).HasMaxLength(1000);
-            entity.Property(e => e.ProblemWhen).HasMaxLength(1000);
-            entity.Property(e => e.ProblemWhere).HasMaxLength(1000);
-            entity.Property(e => e.ProblemWho).HasMaxLength(1000);
-            entity.Property(e => e.ProblemWhy).HasMaxLength(1000);
-            entity.Property(e => e.RcaWhy1).HasMaxLength(1000);
-            entity.Property(e => e.RcaWhy2).HasMaxLength(1000);
-            entity.Property(e => e.RcaWhy3).HasMaxLength(1000);
-            entity.Property(e => e.RcaWhy4).HasMaxLength(1000);
-            entity.Property(e => e.RcaWhy5).HasMaxLength(1000);
-            entity.Property(e => e.Result)
-                .HasMaxLength(200)
-                .IsUnicode(false);
-            entity.Property(e => e.SavingArea).HasMaxLength(1000);
-            entity.Property(e => e.SustenanceFrequency).HasMaxLength(1000);
-            entity.Property(e => e.SustenanceHowToDo).HasMaxLength(2000);
-            entity.Property(e => e.SustenanceWhatToDo).HasMaxLength(2000);
-            entity.Property(e => e.WorkstationCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.WorkstationName).HasMaxLength(200);
         });
 
         modelBuilder.Entity<LinePcmst>(entity =>

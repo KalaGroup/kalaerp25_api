@@ -154,6 +154,7 @@ builder.Services.AddScoped<IReverse, ReverseService>();
 builder.Services.AddScoped<IMachineDownTime, MachineDownTimeService>();
 builder.Services.AddScoped<IManpowerStatus, ManpowerStatusService>();
 builder.Services.AddScoped<IMaterial, MaterialService>();
+builder.Services.AddScoped<IControlPanelBox, ControlPanelBoxService>();
 
 // ✅ CORS Policy
 builder.Services.AddCors(options =>
