@@ -1063,6 +1063,27 @@ namespace KalaGenset.ERP.Core.Services
 
                         allJobCards.Add(jobCardNo);
 
+                        // ── Audit log — one entry per JobCard code created. ─────────────────
+                        //    Mirrors the InsertLoginTransactionDetails pattern used by
+                        //    EngineDGAssemblyService (line ~783). Runs inside the same
+                        //    transaction so it rolls back with the rest on failure.
+                        //      @TransactionType = "S"        → Save
+                        //      @TransactionFrom = "JobCard"  → module identifier
+                        //      @TransactionNo   = jobCardNo  → the JCD code just created
+                        // ──────────────────────────────────────────────────────────────
+                        var logParams = new[]
+                        {
+                            new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                            new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)request.EmpCode ?? "" },
+                            new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                            new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DG JobCard Maker" },
+                            new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = jobCardNo },
+                            new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = compCode },
+                        };
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                            logParams);
+
                     } // END foreach row
 
                     // ============================================================================

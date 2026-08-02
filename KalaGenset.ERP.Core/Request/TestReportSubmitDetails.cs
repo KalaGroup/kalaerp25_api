@@ -23,6 +23,11 @@ namespace KalaGenset.ERP.Core.RequestDTO
         public List<TRDgKitDTO>? TRDGKitDetails { get; set; }
         public IFormFile? RecordedAudioFile { get; set; }
         public IFormFile? RecordedVideoFile { get; set; }
+        // Operator code — sourced from localStorage.employeeCode on the UI side.
+        // Populated on the audit-log write (InsertLoginTransactionDetails) so
+        // each TRStart / TREnd / DGStart / DGEnd action can be attributed to
+        // a specific user.
+        public string? EmpCode { get; set; }
     }
 
     public class TRProcessCheckpointDTO

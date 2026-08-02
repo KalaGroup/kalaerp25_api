@@ -11,6 +11,10 @@ namespace KalaGenset.ERP.Core.RequestDTO
         public string PCCode { get; set; }
         public string PCCode_Act { get; set; }
         public string Remark { get; set; }
+        // Operator code — sourced from localStorage.employeeCode on the UI side.
+        // Populated on the audit-log write (InsertLoginTransactionDetails) so
+        // each JobCard2 save can be attributed to a specific user.
+        public string? EmpCode { get; set; }
         public List<ModelDetailDto> JobCard2Dts { get; set; }
     }
 
