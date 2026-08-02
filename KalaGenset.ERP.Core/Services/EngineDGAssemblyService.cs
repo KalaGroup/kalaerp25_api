@@ -1657,6 +1657,31 @@ ORDER BY SrNo";
                                 throw;
                             }
                         }
+
+                        // ── Audit log — Stage I Start ─────────────────────────────────
+                        //    Same shape as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //      TransactionType = "S"              → Save
+                        //      TransactionFrom = "DGStageIStart"  → module + action
+                        //      TransactionNo   = JBCode           → the JobCard being scanned in
+                        //      CompanyCode     = first 2 chars of PCCode_Act
+                        // ──────────────────────────────────────────────────────────────
+                        {
+                            var startCompCode = (dgStageScanReq.PCCode_Act ?? "").Trim();
+                            startCompCode = startCompCode.Length >= 2 ? startCompCode.Substring(0, 2) : "";
+                            var startLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)dgStageScanReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DGStageIStart" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)dgStageScanReq.JBCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = startCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                startLogParams);
+                        }
                     }
                     else if (dgStageScanReq.StageNo == 1) //Stage1 End
                     {
@@ -1792,6 +1817,30 @@ ORDER BY SrNo";
                                 jobcard.Stage2Status = "D";
                             }
                             await _context.SaveChangesAsync();
+                        }
+
+                        // ── Audit log — Stage I End ───────────────────────────────────
+                        //    Same shape as the Stage I Start block above.
+                        //      TransactionType = "S"           → Save
+                        //      TransactionFrom = "DGStageIEnd" → module + action
+                        //      TransactionNo   = JBCode        → the JobCard being closed out
+                        //      CompanyCode     = first 2 chars of PCCode_Act
+                        // ──────────────────────────────────────────────────────────────
+                        {
+                            var endCompCode = (dgStageScanReq.PCCode_Act ?? "").Trim();
+                            endCompCode = endCompCode.Length >= 2 ? endCompCode.Substring(0, 2) : "";
+                            var endLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)dgStageScanReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DGStageIEnd" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)dgStageScanReq.JBCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = endCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                endLogParams);
                         }
                     }
                     else if (dgStageScanReq.StageNo == 3)//stage two(2)
@@ -2279,7 +2328,7 @@ ORDER BY SrNo";
              new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
         };
                                 var rowsInserted = await _context.Database.ExecuteSqlRawAsync(sqlQueryBat1, parametersBat1);
-                                Console.WriteLine($"[BAT-{bat.Position}] STOCKWIP INSERT completed. Rows affected: {rowsInserted}");
+                               // Console.WriteLine($"[BAT-{bat.Position}] STOCKWIP INSERT completed. Rows affected: {rowsInserted}");
                             }
                             else
                             {
@@ -2318,7 +2367,7 @@ ORDER BY SrNo";
                             }
                         }
 
-                        Console.WriteLine($"========== [BATTERY SAVE COMPLETE] ==========\n");
+                       // Console.WriteLine($"========== [BATTERY SAVE COMPLETE] ==========\n");
 
                         foreach (var chekpoint in dgStageScanReq.PrcChkDts)
                         {
@@ -2444,6 +2493,33 @@ ORDER BY SrNo";
                             new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act)
                         };
                             await _context.Database.ExecuteSqlRawAsync(SqlQuery1, Parameters1);
+                        }
+
+                        // ── Audit log — Stage 2 Completed (backend StageNo == 3, physical Stage 2) ──
+                        //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //    This block covers both Start AND End of physical Stage 2 (there's
+                        //    only one branch here, unlike Stage I which has separate blocks).
+                        //      TransactionType = "S"                 → Save
+                        //      TransactionFrom = "DGStage2Completed" → module + action
+                        //      TransactionNo   = JBCode              → the JobCard being completed
+                        //      CompanyCode     = first 2 chars of PCCode_Act
+                        // ──────────────────────────────────────────────────────────────
+                        {
+                            var stage2CompCode = (dgStageScanReq.PCCode_Act ?? "").Trim();
+                            stage2CompCode = stage2CompCode.Length >= 2 ? stage2CompCode.Substring(0, 2) : "";
+                            var stage2LogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)dgStageScanReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DGStage2Completed" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)dgStageScanReq.JBCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = stage2CompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                stage2LogParams);
                         }
                     }
 
@@ -3403,6 +3479,35 @@ ORDER BY SrNo";
                             }
                         }
                         #endregion
+
+                        // ── Audit log — Stage 3 Start ──────────────────────────────
+                        //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //      TransactionType = "S"              → Save
+                        //      TransactionFrom = "DGStage3Start"  → module + action
+                        //      TransactionNo   = PrcNo            → the process code just generated
+                        //      CompanyCode     = first 2 chars of PCCode_Act
+                        //    NOTE: PrcNo is captured HERE (before line ~3490 reassigns it to
+                        //    a friendly "Process Started For…" message). The audit therefore
+                        //    always holds the raw process code, not the display string.
+                        // ──────────────────────────────────────────────────────────────
+                        {
+                            var s3StartCompCode = (dgStageScanReq.PCCode_Act ?? "").Trim();
+                            s3StartCompCode = s3StartCompCode.Length >= 2 ? s3StartCompCode.Substring(0, 2) : "";
+                            var s3StartLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)dgStageScanReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DGStage3Start" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)PrcNo ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = s3StartCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                s3StartLogParams);
+                        }
+
                         await transaction.CommitAsync();
                     }
                     catch (Exception)
@@ -3473,6 +3578,31 @@ ORDER BY SrNo";
                         else if (dgStageScanReq.PrcStatus == "Rework" || dgStageScanReq.PrcStatus == "Rejected")
                         {
                             PrcNo = $"Process {dgStageScanReq.PrcStatus} For ProcessCode={dgStageScanReq.JobCardCode}";
+                        }
+
+                        // ── Audit log — Stage 3 End ────────────────────────────────
+                        //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //      TransactionType = "S"            → Save
+                        //      TransactionFrom = "DGStage3End"  → module + action
+                        //      TransactionNo   = PfbCode        → the process code being closed out
+                        //      CompanyCode     = first 2 chars of PCCode_Act
+                        // ──────────────────────────────────────────────────────────────
+                        {
+                            var s3EndCompCode = (dgStageScanReq.PCCode_Act ?? "").Trim();
+                            s3EndCompCode = s3EndCompCode.Length >= 2 ? s3EndCompCode.Substring(0, 2) : "";
+                            var s3EndLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)dgStageScanReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "DGStage3End" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)dgStageScanReq.PfbCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = s3EndCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                s3EndLogParams);
                         }
 
                         await transaction.CommitAsync();
@@ -3744,6 +3874,41 @@ ORDER BY SrNo";
 
                             await _context.SaveChangesAsync();
                         }
+                    }
+
+                    // ── Audit log — Test Report action (TRStart / TREnd / DGStart / DGEnd) ──
+                    //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                    //    Runs inside the same transaction so it rolls back on failure.
+                    //      TransactionType = "S"                                   → Save
+                    //      TransactionFrom = "TestReport" + TRTime                 → e.g. "TestReportTRStart"
+                    //      TransactionNo   = raw TR code                           → the test-report code
+                    //                        (StrTRCode for TRStart — just generated by GetMaxNo)
+                    //                        (client-sent TRCode for TREnd / DGStart / DGEnd)
+                    //      CompanyCode     = PFBCode.Substring(10, 2)              → the plant code
+                    //    Placed BEFORE the friendly-message reassignment below so
+                    //    StrTRCode still holds the raw code for the TRStart case.
+                    // ──────────────────────────────────────────────────────────────
+                    {
+                        var trCodeForAudit = testReportSubmitDetailsDTO.TRTime == "TRStart"
+                            ? (StrTRCode ?? "")
+                            : (testReportSubmitDetailsDTO.TRCode ?? "");
+                        var trCompCode = "";
+                        var pfb = testReportSubmitDetailsDTO.PFBCode?.Trim() ?? "";
+                        if (pfb.Length >= 12) trCompCode = pfb.Substring(10, 2);
+                        var trTransactionFrom = $"TestReport{testReportSubmitDetailsDTO.TRTime ?? ""}";
+
+                        var trLogParams = new[]
+                        {
+                            new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                            new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)testReportSubmitDetailsDTO.EmpCode ?? "" },
+                            new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                            new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = trTransactionFrom },
+                            new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = trCodeForAudit },
+                            new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = trCompCode },
+                        };
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                            trLogParams);
                     }
 
                     if (strTimefield == "TRStartTime")
@@ -4114,6 +4279,34 @@ ORDER BY SrNo";
                             }
                         }
 
+                        // ── Audit log — Packing Slip PSStart ──────────────────────
+                        //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //      TransactionType = "S"                    → Save
+                        //      TransactionFrom = "PackingSlipPSStart"   → module + action
+                        //      TransactionNo   = StrPSLCode             → the just-generated PSL code
+                        //      CompanyCode     = TRCode.Substring(10,2) → the plant code
+                        //    Placed BEFORE the friendly-message reassignment below so
+                        //    StrPSLCode still holds the raw code at this point.
+                        // ──────────────────────────────────────────────────────────
+                        {
+                            var psStartCompCode = "";
+                            var trCodeForCompStart = packingSlipSubmitDetailsReq.TRCode?.Trim() ?? "";
+                            if (trCodeForCompStart.Length >= 12) psStartCompCode = trCodeForCompStart.Substring(10, 2);
+                            var psStartLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)packingSlipSubmitDetailsReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "PackingSlipPSStart" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)StrPSLCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = psStartCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                psStartLogParams);
+                        }
+
                         await transaction.CommitAsync();
 
                         StrPSLCode = $"PSStart Process Completed Successfully For = {StrPSLCode}";
@@ -4162,6 +4355,32 @@ ORDER BY SrNo";
                         var dateTimeNow = DateTime.Now;
                         string updateSqlQuery = $"UPDATE PackingSlip SET {columnName} = @p0 WHERE PSCode = @p1";
                         await _context.Database.ExecuteSqlRawAsync(updateSqlQuery, dateTimeNow, psCode);
+
+                        // ── Audit log — Packing Slip PSEnd ────────────────────────
+                        //    Same pattern as InsertLoginTransactionDetails at line ~783.
+                        //    Runs inside the same transaction so it rolls back on failure.
+                        //      TransactionType = "S"                    → Save
+                        //      TransactionFrom = "PackingSlipPSEnd"     → module + action
+                        //      TransactionNo   = psCode                 → the existing PS being closed
+                        //      CompanyCode     = TRCode.Substring(10,2) → the plant code
+                        // ──────────────────────────────────────────────────────────
+                        {
+                            var psEndCompCode = "";
+                            var trCodeForCompEnd = packingSlipSubmitDetailsReq.TRCode?.Trim() ?? "";
+                            if (trCodeForCompEnd.Length >= 12) psEndCompCode = trCodeForCompEnd.Substring(10, 2);
+                            var psEndLogParams = new[]
+                            {
+                                new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                                new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)packingSlipSubmitDetailsReq.EmpCode ?? "" },
+                                new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                                new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "PackingSlipPSEnd" },
+                                new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)psCode ?? "" },
+                                new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = psEndCompCode },
+                            };
+                            await _context.Database.ExecuteSqlRawAsync(
+                                "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                                psEndLogParams);
+                        }
 
                         await transaction.CommitAsync();
 
@@ -4621,6 +4840,31 @@ ORDER BY SrNo";
                                 }
                             }
                         }
+                    }
+
+                    // ── Audit log — JobCard2 Save ────────────────────────────────
+                    //    Same shape as InsertLoginTransactionDetails at line ~783.
+                    //    Runs inside the same transaction so it rolls back on failure.
+                    //      TransactionType = "S"          → Save
+                    //      TransactionFrom = "JobCard2"   → module identifier
+                    //      TransactionNo   = JobCardNo    → the JCP/... code just created
+                    //      CompanyCode     = first 2 chars of PCCode
+                    // ──────────────────────────────────────────────────────────────
+                    {
+                        var jc2CompCode = (jobcard2SubmitDetailsReq.PCCode ?? "").Trim();
+                        jc2CompCode = jc2CompCode.Length >= 2 ? jc2CompCode.Substring(0, 2) : "";
+                        var jc2LogParams = new[]
+                        {
+                            new SqlParameter("@TransactionDtTime", SqlDbType.DateTime)     { Value = DateTime.Now },
+                            new SqlParameter("@EmpID",             SqlDbType.VarChar, 20)  { Value = (object?)jobcard2SubmitDetailsReq.EmpCode ?? "" },
+                            new SqlParameter("@TransactionType",   SqlDbType.VarChar, 5)   { Value = "S" },
+                            new SqlParameter("@TransactionFrom",   SqlDbType.VarChar, 50)  { Value = "JobCard2" },
+                            new SqlParameter("@TransactionNo",     SqlDbType.VarChar, 100) { Value = (object?)JobCardNo ?? "" },
+                            new SqlParameter("@CompanyCode",       SqlDbType.VarChar, 20)  { Value = jc2CompCode },
+                        };
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "EXEC InsertLoginTransactionDetails @TransactionDtTime, @EmpID, @TransactionType, @TransactionFrom, @TransactionNo, @CompanyCode",
+                            jc2LogParams);
                     }
 
                     await transaction.CommitAsync();

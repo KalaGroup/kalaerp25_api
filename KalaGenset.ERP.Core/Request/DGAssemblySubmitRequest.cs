@@ -47,6 +47,10 @@ namespace KalaGenset.ERP.Core.RequestDTO
         public List<DgKitDTO>? DGKitDetails { get; set; }
         public string? Remark { get; set; }
         public string? JobCardCode { get; set; }
+        // Operator code — sourced from localStorage.employeeCode on the UI side.
+        // Populated on the audit-log write (InsertLoginTransactionDetails) so
+        // each Stage I Start / End action can be attributed to a specific user.
+        public string? EmpCode { get; set; }
     }
 
     public class ProcessCheckpointDTO

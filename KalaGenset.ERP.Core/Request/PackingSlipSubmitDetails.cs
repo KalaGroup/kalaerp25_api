@@ -53,6 +53,10 @@ namespace KalaGenset.ERP.Core.RequestDTO
         public string? KRMSrno { get; set; }
         public List<MOFAddPartDetailsDTO>? MOFAddParts { get; set; }
         public string? Remark { get; set; }
+        // Operator code — sourced from localStorage.employeeCode on the UI side.
+        // Populated on the audit-log write (InsertLoginTransactionDetails) so
+        // each PSStart / PSEnd action can be attributed to a specific user.
+        public string? EmpCode { get; set; }
     }
 
     public class MOFAddPartDetailsDTO
