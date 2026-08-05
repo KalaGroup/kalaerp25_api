@@ -421,23 +421,32 @@ namespace KalaGenset.ERP.Core.Services
 
                             else if (ChkforStart == false)
                             {
-                                string prevPrcTime = await GetPrevPrcTimeAsync(
-                                    con, tran,
-                                    CpyPrcFabReq.PCCode_Act, CpyPrcFabReq.PlanCode,
-                                    CpyPrcFabReq.ProductCode, strMachineNo[1].ToString());
+                                //local
+                              //  sb.Append("'" + ComCon.dateinyyyymmdd(await GetPrevPrcTimeAsync(con, tran, CpyPrcFabReq.PCCode_Act, CpyPrcFabReq.PlanCode, CpyPrcFabReq.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                                //server
+                                sb.Append("'" + (await GetPrevPrcTimeAsync(con, tran, CpyPrcFabReq.PCCode_Act, CpyPrcFabReq.PlanCode, CpyPrcFabReq.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
 
-                                // GetPrevPrcTimeAsync returns "Null" when the previous process row has no EDt
-                                // (started, not yet ended). dateinyyyymmdd can't parse that -> crash.
-                                // No valid end-time to chain from, so fall back to start behaviour: Dt=now, EDt=Null.
-                                if (prevPrcTime == "Null" || string.IsNullOrWhiteSpace(prevPrcTime))
-                                {
-                                    sb.Append("'" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',Null,");
-                                }
-                                else
-                                {
-                                    sb.Append("'" + ComCon.dateinyyyymmdd(prevPrcTime) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
-                                }
                             }
+
+                            //else if (ChkforStart == false)
+                            //{
+                            //    string prevPrcTime = await GetPrevPrcTimeAsync(
+                            //        con, tran,
+                            //        CpyPrcFabReq.PCCode_Act, CpyPrcFabReq.PlanCode,
+                            //        CpyPrcFabReq.ProductCode, strMachineNo[1].ToString());
+
+                            //    // GetPrevPrcTimeAsync returns "Null" when the previous process row has no EDt
+                            //    // (started, not yet ended). dateinyyyymmdd can't parse that -> crash.
+                            //    // No valid end-time to chain from, so fall back to start behaviour: Dt=now, EDt=Null.
+                            //    if (prevPrcTime == "Null" || string.IsNullOrWhiteSpace(prevPrcTime))
+                            //    {
+                            //        sb.Append("'" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',Null,");
+                            //    }
+                            //    else
+                            //    {
+                            //        sb.Append("'" + ComCon.dateinyyyymmdd(prevPrcTime) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                            //    }
+                            //}
                             sb.Append("'" + ComCon.yearEnd(con, tran) + "','" + strMachineNo[0].ToString() + "','" + strMachineNo[1].ToString() + "','" + CpyPrcFabReq.PCCode.Trim() + "','" + CpyPrcFabReq.OSSupplierCode.Trim() + "','" + CpyPrcFabReq.ProductCode.Trim() + "',");
                             sb.Append("'" + CpyPrcFabReq.PlanCode.Trim() + "','" + CpyPrcFabReq.BOMcode.Trim() + "',");
                             sb.Append("'" + NstPart + "','" + CpyPrcFabReq.BatchQty + "',");

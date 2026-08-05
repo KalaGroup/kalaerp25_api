@@ -602,15 +602,21 @@ namespace KalaGenset.ERP.Core.Services
                     sb.Append("NestingforCode,NestingforQty,nstWtPerUt,nstSqftPerUt,WtperUt,");
                     sb.Append("PartCode,VersionCode,ProcessQty,PKitQty,PLength,PWidth,PThickness, CompanyCode,PFBRate,PPWCode,Remark,CatID,PCCode_Act)");
                     sb.Append(" values('" + prcNo.Trim() + "','" + prcNo.Trim() + "','" + prcNo.Substring(10, 8) + "', ");
-
+                    //Local
                     if (chkforStart == true)
                     {
                         sb.Append("'" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',Null,");
                     }
                     else if (chkforStart == false)
                     {
-                        sb.Append("'" + ComCon.dateinyyyymmdd(await GetPrevPrcTimeAsync(con, tran, req.PCCode_Act, req.PlanCode, req.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                     //local
+                      //  sb.Append("'" + ComCon.dateinyyyymmdd(await GetPrevPrcTimeAsync(con, tran, req.PCCode_Act, req.PlanCode, req.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                      //server 
+                        sb.Append("'" + (await GetPrevPrcTimeAsync(con, tran, req.PCCode_Act, req.PlanCode, req.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+
                     }
+                    //End Local
+
 
 
 

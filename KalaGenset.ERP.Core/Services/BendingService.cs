@@ -340,14 +340,23 @@ namespace KalaGenset.ERP.Core.Services
                         sb.Append("NestingforCode,NestingforQty,nstWtPerUt,nstSqftPerUt,WtperUt,SqftperUt,");
                         sb.Append("PartCode,ProcessQty,CompanyCode,PFBRate,PPWCode,Remark,SilCladdingRate,CatID,PCCode_Act)");
                         sb.Append(" values('" + PrcNo.Trim() + "','" + PrcNo.Trim() + "','" + (PrcNo.Substring(10, 8)) + "', ");
+                        //local
                         if (ChkforStart == true)
                         {
                             sb.Append("'" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',Null,");
                         }
                         else if (ChkforStart == false)
                         {
-                            sb.Append("'" + ComCon.dateinyyyymmdd(await GetPrevPrcTimeAsync(con, tran, CpyPrcBendReq.PCCode_Act, CpyPrcBendReq.PlanCode, CpyPrcBendReq.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                            //local
+                           // sb.Append("'" + ComCon.dateinyyyymmdd(await GetPrevPrcTimeAsync(con, tran, CpyPrcBendReq.PCCode_Act, CpyPrcBendReq.PlanCode, CpyPrcBendReq.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+                          //server
+                            sb.Append("'" + (await GetPrevPrcTimeAsync(con, tran, CpyPrcBendReq.PCCode_Act, CpyPrcBendReq.PlanCode, CpyPrcBendReq.ProductCode, strMachineNo[1].ToString())) + "','" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',");
+
                         }
+                        //End
+
+
+
                         sb.Append("'" + ComCon.yearEnd(con, tran) + "','" + strMachineNo[0].ToString() + "','" + strMachineNo[1].ToString() + "','" + CpyPrcBendReq.PCCode.Trim() + "','" + CpyPrcBendReq.ProductCode.Trim() + "',");
                         sb.Append("'" + CpyPrcBendReq.PlanCode.Trim() + "','" + CpyPrcBendReq.BOMcode.Trim() + "',");
                         sb.Append("'" + NstPart + "','" + CpyPrcBendReq.BatchQty + "','" + double.Parse(strNstWtsqft[0].Trim()) + "','" + double.Parse(strNstWtsqft[1].Trim()) + "','" + CpyPrcBendReq.PWt + "','" + CpyPrcBendReq.PSqft + "',");
