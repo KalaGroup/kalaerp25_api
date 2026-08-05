@@ -51,6 +51,4 @@ public partial class MaterialRequisitionWithOutPlan
     public string? InActiveRemark { get; set; }
 
     public string Pofcode { get; set; } = null!;
-
-    public string? PccodeAct { get; set; }
 }

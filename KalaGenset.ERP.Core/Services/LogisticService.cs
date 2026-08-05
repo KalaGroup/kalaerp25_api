@@ -533,6 +533,13 @@ namespace KalaGenset.ERP.Core.Services
                         c.Parameters.AddWithValue("@Remark", req.Remark?.Trim() ?? "");
                         c.Parameters.AddWithValue("@WtPerUt", 0);
                         c.Parameters.AddWithValue("@SqftPerUt", 0);
+                        // _Act pair — carry the line-wise PCs so downstream
+                        // line-scoped stock filters can distinguish which line
+                        // this MTF actually moved stock to/from.
+                        //   FromProfitCenterCode_Act = req.FromPCCode  (Logistics '23.001')
+                        //   ToProfitCenterCode_Act   = req.ToPCCode    (selected LineWisePC, e.g. '01.106')
+                        c.Parameters.AddWithValue("@FromProfitCenterCode_Act", req.FromPCCode.Trim());
+                        c.Parameters.AddWithValue("@ToProfitCenterCode_Act",   req.ToPCCode.Trim());
                         await c.ExecuteNonQueryAsync();
                     }
 
