@@ -156,6 +156,9 @@ builder.Services.AddScoped<IManpowerStatus, ManpowerStatusService>();
 builder.Services.AddScoped<IMaterial, MaterialService>();
 builder.Services.AddScoped<IControlPanelBox, ControlPanelBoxService>();
 
+//ControlPanel
+builder.Services.AddScoped<IControlPanel, ControlPanelService>();
+
 // ✅ CORS Policy
 builder.Services.AddCors(options =>
 {
