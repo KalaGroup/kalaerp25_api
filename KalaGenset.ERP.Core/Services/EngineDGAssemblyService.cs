@@ -5111,17 +5111,34 @@ ORDER BY SrNo";
 
                 NewTransCode = $"{prefix}/{yearEnd}/{compCode}{strmax}";
 
-                var record = await _context.GetMaxCodes
-                            .FirstOrDefaultAsync(g => g.Prefix == prefix
-                             && g.TblName == tblName
-                             && g.CompCode == compCode
-                             && g.Yr == yearEnd);
+                // Persist the incremented counter via MERGE — EF change-tracking cannot be
+                // used because GetMaxCode is HasNoKey(). The previous LINQ-then-SaveChanges
+                // pattern was a silent no-op (rows fetched, mutated in memory, never
+                // written). MERGE also INSERTs a seed row if none exists yet for this
+                // (prefix, tblName, compCode, yearEnd) — so callers never regenerate the
+                // same code because the seed was missing.
+                const string upsertSql = @"
+MERGE dbo.GetMaxCode WITH (HOLDLOCK) AS target
+USING (SELECT @TblName AS TblName, @CompCode AS CompCode,
+              @Prefix  AS Prefix,  @Yr       AS Yr,
+              @MaxValue AS MaxValue) AS src
+   ON target.TblName  = src.TblName
+  AND target.CompCode = src.CompCode
+  AND target.Prefix   = src.Prefix
+  AND target.Yr       = src.Yr
+WHEN MATCHED THEN
+    UPDATE SET target.MaxValue = src.MaxValue
+WHEN NOT MATCHED THEN
+    INSERT (TblName, CompCode, Prefix, Yr, MaxValue)
+    VALUES (src.TblName, src.CompCode, src.Prefix, src.Yr, src.MaxValue);";
 
-                if (record != null)
-                {
-                    record.MaxValue = Convert.ToInt32(strmax);
-                    await _context.SaveChangesAsync();
-                }
+                await _context.Database.ExecuteSqlRawAsync(
+                    upsertSql,
+                    new SqlParameter("@MaxValue", Convert.ToInt32(strmax)),
+                    new SqlParameter("@TblName",  tblName),
+                    new SqlParameter("@CompCode", compCode),
+                    new SqlParameter("@Prefix",   prefix),
+                    new SqlParameter("@Yr",       yearEnd ?? string.Empty));
 
                 return NewTransCode;
             }

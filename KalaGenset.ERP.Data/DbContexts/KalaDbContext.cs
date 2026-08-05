@@ -3096,10 +3096,6 @@ public partial class KalaDbContext : DbContext
                 .HasMaxLength(300)
                 .HasDefaultValue("NIL");
             entity.Property(e => e.MaxSrNo).HasMaxLength(50);
-            entity.Property(e => e.PccodeAct)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("PCCode_Act");
             entity.Property(e => e.Pofcode)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("((0))")

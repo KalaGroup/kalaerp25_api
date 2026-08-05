@@ -644,16 +644,15 @@ namespace KalaGenset.ERP.Core.Services
                     foreach (var row in activeRows)
                     {
                         #region STEP 2 — GETMAXNO INLINE — Generate unique JobCard number per row
+                        // Counter is only incremented in memory here; the DB row in GetMaxCode is
+                        // persisted ONCE after the loop via raw SQL (see STEP 10.5 below).
+                        // EF change-tracking cannot be used because GetMaxCode is HasNoKey() —
+                        // assignments to maxJcRecord.MaxValue + SaveChangesAsync() are silent no-ops
+                        // and cause every submission to regenerate the same JobCode → PK violation.
                         intMaxJC++;  // Increment in memory each iteration
 
                         string strMaxJC = intMaxJC.ToString("D6");  // Pads to 6 digits: 000001, 001118, etc.
                         string jobCardNo = $"JCD/{yr}/{compCode}{strMaxJC}";
-
-                        if (maxJcRecord != null)
-                        {
-                            maxJcRecord.MaxValue = int.Parse(strMaxJC);
-                            await _context.SaveChangesAsync();
-                        }
                         #endregion
 
                         #region STEP 3 — INSERT JobCard master header
@@ -824,38 +823,47 @@ namespace KalaGenset.ERP.Core.Services
                                 new SqlParameter("@Stage2", stage));
                             #endregion
 
-                            #region STEP 9 — LOCK SOURCE DOCUMENTS via LINQ (JobCardStatus = J)
+                            #region STEP 9 — LOCK SOURCE DOCUMENTS via raw SQL (JobCardStatus = J)
+                            // EF change-tracking cannot be used here because every source
+                            // table (GIIRDetailsSub, GatereceiptInternalDetailsSub,
+                            // ConvertSerialNoDetails, MTFDetailsSub, ProcessFeedbackDetailsSub)
+                            // is configured HasNoKey() in the DbContext — mutating a fetched
+                            // entity and calling SaveChangesAsync() is a silent no-op and the
+                            // rows never transition to 'J'. Use raw SQL UPDATE (inside the
+                            // active transaction) so the state change actually reaches the DB.
                             if (pc3 == "001" || pc3 == "002" || pc3 == "010")
                             {
                                 if (gc3 == "GIR")
                                 {
-                                    var giirRows = await _context.GiirdetailsSubs
-                                        .Where(g => g.Giircode == serial.Gcode
-                                                 && g.SerialNo == serial.SerialNo
-                                                 && g.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var g in giirRows) g.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GIIRDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE GIIRCode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
                                 }
                                 else if (gc3 == "GRI")
                                 {
-                                    var griRows = await _context.GatereceiptInternalDetailsSubs
-                                        .Where(g => g.Gricode == serial.Gcode
-                                                 && g.SerialNo == serial.SerialNo
-                                                 && g.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var g in griRows) g.JobcardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    // Note: the DB column is 'JobcardStatus' (lowercase c) on
+                                    // GatereceiptInternalDetailsSub — different from the sister
+                                    // tables. Keep the exact column name here.
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GatereceiptInternalDetailsSub SET JobcardStatus = 'J' " +
+                                        "WHERE GRICode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
                                 }
                                 else if (gc3 == "CNS")
                                 {
-                                    var cnsRows = await _context.ConvertSerialNoDetails
-                                        .Where(c => c.Cnvcode == serial.Gcode
-                                                 && c.SerialNo == serial.SerialNo)
-                                        .ToListAsync();
-                                    foreach (var c in cnsRows) c.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ConvertSerialNoDetails SET JobCardStatus = 'J' " +
+                                        "WHERE CNVCode = @Gcode AND SerialNo = @SerialNo",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo));
 
+                                    // SELECT is fine on HasNoKey entities — the LINQ read still
+                                    // returns the mapped Giircode column value.
                                     string origGiir = await _context.ConvertSerialNoDetails
                                         .Where(c => c.Cnvcode == serial.Gcode
                                                  && c.SerialNo == serial.SerialNo)
@@ -864,62 +872,56 @@ namespace KalaGenset.ERP.Core.Services
 
                                     if (!string.IsNullOrEmpty(origGiir))
                                     {
-                                        var origGiirRows = await _context.GiirdetailsSubs
-                                            .Where(g => g.Giircode == origGiir
-                                                     && g.SerialNo == serial.SerialNo
-                                                     && g.PartCode == serial.PartCode)
-                                            .ToListAsync();
-                                        foreach (var g in origGiirRows) g.JobCardStatus = "J";
-                                        await _context.SaveChangesAsync();
+                                        await _context.Database.ExecuteSqlRawAsync(
+                                            "UPDATE GIIRDetailsSub SET JobCardStatus = 'J' " +
+                                            "WHERE GIIRCode = @OrigGiir AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                            new SqlParameter("@OrigGiir", origGiir),
+                                            new SqlParameter("@SerialNo", serial.SerialNo),
+                                            new SqlParameter("@PartCode", serial.PartCode));
                                     }
                                 }
                                 else if (gc3 == "MTF")
                                 {
-                                    var mtfRows = await _context.MtfdetailsSubs
-                                        .Where(m => m.Mtfcode == serial.Gcode
-                                                 && m.SerialNo == serial.SerialNo
-                                                 && m.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var m in mtfRows) m.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE MTFDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE MTFCode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
 
-                                    var giirMtfRows = await _context.GiirdetailsSubs
-                                        .Where(g => g.SerialNo == serial.SerialNo
-                                                 && g.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var g in giirMtfRows) g.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE GIIRDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
                                 }
                             }
                             else if (pc3 == "401")
                             {
                                 if (gc3 == "PSH")
                                 {
-                                    var pshRows = await _context.ProcessFeedbackDetailsSubs
-                                        .Where(p => p.Pfbcode == serial.Gcode
-                                                 && p.SerialNo == serial.SerialNo
-                                                 && p.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var p in pshRows) p.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE PFBCode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
                                 }
                                 else if (gc3 == "MTF")
                                 {
-                                    var pfbRows = await _context.ProcessFeedbackDetailsSubs
-                                        .Where(p => p.Trfcode == serial.Gcode
-                                                 && p.SerialNo == serial.SerialNo
-                                                 && p.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var p in pfbRows) p.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE ProcessFeedbackDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE TRFCode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
 
-                                    var mtfCpyRows = await _context.MtfdetailsSubs
-                                        .Where(m => m.Mtfcode == serial.Gcode
-                                                 && m.SerialNo == serial.SerialNo
-                                                 && m.PartCode == serial.PartCode)
-                                        .ToListAsync();
-                                    foreach (var m in mtfCpyRows) m.JobCardStatus = "J";
-                                    await _context.SaveChangesAsync();
+                                    await _context.Database.ExecuteSqlRawAsync(
+                                        "UPDATE MTFDetailsSub SET JobCardStatus = 'J' " +
+                                        "WHERE MTFCode = @Gcode AND SerialNo = @SerialNo AND PartCode = @PartCode",
+                                        new SqlParameter("@Gcode", serial.Gcode),
+                                        new SqlParameter("@SerialNo", serial.SerialNo),
+                                        new SqlParameter("@PartCode", serial.PartCode));
                                 }
                             }
                             #endregion
@@ -1085,6 +1087,45 @@ namespace KalaGenset.ERP.Core.Services
                             logParams);
 
                     } // END foreach row
+
+                    // ============================================================================
+                    // STEP 10.5 — PERSIST THE JOBCARD COUNTER (once, after all rows)
+                    // ----------------------------------------------------------------------------
+                    // Upsert via MERGE — EF change-tracking cannot be used because GetMaxCode is
+                    // configured HasNoKey(). The previous plain UPDATE was silently skipped when
+                    // the seed row for (TblName='JobCard', CompCode, Prefix='JCD', Yr) didn't
+                    // exist OR when a trailing-space / case mismatch made the LINQ pre-read
+                    // return null (maxJcRecord guard failed). MERGE fixes both: it INSERTs the
+                    // seed row when missing and UPDATEs it when present, so the counter
+                    // ALWAYS advances after a successful submission.
+                    // ============================================================================
+                    #region STEP 10.5 — PERSIST JOBCARD COUNTER
+                    if (allJobCards.Count > 0)
+                    {
+                        const string upsertSql = @"
+MERGE dbo.GetMaxCode WITH (HOLDLOCK) AS target
+USING (SELECT @TblName AS TblName, @CompCode AS CompCode,
+              @Prefix  AS Prefix,  @Yr       AS Yr,
+              @MaxValue AS MaxValue) AS src
+   ON target.TblName  = src.TblName
+  AND target.CompCode = src.CompCode
+  AND target.Prefix   = src.Prefix
+  AND target.Yr       = src.Yr
+WHEN MATCHED THEN
+    UPDATE SET target.MaxValue = src.MaxValue
+WHEN NOT MATCHED THEN
+    INSERT (TblName, CompCode, Prefix, Yr, MaxValue)
+    VALUES (src.TblName, src.CompCode, src.Prefix, src.Yr, src.MaxValue);";
+
+                        await _context.Database.ExecuteSqlRawAsync(
+                            upsertSql,
+                            new SqlParameter("@MaxValue", intMaxJC),
+                            new SqlParameter("@TblName",  "JobCard"),
+                            new SqlParameter("@CompCode", compCode),
+                            new SqlParameter("@Prefix",   "JCD"),
+                            new SqlParameter("@Yr",       yr));
+                    }
+                    #endregion
 
                     // ============================================================================
                     // STEP 11 — PERSIST THE REQ COUNTER (once, after all rows)
@@ -1998,6 +2039,10 @@ namespace KalaGenset.ERP.Core.Services
                     }
 
                     // GetMaxCode read once; in-memory ++ per row.
+                    // The DB write happens ONCE after the loop via MERGE (raw SQL) — EF
+                    // change-tracking cannot be used because GetMaxCode is HasNoKey(),
+                    // so any per-row `maxRec.MaxValue = ...; SaveChangesAsync();` is a
+                    // silent no-op and RTCode collides on the next submission.
                     var maxRec = await _context.GetMaxCodes
                         .Where(g => g.TblName == "StageRevTrans"
                                  && g.CompCode == compCode
@@ -2013,12 +2058,6 @@ namespace KalaGenset.ERP.Core.Services
                         maxN++;
                         string strMax = maxN.ToString("D6");
                         string rtCode = $"RTC/{yr}/{compCode}{strMax}";
-
-                        if (maxRec != null)
-                        {
-                            maxRec.MaxValue = int.Parse(strMax);
-                            await _context.SaveChangesAsync();
-                        }
 
                         // ── Step 2: INSERT StageRevTrans header ──────────────
                         await _context.Database.ExecuteSqlRawAsync(
@@ -2351,6 +2390,36 @@ namespace KalaGenset.ERP.Core.Services
                         }
 
                         allCodes.Add(rtCode);
+                    }
+
+                    // ── PERSIST THE RTC COUNTER (once, after all rows) ──────────────
+                    // Upsert via MERGE — GetMaxCode is HasNoKey() so EF SaveChangesAsync
+                    // is a silent no-op. MERGE UPDATEs the seed row if it exists and
+                    // INSERTs it if it doesn't, so RTCode never regenerates.
+                    if (allCodes.Count > 0)
+                    {
+                        const string upsertMaxCodeSql = @"
+MERGE dbo.GetMaxCode WITH (HOLDLOCK) AS target
+USING (SELECT @TblName AS TblName, @CompCode AS CompCode,
+              @Prefix  AS Prefix,  @Yr       AS Yr,
+              @MaxValue AS MaxValue) AS src
+   ON target.TblName  = src.TblName
+  AND target.CompCode = src.CompCode
+  AND target.Prefix   = src.Prefix
+  AND target.Yr       = src.Yr
+WHEN MATCHED THEN
+    UPDATE SET target.MaxValue = src.MaxValue
+WHEN NOT MATCHED THEN
+    INSERT (TblName, CompCode, Prefix, Yr, MaxValue)
+    VALUES (src.TblName, src.CompCode, src.Prefix, src.Yr, src.MaxValue);";
+
+                        await _context.Database.ExecuteSqlRawAsync(
+                            upsertMaxCodeSql,
+                            new SqlParameter("@MaxValue", maxN),
+                            new SqlParameter("@TblName",  "StageRevTrans"),
+                            new SqlParameter("@CompCode", compCode),
+                            new SqlParameter("@Prefix",   "RTC"),
+                            new SqlParameter("@Yr",       yr));
                     }
 
                     await tx.CommitAsync();

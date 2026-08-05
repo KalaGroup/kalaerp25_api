@@ -26,8 +26,15 @@ namespace KalaGenset.ERP.Core.Services
         // the grid load / save with no rows / an "invalid PC" error.
         private static readonly HashSet<string> AllowedProductionPCs = new(StringComparer.OrdinalIgnoreCase)
         {
+            // Legacy flat-pack / parent PCs — kept so any other caller stays green.
             "01.005", "03.038", "01.093",
             "01.124", "01.125", "01.126",
+            // Canopy-assembly LineWisePCs served by the "Add New" form in
+            // Flatpack Canopy Report. Any of these six may be selected from
+            // the hardcoded dropdown; ParentDgPC is passed alongside.
+            "01.190",                                   // Unit 1  Line A     Canopy Assembly (parent 01.005)
+            "03.069", "03.181",                         // Unit 4  Line B / C Canopy Assembly (parent 03.038)
+            "28.025", "28.039", "28.116",               // Unit BLR Line A / B / C Canopy Assembly (parent 28.017)
         };
 
         // PC = 01.093 (KanBan / Flat-Pack-Bhosari) triggers the auto-REQ branch.
@@ -114,18 +121,41 @@ ORDER BY PF.Dt DESC, PF.PFBCode;";
         public async Task<List<FlatPackCanopyOptionDto>> GetFlatPackCanopyOptionsAsync(string pcCode)
         {
             // KVA band lookup driven by LineWisePC. Lower bound is split so
-            // callers can pick inclusive (>=) or exclusive (>) — 01.125 needs
-            // "above 58.5" and must not overlap with 01.124's ceiling of 58.5.
-            //   01.124 → 0     <= KVA <= 58.5   (both inclusive)
-            //   01.125 → 58.5  <  KVA <= 250    (lower EXCLUSIVE)
-            //   01.126 → 250   <= KVA           (no upper cap)
+            // callers can pick inclusive (>=) or exclusive (>) — the "mid" band
+            // needs "above 58.5" and must not overlap with the low band's ceiling.
+            // Three tiers (identical for every unit — Unit 1 / Unit 4 / Unit BLR):
+            //   LOW   → 0     <= KVA <= 58.5   (both inclusive)
+            //   MID   → 58.5  <  KVA <= 250    (lower EXCLUSIVE)
+            //   HIGH  → 250   <= KVA           (no upper cap)
+            //
+            // LineWisePC → band mapping:
+            //   Unit 1   Line A (01.190)  → LOW
+            //   Unit 4   Line B (03.069)  → MID
+            //   Unit 4   Line C (03.181)  → HIGH
+            //   Unit BLR Line A (28.025)  → LOW
+            //   Unit BLR Line B (28.039)  → MID
+            //   Unit BLR Line C (28.116)  → HIGH
+            // Legacy flat-pack lines (01.124/125/126) kept for backward compatibility.
             // For any other pcCode all three bounds stay null → no KVA filter.
             decimal? kvaMinInc = null, kvaMinExc = null, kvaMax = null;
             switch ((pcCode ?? string.Empty).Trim())
             {
+                // Legacy flat-pack lines
                 case "01.124": kvaMinInc = 0m;    kvaMax = 58.5m; break;
                 case "01.125": kvaMinExc = 58.5m; kvaMax = 250m;  break;
                 case "01.126": kvaMinInc = 250m;                  break;
+                // LOW  (0 <= KVA <= 58.5)
+                case "01.190":
+                case "28.025":
+                    kvaMinInc = 0m;    kvaMax = 58.5m; break;
+                // MID  (58.5 < KVA <= 250)
+                case "03.069":
+                case "28.039":
+                    kvaMinExc = 58.5m; kvaMax = 250m;  break;
+                // HIGH (250 <= KVA)
+                case "03.181":
+                case "28.116":
+                    kvaMinInc = 250m;                  break;
             }
 
             const string sql = @"
@@ -1059,8 +1089,11 @@ FROM (
             ValidatePlanSubmit(req);
 
             var pc       = req.PCCode.Trim();          // LineWisePC of the selected line (pcCode_Act)
-            var pcOld    = req.ParentDgPC.Trim();      // ParentDgPC of the selected line (pcCode_Old)
-            var company  = req.CompanyCode.Trim();
+            var pcOld    = req.ParentDgPC.Trim();      // ParentDgPC of the selected line (pcCode_Old) 
+            // Extract the 2-digit company/plant code from PCCode (e.g. "01.190" → "01")
+            string compCode = (req.PCCode ?? "").Trim().Length >= 2
+                                ? req.PCCode.Trim().Substring(0, 2)
+                                : "";
             var emp      = req.EmpCode.Trim();
 
             // pcCode_Act → (ProfitCenterCode_Act, ToProfitCenterCode) for the
@@ -1116,7 +1149,7 @@ FROM (
                 // 1) New CPCode "CPY/<yy-yy>/<CompID><N>"
                 var cpCode = await GetMaxNoAsync(
                     prefix: "CPY",
-                    compCode: company,
+                    compCode: compCode,
                     tblName: "CanopyPlan",
                     tx: sqlTx);
                 var maxSrNo = ExtractSequencePart(cpCode);
@@ -1134,10 +1167,11 @@ FROM (
                     cmd.Parameters.AddWithValue("@FromDt",      req.FromDt.Date);
                     cmd.Parameters.AddWithValue("@ToDt",        req.ToDt.Date);
                     cmd.Parameters.AddWithValue("@PlanPCCode",  pc);
-                    cmd.Parameters.AddWithValue("@CompanyCode", company);
+                    cmd.Parameters.AddWithValue("@CompanyCode", compCode);
                     cmd.Parameters.AddWithValue("@PlanType",    "M");
                     cmd.Parameters.AddWithValue("@AutoFlg",     "No");
                     cmd.Parameters.AddWithValue("@PCCode_Act",  pc);
+                    cmd.Parameters.AddWithValue("@Checker1",    false);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -1287,7 +1321,7 @@ FROM (
 
                 // 4) Activity log
                 await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
-                    emp, "S", "CanopyPlan", cpCode, company);
+                    emp, "S", "CanopyPlan", cpCode, compCode);
 
                 await tx.CommitAsync();
                 return new SubmitCanopyPlanResponse
@@ -3507,10 +3541,14 @@ ORDER BY cpd.SrNo;";
 
             var cp       = request.CPCode.Trim();
             var emp      = request.EmpCode.Trim();
-            var company  = request.CompanyCode.Trim();
             var pc       = request.PCCode.Trim();        // LineWisePC
             var pcOld    = request.ParentDgPC.Trim();    // ParentDgPC
             var decision = (request.Decision ?? "Accept").Trim();
+            // Derive company code from the first two chars of the LineWisePC
+            // (e.g. "01.190" -> "01", "28.040" -> "28") — matches the pattern
+            // used elsewhere (JobCard, PackingSlip, TestReport audit-log blocks)
+            // and avoids trusting the UI-supplied CompanyCode field.
+            var company  = pc.Length >= 2 ? pc.Substring(0, 2) : "";
 
             try
             {
