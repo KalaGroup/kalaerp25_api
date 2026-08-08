@@ -125,10 +125,24 @@ namespace KalaGenset.ERP.API.Controllers
         [HttpPost("SubmitDGStage4Details")]
         public async Task<IActionResult> SubmitDGStage4Details([FromForm] DGAssemblySubmitRequest dgAssemblySubmitReq, [FromForm] string? PrcChkDtsJson, [FromForm] string? DGKitDetailJson)
         {
-            bool stageStatus = await _engineDGAssembly.CheckStageStatus(dgAssemblySubmitReq.JobCardCode, dgAssemblySubmitReq.EngSrNo, dgAssemblySubmitReq.StageNo);
-            if (stageStatus)
+            // Duplicate-Start guard — fires ONLY on the Start submission (Remark == "Start").
+            // End submissions must NOT be blocked; they legitimately target an already-open
+            // PFB. CheckStageStatus StageNo==4 returns TRUE when an open PFB exists for the
+            // (JobCard1, EngSrNo) pair (Dt IS NOT NULL AND EDt IS NULL).
+            if (string.Equals(dgAssemblySubmitReq.Remark?.Trim(), "Start", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest($"This Stage For Jobcard:- {dgAssemblySubmitReq.JobCardCode} With Eng Serial No:- {dgAssemblySubmitReq.EngSrNo} Is Already Completed!");
+                bool stageStatus = await _engineDGAssembly.CheckStageStatus(
+                    dgAssemblySubmitReq.JobCardCode,
+                    dgAssemblySubmitReq.EngSrNo,
+                    dgAssemblySubmitReq.StageNo);
+
+                if (stageStatus)
+                {
+                    return BadRequest(
+                        $"Stage 3 Process Already Started For JobCard: {dgAssemblySubmitReq.JobCardCode} " +
+                        $"With Eng Serial No: {dgAssemblySubmitReq.EngSrNo}. " +
+                        "Please continue with the End process — cannot start again.");
+                }
             }
 
             if (!string.IsNullOrEmpty(PrcChkDtsJson))

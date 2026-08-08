@@ -509,6 +509,15 @@ namespace KalaGenset.ERP.Core.Services
                         }
                     }
 
+                    if(req.ToPCCode.Trim() == "01.106")
+                    {
+                        req.ToPCCode = "01.004";
+                    }
+                    else if (req.ToPCCode.Trim() == "03.092" || req.ToPCCode.Trim() == "03.123")
+                    {
+                        req.ToPCCode = "03.051";
+                    }
+                   
                     // ── 3c. InsertPlanMTF ──
                     using (var c = conn.CreateCommand())
                     {
@@ -656,28 +665,36 @@ namespace KalaGenset.ERP.Core.Services
 
                                 var gPrefix3 = sr.GCode.Length >= 3 ? sr.GCode.Substring(0, 3) : "";
 
-                                // ── UPDATE via LINQ (EF Core) ──
+                                // ── UPDATE via raw SQL ──
+                                // EF change-tracking cannot be used because GIIRDetailsSub,
+                                // GatereceiptInternalDetailsSub and ConvertSerialNoDetails are
+                                // all HasNoKey() in the DbContext — the earlier LINQ + SaveChangesAsync
+                                // was a silent no-op and the status never transitioned to 'D'.
                                 if (gPrefix3 == "GIR")
                                 {
-                                    var ent = await _context.GiirdetailsSubs
-                                        .FirstOrDefaultAsync(e => e.SerialNo == sr.SerialNo && e.Giircode == sr.GCode);
-                                    if (ent != null)
-                                    {
-                                        ent.Trfstatus = "D";
-                                        ent.Trfcode = mtfCode;
-                                        await _context.SaveChangesAsync();
-                                    }
+                                    using var c = conn.CreateCommand();
+                                    c.Transaction = sqlTran;
+                                    c.CommandText = @"
+                                UPDATE GIIRDetailsSub
+                                   SET TRFStatus = 'D', TRFCode = @mtf
+                                 WHERE SerialNo = @sn AND GIIRCode = @gc";
+                                    c.Parameters.Add(new SqlParameter("@mtf", mtfCode));
+                                    c.Parameters.Add(new SqlParameter("@sn",  sr.SerialNo));
+                                    c.Parameters.Add(new SqlParameter("@gc",  sr.GCode));
+                                    await c.ExecuteNonQueryAsync();
                                 }
                                 else if (gPrefix3 == "GRI")
                                 {
-                                    var ent = await _context.GatereceiptInternalDetailsSubs
-                                        .FirstOrDefaultAsync(e => e.SerialNo == sr.SerialNo && e.Gricode == sr.GCode);
-                                    if (ent != null)
-                                    {
-                                        ent.Trfstatus = "D";
-                                        ent.Trfcode = mtfCode;
-                                        await _context.SaveChangesAsync();
-                                    }
+                                    using var c = conn.CreateCommand();
+                                    c.Transaction = sqlTran;
+                                    c.CommandText = @"
+                                UPDATE GatereceiptInternalDetailsSub
+                                   SET TRFStatus = 'D', TRFCode = @mtf
+                                 WHERE SerialNo = @sn AND GRICode = @gc";
+                                    c.Parameters.Add(new SqlParameter("@mtf", mtfCode));
+                                    c.Parameters.Add(new SqlParameter("@sn",  sr.SerialNo));
+                                    c.Parameters.Add(new SqlParameter("@gc",  sr.GCode));
+                                    await c.ExecuteNonQueryAsync();
                                 }
                                 else if (gPrefix3 == "CNS")
                                 {
@@ -686,28 +703,36 @@ namespace KalaGenset.ERP.Core.Services
                                     using (var c = conn.CreateCommand())
                                     {
                                         c.Transaction = sqlTran;
-                                        c.CommandText = "SELECT GiirCode FROM ConvertSerialNoDetails WHERE CNVCode = @cnv AND SerialNo = @sn";
+                                        c.CommandText = "SELECT GIIRCode FROM ConvertSerialNoDetails WHERE CNVCode = @cnv AND SerialNo = @sn";
                                         c.Parameters.Add(new SqlParameter("@cnv", sr.GCode));
-                                        c.Parameters.Add(new SqlParameter("@sn", sr.SerialNo));
+                                        c.Parameters.Add(new SqlParameter("@sn",  sr.SerialNo));
                                         strGiirCode = (await c.ExecuteScalarAsync())?.ToString()?.Trim() ?? "0";
                                     }
 
-                                    var giirEnt = await _context.GiirdetailsSubs
-                                        .FirstOrDefaultAsync(e => e.SerialNo == sr.SerialNo && e.Giircode == strGiirCode);
-                                    if (giirEnt != null)
+                                    using (var c = conn.CreateCommand())
                                     {
-                                        giirEnt.Trfstatus = "D";
-                                        giirEnt.Trfcode = mtfCode;
-                                        await _context.SaveChangesAsync();
+                                        c.Transaction = sqlTran;
+                                        c.CommandText = @"
+                                UPDATE GIIRDetailsSub
+                                   SET TRFStatus = 'D', TRFCode = @mtf
+                                 WHERE SerialNo = @sn AND GIIRCode = @gc";
+                                        c.Parameters.Add(new SqlParameter("@mtf", mtfCode));
+                                        c.Parameters.Add(new SqlParameter("@sn",  sr.SerialNo));
+                                        c.Parameters.Add(new SqlParameter("@gc",  strGiirCode));
+                                        await c.ExecuteNonQueryAsync();
                                     }
 
-                                    var cnvEnt = await _context.ConvertSerialNoDetails
-                                        .FirstOrDefaultAsync(e => e.SerialNo == sr.SerialNo && e.Cnvcode == sr.GCode);
-                                    if (cnvEnt != null)
+                                    using (var c = conn.CreateCommand())
                                     {
-                                        cnvEnt.MtfserialStatus = "D";
-                                        cnvEnt.Cmtfcode = mtfCode;
-                                        await _context.SaveChangesAsync();
+                                        c.Transaction = sqlTran;
+                                        c.CommandText = @"
+                                UPDATE ConvertSerialNoDetails
+                                   SET MTFSerialStatus = 'D', CMTFCode = @mtf
+                                 WHERE SerialNo = @sn AND CNVCode = @cnv";
+                                        c.Parameters.Add(new SqlParameter("@mtf", mtfCode));
+                                        c.Parameters.Add(new SqlParameter("@sn",  sr.SerialNo));
+                                        c.Parameters.Add(new SqlParameter("@cnv", sr.GCode));
+                                        await c.ExecuteNonQueryAsync();
                                     }
                                 }
                             }
@@ -759,17 +784,20 @@ namespace KalaGenset.ERP.Core.Services
                         }
                     }
 
-                    // ── 3e. Close requisition if fully MTF'd (LINQ) ──
+                    // ── 3e. Close requisition if fully MTF'd (raw SQL) ──
+                    // Raw UPDATE — EF change-tracking was silently missing the write
+                    // (also avoids re-hydrating the entity, which previously blew up
+                    // on the phantom PCCode_Act column).
                     if (Math.Abs(req.ReqBalQty - req.MTFQty) < 0.000001)
                     {
-                        var mr = await _context.MaterialRequisitionWithOutPlans
-                            .FirstOrDefaultAsync(e => e.Reqcode == req.ReqCode.Trim());
-                        if (mr != null)
-                        {
-
-                            mr.Reqstatus = "D";
-                            await _context.SaveChangesAsync();
-                        }
+                        using var c = conn.CreateCommand();
+                        c.Transaction = sqlTran;
+                        c.CommandText = @"
+                    UPDATE MaterialRequisitionWithOutPlan
+                       SET REQStatus = 'D'
+                     WHERE ReqCode = @rc";
+                        c.Parameters.Add(new SqlParameter("@rc", req.ReqCode.Trim()));
+                        await c.ExecuteNonQueryAsync();
                     }
 
                     // ── 3f. LoginTransactionDetails for MTF ──
@@ -1020,23 +1048,31 @@ namespace KalaGenset.ERP.Core.Services
                                     {
                                         if (mob == "B")
                                         {
-                                            //LINQ: UPDATE GIIRDetails SET GIIRStatus = 'D'
-                                            var gDetails = await _context.Giirdetails
-                                                .Where(e => e.Giircode == g.ReceivedCode && e.PartCode == p.PartCode)
-                                                .ToListAsync();
-                                            foreach (var e in gDetails) e.Giirstatus = "D";
-                                            if (gDetails.Count > 0) await _context.SaveChangesAsync();
+                                            // Raw SQL — EF change-tracking on Giirdetails was silently
+                                            // dropping the write. Use ExecuteScalarAsync affected-rows
+                                            // for the update since bulk foreach cannot flush.
+                                            using var c = conn.CreateCommand();
+                                            c.Transaction = sqlTran;
+                                            c.CommandText = @"
+                                    UPDATE GIIRDetails
+                                       SET GIIRStatus = 'D'
+                                     WHERE GIIRCode = @gc AND PartCode = @pc";
+                                            c.Parameters.Add(new SqlParameter("@gc", g.ReceivedCode));
+                                            c.Parameters.Add(new SqlParameter("@pc", p.PartCode));
+                                            await c.ExecuteNonQueryAsync();
                                         }
                                         else // mob == "M"
                                         {
-                                            // LINQ: UPDATE ProcessWithKit SET MTFStatus='D'
-                                            var pwk = await _context.ProcessWithKits
-                                                .FirstOrDefaultAsync(e => e.Pwkcode == g.ReceivedCode && e.ProcessKitCode == p.PartCode);
-                                            if (pwk != null)
-                                            {
-                                                pwk.Mtfstatus = "D";
-                                                await _context.SaveChangesAsync();
-                                            }
+                                            // Raw SQL — ProcessWithKit is HasNoKey(), LINQ update no-op.
+                                            using var c = conn.CreateCommand();
+                                            c.Transaction = sqlTran;
+                                            c.CommandText = @"
+                                    UPDATE ProcessWithKit
+                                       SET MTFStatus = 'D'
+                                     WHERE PWKCode = @pwk AND ProcessKitCode = @pkc";
+                                            c.Parameters.Add(new SqlParameter("@pwk", g.ReceivedCode));
+                                            c.Parameters.Add(new SqlParameter("@pkc", p.PartCode));
+                                            await c.ExecuteNonQueryAsync();
                                         }
                                     }
 
@@ -1056,13 +1092,15 @@ namespace KalaGenset.ERP.Core.Services
 
                                         if (remainingCnt == 0)
                                         {
-                                            var giirHdr = await _context.Giirs
-                                                .FirstOrDefaultAsync(e => e.Giircode == g.ReceivedCode);
-                                            if (giirHdr != null)
-                                            {
-                                                giirHdr.Giirstatus = "D";
-                                                await _context.SaveChangesAsync();
-                                            }
+                                            // Raw SQL — flip the GIIR header.
+                                            using var c = conn.CreateCommand();
+                                            c.Transaction = sqlTran;
+                                            c.CommandText = @"
+                                    UPDATE GIIR
+                                       SET GIIRStatus = 'D'
+                                     WHERE GIIRCode = @gc";
+                                            c.Parameters.Add(new SqlParameter("@gc", g.ReceivedCode));
+                                            await c.ExecuteNonQueryAsync();
                                         }
                                     }
                                 }
