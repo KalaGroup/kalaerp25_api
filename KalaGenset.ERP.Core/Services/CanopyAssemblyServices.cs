@@ -1166,7 +1166,7 @@ FROM (
                     cmd.Parameters.AddWithValue("@Yr",          await GetYearEndAsync());
                     cmd.Parameters.AddWithValue("@FromDt",      req.FromDt.Date);
                     cmd.Parameters.AddWithValue("@ToDt",        req.ToDt.Date);
-                    cmd.Parameters.AddWithValue("@PlanPCCode",  pc);
+                    cmd.Parameters.AddWithValue("@PlanPCCode", pcOld);
                     cmd.Parameters.AddWithValue("@CompanyCode", compCode);
                     cmd.Parameters.AddWithValue("@PlanType",    "M");
                     cmd.Parameters.AddWithValue("@AutoFlg",     "No");
@@ -1509,7 +1509,7 @@ SELECT   P.KVA, P.KVA AS KVA1
 FROM     CanopyPlanDetails d  WITH (NOLOCK)
 INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
 INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
-WHERE    cp.PlanPCCode = @PCCode
+WHERE    cp.PCCode_Act = @PCCode
   AND    ISNULL(cp.Active, '1')       = '1'
   AND    ISNULL(cp.Checker1, 0)       = 1
   AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
@@ -1553,7 +1553,7 @@ SELECT   P.Model, P.Model AS Model1
 FROM     CanopyPlanDetails d  WITH (NOLOCK)
 INNER    JOIN CanopyPlan   cp WITH (NOLOCK) ON cp.CPCode  = d.CPCode
 INNER    JOIN Part         P  WITH (NOLOCK) ON P.PartCode = d.Partcode
-WHERE    cp.PlanPCCode = @PCCode
+WHERE    cp.PCCode_Act = @PCCode
   AND    ISNULL(cp.Active, '1')     = '1'
   AND    ISNULL(cp.Checker1, 0)     = 1
   AND    CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
@@ -1625,7 +1625,7 @@ LEFT   JOIN ProcessFeedback pf WITH (NOLOCK)
        AND pf.ProductCode    = d.Partcode
        AND pf.EDt IS NULL
        AND pf.PFBCode LIKE 'PSH/%'
-WHERE  cp.PlanPCCode = @PCCode
+WHERE  cp.PCCode_Act = @PCCode
    AND ISNULL(cp.Active, '1')     = '1'
    AND ISNULL(cp.Checker1, 0)     = 1
    AND CAST(GETDATE() AS date) BETWEEN CAST(cp.FromDt AS date) AND CAST(cp.ToDt AS date)
