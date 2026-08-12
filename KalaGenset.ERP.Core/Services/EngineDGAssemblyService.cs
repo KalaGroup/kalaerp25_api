@@ -970,21 +970,44 @@ ORDER BY SrNo";
             return result;
         }
 
+        //public async Task<string> ExecuteGetCPPartcodeAsync(string cpTypeValue)
+        //{
+        //    // Ensure cpTypeValue is not null or empty to prevent SQL errors
+        //    if (string.IsNullOrWhiteSpace(cpTypeValue))
+        //    {
+        //        throw new ArgumentException("CP Type value cannot be null or empty.", nameof(cpTypeValue));
+        //    }
+
+        //    var parameters = new[] { new SqlParameter("@cpType", cpTypeValue.Trim()) };
+
+        //    var result = await _context.Database
+        //        .SqlQueryRaw<GetCPPartcode>("EXEC GetCPPartcode @cpType, '0'", parameters)
+        //        .FirstOrDefaultAsync(); // Fetch the first record
+
+        //    return result?.PanelTypePartcode ?? string.Empty;
+        //}
+
         public async Task<string> ExecuteGetCPPartcodeAsync(string cpTypeValue)
         {
-            // Ensure cpTypeValue is not null or empty to prevent SQL errors
-            if (string.IsNullOrWhiteSpace(cpTypeValue))
+            string result = string.Empty;
+            using (var connection = new SqlConnection(_context.Database.GetDbConnection().ConnectionString))
+            using (var command = new SqlCommand("GetCPPartcode", connection))
             {
-                throw new ArgumentException("CP Type value cannot be null or empty.", nameof(cpTypeValue));
+                command.CommandType = CommandType.StoredProcedure;
+                command.Parameters.AddWithValue("@cpType", cpTypeValue.Trim() ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@dummy", "0");
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        result = await reader.IsDBNullAsync(reader.GetOrdinal("PanelTypePartcode"))
+                            ? string.Empty
+                            : reader.GetString(reader.GetOrdinal("PanelTypePartcode"));
+                    }
+                }
             }
-
-            var parameters = new[] { new SqlParameter("@cpType", cpTypeValue.Trim()) };
-
-            var result = await _context.Database
-                .SqlQueryRaw<GetCPPartcode>("EXEC GetCPPartcode @cpType, '0'", parameters)
-                .FirstOrDefaultAsync(); // Fetch the first record
-
-            return result?.PanelTypePartcode ?? string.Empty;
+            return result;
         }
 
         public async Task<List<GetTRPrcChkDts>> FetchProcessCheckpointsFromDB(string stageName, string statusName)
@@ -1109,7 +1132,7 @@ WHERE  pfd.TrfCode  = @JobCode
             {
                 var parameters = new[]
                       {
-                           new SqlParameter("@strPCCode",strPCCode_Old),
+                           new SqlParameter("@strPCCode",PCCode_Act),
                            new SqlParameter("@RatePCCode",formattedRatePCCode),
                            new SqlParameter("@ProdDts",prodDts[0]),
                            new SqlParameter("@strPrdPartCode",strPrdPartCode),
@@ -2629,7 +2652,7 @@ WHERE  pfd.TrfCode  = @JobCode
 
                     foreach (var item in dgStageScanReq.DGKitDetails)
                     {
-                        if (double.Parse(item.StockQty) < 0)
+                        if (double.Parse(item.StockQty) <= 0)
                         {
                             PrcNo = $"Insufficient Stock For Part= {item.PartCode.Trim()}";
                             return;
@@ -2756,27 +2779,27 @@ WHERE  pfd.TrfCode  = @JobCode
                         }
                     }
 
-                    if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
-                    {
-                        string panelTypePartcode = await ExecuteGetCPPartcodeAsync(CPType[1]);
+                    //if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
+                    //{
+                    //    string panelTypePartcode = await ExecuteGetCPPartcodeAsync(CPType[1]);
 
-                        if (panelTypePartcode != null)
-                        {
-                            if (double.Parse(CPType[1].Trim()) != 0)
-                            {
-                                if (dgStageScanReq.CP2Srno.Trim() == "0" || dgStageScanReq.CP2Srno.Trim() == "")
-                                {
-                                    PrcNo = "Please Scan Control Panel(2) SerialNo";
-                                    return;
-                                }
-                            }
-                            if (double.Parse(StrCP2Rate.Trim()) == 0)
-                            {
-                                PrcNo = "Control Panel(2) Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
-                                return;
-                            }
-                        }
-                    }
+                    //    if (panelTypePartcode != null)
+                    //    {
+                    //        if (double.Parse(CPType[1].Trim()) != 0)
+                    //        {
+                    //            if (dgStageScanReq.CP2Srno.Trim() == "0" || dgStageScanReq.CP2Srno.Trim() == "")
+                    //            {
+                    //                PrcNo = "Please Scan Control Panel(2) SerialNo";
+                    //                return;
+                    //            }
+                    //        }
+                    //        if (double.Parse(StrCP2Rate.Trim()) == 0)
+                    //        {
+                    //            PrcNo = "Control Panel(2) Rate Cannot Be Zero Please Contact CIA/DOcument Control Dept";
+                    //            return;
+                    //        }
+                    //    }
+                    //}
 
                     try
                     {
@@ -3005,35 +3028,69 @@ WHERE  pfd.TrfCode  = @JobCode
                         //Control Panel Related Operations
                         if (double.Parse(CPType[1].Trim()) != 0 && double.Parse(CPType[1].Trim()) != 150)
                         {
-                            var sqlInsertQuery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
-                                              PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
-                                              VALUES 
-                                              (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
-                                              @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
+                            //  var sqlInsertQuery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                            //                    PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
+                            //                    VALUES 
+                            //                    (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                            //                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                            var sqlParams = new object[]
+                            //  var sqlParams = new object[]
+                            //  {
+                            //new SqlParameter("@PFBCode", PrcNo.Trim()),
+                            //new SqlParameter("@SrNo", SrNo),
+                            //new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
+                            //new SqlParameter("@KITQty", 1),
+                            //new SqlParameter("@TotQty", 1),
+                            //new SqlParameter("@StockQty", 1),
+                            //new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
+                            //new SqlParameter("@PLength", 0),
+                            //new SqlParameter("@PWidth", 0),
+                            //new SqlParameter("@PThickness", 0),
+                            //new SqlParameter("@PLossWt", 0),
+                            //new SqlParameter("@PHeight", 0),
+                            //new SqlParameter("@PLength1", 0),
+                            //new SqlParameter("@PLength2", 0),
+                            //new SqlParameter("@PWidth1", 0),
+                            //new SqlParameter("@PWidth2", 0),
+                            //new SqlParameter("@PLossSqft", 0),
+                            //new SqlParameter("@PCatagoryCode", 0)
+                            //  };
+
+                            var sqlInsertQuery_cp1 = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, PrvIssueQty, TotQty, StockQty, 
+                    PFBRate, SaleRate, PLength, PWidth, PThickness, PLossWt, PHeight, PLength1, PLength2, PWidth1, PWidth2, PLossSqft, WtPerUt, SqftPerUt, PCatagoryCode) 
+                    VALUES 
+                    (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
+
+                            var sqlParams_cp1 = new object[]
                             {
-                          new SqlParameter("@PFBCode", PrcNo.Trim()),
-                          new SqlParameter("@SrNo", SrNo),
-                          new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
-                          new SqlParameter("@KITQty", 1),
-                          new SqlParameter("@TotQty", 1),
-                          new SqlParameter("@StockQty", 1),
-                          new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
-                          new SqlParameter("@PLength", 0),
-                          new SqlParameter("@PWidth", 0),
-                          new SqlParameter("@PThickness", 0),
-                          new SqlParameter("@PLossWt", 0),
-                          new SqlParameter("@PHeight", 0),
-                          new SqlParameter("@PLength1", 0),
-                          new SqlParameter("@PLength2", 0),
-                          new SqlParameter("@PWidth1", 0),
-                          new SqlParameter("@PWidth2", 0),
-                          new SqlParameter("@PLossSqft", 0),
-                          new SqlParameter("@PCatagoryCode", 0)
+    new SqlParameter("@PFBCode", PrcNo.Trim()),
+    new SqlParameter("@SrNo", SrNo),
+    new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
+    new SqlParameter("@KITQty", 1),
+    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
+    new SqlParameter("@TotQty", 1),
+    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
+    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PLength", 0),
+    new SqlParameter("@PWidth", 0),
+    new SqlParameter("@PThickness", 0),
+    new SqlParameter("@PLossWt", 0),
+    new SqlParameter("@PHeight", 0),
+    new SqlParameter("@PLength1", 0),
+    new SqlParameter("@PLength2", 0),
+    new SqlParameter("@PWidth1", 0),
+    new SqlParameter("@PWidth2", 0),
+    new SqlParameter("@PLossSqft", 0),
+    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PCatagoryCode", 0)
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery_cp1, sqlParams_cp1);
+
+                           // await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
 
                             var sqlInsertQuery1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                              VALUES 
@@ -3070,7 +3127,7 @@ WHERE  pfd.TrfCode  = @JobCode
                            new SqlParameter("@RWStatus", "OK")
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery2, sqlParams2);
 
                             var jobCardDetails = await _context.Jobcard2DetailsSubs
                                 .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
@@ -3091,42 +3148,74 @@ WHERE  pfd.TrfCode  = @JobCode
 
                         if (double.Parse(CPType[1].Trim()) == 0 && DGCFM == "STD")
                         {
-                            var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
-                                                  PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
-                                                  VALUES 
-                                                  (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
-                                                   @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
+                            //var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                            //                      PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
+                            //                      VALUES 
+                            //                      (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                            //                       @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                            var sqlParameters = new object[]
+                            //var sqlParameters = new object[]
+                            //{
+                            //      new SqlParameter("@PFBCode", PrcNo.Trim()),
+                            //      new SqlParameter("@SrNo", SrNo),
+                            //      new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
+                            //      new SqlParameter("@KITQty", 1),
+                            //      new SqlParameter("@TotQty", 1),
+                            //      new SqlParameter("@StockQty", 1),
+                            //      new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
+                            //      new SqlParameter("@PLength", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PWidth", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PThickness", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PLossWt", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PHeight", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PLength1", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PLength2", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PWidth1", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PWidth2", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PLossSqft", SqlDbType.Int) { Value = 0 },
+                            //      new SqlParameter("@PCatagoryCode", SqlDbType.Int) { Value = 0 }
+                            //};
+                            var sqlInsertQuerycp1 = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, PrvIssueQty, TotQty, StockQty, 
+                    PFBRate, SaleRate, PLength, PWidth, PThickness, PLossWt, PHeight, PLength1, PLength2, PWidth1, PWidth2, PLossSqft, WtPerUt, SqftPerUt, PCatagoryCode) 
+                    VALUES 
+                    (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
+
+                            var sqlParamscp1 = new object[]
                             {
-                                  new SqlParameter("@PFBCode", PrcNo.Trim()),
-                                  new SqlParameter("@SrNo", SrNo),
-                                  new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
-                                  new SqlParameter("@KITQty", 1),
-                                  new SqlParameter("@TotQty", 1),
-                                  new SqlParameter("@StockQty", 1),
-                                  new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
-                                  new SqlParameter("@PLength", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PWidth", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PThickness", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PLossWt", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PHeight", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PLength1", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PLength2", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PWidth1", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PWidth2", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PLossSqft", SqlDbType.Int) { Value = 0 },
-                                  new SqlParameter("@PCatagoryCode", SqlDbType.Int) { Value = 0 }
+    new SqlParameter("@PFBCode", PrcNo.Trim()),
+    new SqlParameter("@SrNo", SrNo),
+    new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
+    new SqlParameter("@KITQty", 1),
+    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
+    new SqlParameter("@TotQty", 1),
+    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
+    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PLength", 0),
+    new SqlParameter("@PWidth", 0),
+    new SqlParameter("@PThickness", 0),
+    new SqlParameter("@PLossWt", 0),
+    new SqlParameter("@PHeight", 0),
+    new SqlParameter("@PLength1", 0),
+    new SqlParameter("@PLength2", 0),
+    new SqlParameter("@PWidth1", 0),
+    new SqlParameter("@PWidth2", 0),
+    new SqlParameter("@PLossSqft", 0),
+    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PCatagoryCode", 0)
                             };
 
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuerycp1, sqlParamscp1);
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
+                            //await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
-                            var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
+                            var _sqlInsertQuerycp1 = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                                   VALUES 
                                                   (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToPCCode_Old, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                            var sqlParameter = new object[]
+                            var _sqlParametercp1 = new object[]
                            {
                                 new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
@@ -3138,13 +3227,13 @@ WHERE  pfd.TrfCode  = @JobCode
                                 new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                            };
 
-                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
+                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuerycp1, _sqlParametercp1);
 
-                            var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                            var _sqlInsertQuery1cp1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                                     VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                            var _sqlParams = new object[]
+                            var _sqlParamscp1 = new object[]
                             {
                                 new SqlParameter("@PFBCode", PrcNo.Trim()),
                                 new SqlParameter("@SrNo", 1),
@@ -3157,7 +3246,7 @@ WHERE  pfd.TrfCode  = @JobCode
                                 new SqlParameter("@RWStatus", "OK")
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1cp1, _sqlParamscp1);
 
                             var _jobCardDetails = await _context.Jobcard2DetailsSubs
                             .Where(j => j.SerialNo == dgStageScanReq.CPSrno.Trim() &&
@@ -3180,41 +3269,73 @@ WHERE  pfd.TrfCode  = @JobCode
                         {
                             if (double.Parse(CPType[2].Trim()) > 1)
                             {
-                                var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
-                                                  PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
-                                                  VALUES 
-                                                  (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
-                                                   @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
+                                //var sqlquery = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, TotQty, StockQty, 
+                                //                  PFBRate, PLength, PWidth, PThickness, PLossWt, PHeight,PLength1, PLength2, PWidth1, PWidth2, PLossSqft, PCatagoryCode) 
+                                //                  VALUES 
+                                //                  (@PFBCode, @SrNo, @PartCode, @KITQty, @TotQty, @StockQty,@PFBRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                                //                   @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @PCatagoryCode)";
 
-                                var sqlParameters = new object[]
+                                //var sqlParameters = new object[]
+                                //{
+                                //  new SqlParameter("@PFBCode", PrcNo.Trim()),
+                                //  new SqlParameter("@SrNo", SrNo),
+                                //  new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
+                                //  new SqlParameter("@KITQty", 1),
+                                //  new SqlParameter("@TotQty", 1),
+                                //  new SqlParameter("@StockQty", 1),
+                                //  new SqlParameter("@PFBRate", double.Parse(StrCP2Rate.Trim())),
+                                //  new SqlParameter("@PLength", 0),
+                                //  new SqlParameter("@PWidth", 0),
+                                //  new SqlParameter("@PThickness", 0),
+                                //  new SqlParameter("@PLossWt", 0),
+                                //  new SqlParameter("@PHeight", 0),
+                                //  new SqlParameter("@PLength1", 0),
+                                //  new SqlParameter("@PLength2", 0),
+                                //  new SqlParameter("@PWidth1", 0),
+                                //  new SqlParameter("@PWidth2", 0),
+                                //  new SqlParameter("@PLossSqft", 0),
+                                // new SqlParameter("@PCatagoryCode", 0)
+                                //};
+                                var sqlInsertQuerycp2 = @"INSERT INTO processfeedbackdetails(PFBCode, SrNo, PartCode, KITQty, PrvIssueQty, TotQty, StockQty, 
+                    PFBRate, SaleRate, PLength, PWidth, PThickness, PLossWt, PHeight, PLength1, PLength2, PWidth1, PWidth2, PLossSqft, WtPerUt, SqftPerUt, PCatagoryCode) 
+                    VALUES 
+                    (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
+                    @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
+
+                                var sqlParamscp2 = new object[]
                                 {
-                                  new SqlParameter("@PFBCode", PrcNo.Trim()),
-                                  new SqlParameter("@SrNo", SrNo),
-                                  new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
-                                  new SqlParameter("@KITQty", 1),
-                                  new SqlParameter("@TotQty", 1),
-                                  new SqlParameter("@StockQty", 1),
-                                  new SqlParameter("@PFBRate", double.Parse(StrCP2Rate.Trim())),
-                                  new SqlParameter("@PLength", 0),
-                                  new SqlParameter("@PWidth", 0),
-                                  new SqlParameter("@PThickness", 0),
-                                  new SqlParameter("@PLossWt", 0),
-                                  new SqlParameter("@PHeight", 0),
-                                  new SqlParameter("@PLength1", 0),
-                                  new SqlParameter("@PLength2", 0),
-                                  new SqlParameter("@PWidth1", 0),
-                                  new SqlParameter("@PWidth2", 0),
-                                  new SqlParameter("@PLossSqft", 0),
-                                 new SqlParameter("@PCatagoryCode", 0)
+    new SqlParameter("@PFBCode", PrcNo.Trim()),
+    new SqlParameter("@SrNo", SrNo),
+    new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
+    new SqlParameter("@KITQty", 1),
+    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
+    new SqlParameter("@TotQty", 1),
+    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@PFBRate", double.Parse(StrCP2Rate.Trim())),
+    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PLength", 0),
+    new SqlParameter("@PWidth", 0),
+    new SqlParameter("@PThickness", 0),
+    new SqlParameter("@PLossWt", 0),
+    new SqlParameter("@PHeight", 0),
+    new SqlParameter("@PLength1", 0),
+    new SqlParameter("@PLength2", 0),
+    new SqlParameter("@PWidth1", 0),
+    new SqlParameter("@PWidth2", 0),
+    new SqlParameter("@PLossSqft", 0),
+    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
+    new SqlParameter("@PCatagoryCode", 0)
                                 };
 
-                                await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
+                                await _context.Database.ExecuteSqlRawAsync(sqlInsertQuerycp2, sqlParamscp2);
+                               // await _context.Database.ExecuteSqlRawAsync(sqlquery, sqlParameters);
 
                                 var _sqlInsertQuery = @"INSERT INTO StockWIP(FromProfitCenterCode, PartCode, IssueCode, IssueDate, IssueQty, ToProfitCenterCode, StockType, FromProfitCenterCode_Act, ToProfitCenterCode_Act) 
                                                   VALUES 
                                                   (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToPCCode_Old, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
-                                var sqlParameter = new object[]
+                                var _sqlParameter = new object[]
                                 {
                                 new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
@@ -3226,13 +3347,13 @@ WHERE  pfd.TrfCode  = @JobCode
                                 new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                                 };
 
-                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, sqlParameter);
+                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery, _sqlParameter);
 
-                                var _sqlInsertQuery1 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                                var _sqlInsertQuery1cp2 = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                                     VALUES 
                                                   (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                                var _sqlParams = new object[]
+                                var _sqlParamscp2 = new object[]
                                 {
                                 new SqlParameter("@PFBCode", PrcNo.Trim()),
                                 new SqlParameter("@SrNo", 1),
@@ -3245,7 +3366,7 @@ WHERE  pfd.TrfCode  = @JobCode
                                 new SqlParameter("@RWStatus", "OK")
                                 };
 
-                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1, _sqlParams);
+                                await _context.Database.ExecuteSqlRawAsync(_sqlInsertQuery1cp2, _sqlParamscp2);
 
                                 var _jobCardDetails = await _context.Jobcard2DetailsSubs
                                .Where(j => j.SerialNo == dgStageScanReq.CP2Srno.Trim() &&
@@ -3386,11 +3507,11 @@ WHERE  pfd.TrfCode  = @JobCode
                         //KRM Related Operations
                         if (dgStageScanReq.KRMSrno.Trim() != "0")
                         {
-                            var sqlInsertQuery = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
+                            var sqlInsertQuerykrm = @"INSERT INTO ProcessFeedbackDetailsSub(PFBCode, SrNo, PartCode, SerialNo, PFBBOTSerialNo, TrfCode, Status, QPCStatus, RWStatus) 
                                              VALUES 
                                              (@PFBCode, @SrNo, @PartCode, @SerialNo, @PFBBOTSerialNo, @TrfCode, @Status, @QPCStatus, @RWStatus)";
 
-                            var sqlParams = new object[]
+                            var sqlParamskrm = new object[]
                             {
                            new SqlParameter("@PFBCode", PrcNo.Trim()),
                            new SqlParameter("@SrNo", 1),
@@ -3403,7 +3524,7 @@ WHERE  pfd.TrfCode  = @JobCode
                            new SqlParameter("@RWStatus", "OK")
                             };
 
-                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery, sqlParams);
+                            await _context.Database.ExecuteSqlRawAsync(sqlInsertQuerykrm, sqlParamskrm);
 
                             var recordToUpdate = await _context.Jobcard2DetailsSubs
                                                  .FirstOrDefaultAsync(j => j.SerialNo == dgStageScanReq.KRMSrno.Trim()
@@ -3564,10 +3685,10 @@ WHERE  pfd.TrfCode  = @JobCode
                         foreach (var item in dgStageScanReq.PrcChkDts)
                         {
                             SrNo += 1;
-                            string query = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
+                            string queryprcChk = @"INSERT INTO PrcChkDetails (TransCode, Dt, MainSerialNo, PrcName, ChkPointId, PrcChkPoints, PrcStatus, DGStartTime, QA6M)
                                     VALUES (@TransCode, @Dt, @MainSerialNo, @PrcName, @ChkPointId, @PrcChkPoints, @PrcStatus, @DGStartTime, @QA6M)";
 
-                            var parameters = new[]
+                            var parametersprcChk = new[]
                             {
                                  new SqlParameter("@TransCode", dgStageScanReq.PfbCode.Trim()),
                                  new SqlParameter("@Dt", SqlDbType.DateTime) { Value = DateTime.Now },
@@ -3585,7 +3706,7 @@ WHERE  pfd.TrfCode  = @JobCode
                                  },
                                  new SqlParameter("@QA6M", dgStageScanReq.QA6M ?? 0)
                             };
-                            await _context.Database.ExecuteSqlRawAsync(query, parameters);
+                            await _context.Database.ExecuteSqlRawAsync(queryprcChk, parametersprcChk);
                         }
 
                         var record = await _context.ProcessFeedBacks
@@ -4058,16 +4179,16 @@ WHERE  pfd.TrfCode  = @JobCode
                                new SqlParameter("@SrNo",              packingSlipSubmitDetailsReq.DGSrNo.Trim()),
                                new SqlParameter("@Remark",            packingSlipSubmitDetailsReq.Remark.Trim()),
                                new SqlParameter("@PCCodeStkIssue",    StrPCCodeStkIssue.Trim()),                          
-                               new SqlParameter("@BatteryTerminals",  Convert.ToInt32(packingSlipSubmitDetailsReq.BatTer.Trim())),
-                               new SqlParameter("@BatteryLead",       Convert.ToInt32(packingSlipSubmitDetailsReq.BatLead.Trim())),
-                               new SqlParameter("@ExhaustPipe",       Convert.ToInt32(packingSlipSubmitDetailsReq.ExhPipe.Trim())),
-                               new SqlParameter("@DCBulb",            Convert.ToInt32(packingSlipSubmitDetailsReq.DCBulb.Trim())),
-                               new SqlParameter("@CanopyKey",         Convert.ToInt32(packingSlipSubmitDetailsReq.CanopyKey.Trim())),
-                               new SqlParameter("@FuelCapKey",        Convert.ToInt32(packingSlipSubmitDetailsReq.FuelCapKey.Trim())),
+                               new SqlParameter("@BatteryTerminals",  0),
+                               new SqlParameter("@BatteryLead",       0),
+                               new SqlParameter("@ExhaustPipe",       0),
+                               new SqlParameter("@DCBulb",            0),
+                               new SqlParameter("@CanopyKey",         0),
+                               new SqlParameter("@FuelCapKey",        0),
                                new SqlParameter("@Rate",              1),                              // literal value 1
-                               new SqlParameter("@RubberPad",         Convert.ToInt32(packingSlipSubmitDetailsReq.RubberPad.Trim())),
-                               new SqlParameter("@FunnelPad",         Convert.ToInt32(packingSlipSubmitDetailsReq.FunnelPad.Trim())),
-                               new SqlParameter("@PrdManual",         Convert.ToInt32(packingSlipSubmitDetailsReq.PrdManual.Trim())),
+                               new SqlParameter("@RubberPad",         0),
+                               new SqlParameter("@FunnelPad",         0),
+                               new SqlParameter("@PrdManual",         0),
                                new SqlParameter("@CompanyCode",       PC_CompanyCode.Trim()),
                                new SqlParameter("@PCCodeStkIssue_Act", packingSlipSubmitDetailsReq.pccode_act.Trim())                             
                         };

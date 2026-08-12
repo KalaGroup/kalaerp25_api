@@ -13,7 +13,11 @@ namespace KalaGenset.ERP.Core.Interface
     {      
         public Task<List<QualityDefectsByStageAndPCCodeResponseDTO>> GetQualityDefectAsync(string stagename, string pccode);
 
-        public Task<object> GetStageQAPendingListAsync(string stageName, string PCCode);
+        public Task<object> GetStageQAPendingListAsync(
+            string stageName,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
+            string? lineWisePC = null);
 
         public Task<List<DGAssemblyProfitcenters>> GetDGAssemblyProfitcentersAsync();
 

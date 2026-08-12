@@ -509,13 +509,15 @@ namespace KalaGenset.ERP.Core.Services
                         }
                     }
 
-                    if(req.ToPCCode.Trim() == "01.106")
+                    string ToPCCode_Old = "";
+
+                    if (req.ToPCCode.Trim() == "01.106")
                     {
-                        req.ToPCCode = "01.004";
+                        ToPCCode_Old = "01.004";
                     }
                     else if (req.ToPCCode.Trim() == "03.092" || req.ToPCCode.Trim() == "03.123")
                     {
-                        req.ToPCCode = "03.051";
+                        ToPCCode_Old = "03.051";
                     }
                    
                     // ── 3c. InsertPlanMTF ──
@@ -529,7 +531,7 @@ namespace KalaGenset.ERP.Core.Services
                         c.Parameters.AddWithValue("@Dt", DateTime.Now);
                         c.Parameters.AddWithValue("@Yr", fiscalYear);
                         c.Parameters.AddWithValue("@FromProfitCenterCode", req.FromPCCode.Trim());
-                        c.Parameters.AddWithValue("@ToProfitCenterCode", req.ToPCCode.Trim());
+                        c.Parameters.AddWithValue("@ToProfitCenterCode", ToPCCode_Old.Trim());
                         c.Parameters.AddWithValue("@ForProfitCenterCode", 0);
                         c.Parameters.AddWithValue("@RequisitionCode", req.ReqCode.Trim());
                         c.Parameters.AddWithValue("@CpyPartCode", req.ProdPartCode.Trim());

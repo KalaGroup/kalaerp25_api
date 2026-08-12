@@ -14,12 +14,28 @@ namespace KalaGenset.ERP.API.Controllers
         {
             _dgStageChecker = dgStageChecker;
         }
-        [HttpGet("GetStageQAPendingList/{stageName}/{profitCenter}")]
-        public async Task<IActionResult> GetStageQAPendingList(string stageName, string profitCenter)
+        // Route change — profitCenter is now OPTIONAL in the path (backward compat).
+        // Two new query-string params are accepted:
+        //   ?fromDate=2026-08-01&toDate=2026-08-11&lineWisePC=01.106
+        // Any missing/blank value falls through to the SP's NULL default (no filter
+        // for that dimension). The legacy 2-segment URL still works — old callers
+        // will just pass the LineWisePC in the route slot and skip the date range.
+        [HttpGet("GetStageQAPendingList/{stageName}/{profitCenter?}")]
+        public async Task<IActionResult> GetStageQAPendingList(
+            string stageName,
+            string? profitCenter = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? lineWisePC = null)
         {
             try
             {
-                var result = await _dgStageChecker.GetStageQAPendingListAsync(stageName, profitCenter);
+                // Prefer explicit ?lineWisePC=… when supplied; otherwise fall back to
+                // the legacy /{profitCenter} path segment so old clients still work.
+                var linePc = !string.IsNullOrWhiteSpace(lineWisePC) ? lineWisePC : profitCenter;
+
+                var result = await _dgStageChecker.GetStageQAPendingListAsync(
+                    stageName, fromDate, toDate, linePc);
                 return Ok(result);
             }
             catch (Exception ex)

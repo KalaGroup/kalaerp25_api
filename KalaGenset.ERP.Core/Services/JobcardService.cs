@@ -1919,89 +1919,206 @@ WHEN NOT MATCHED THEN
             return data;
         }
 
+        //public async Task<List<ReverseTransSearchResultDTO>> GetRevTransDtsAsync(
+        //    int transType,
+        //    string pcCode,
+        //    string kva,
+        //    string model)
+        //{
+        //    var data = new List<ReverseTransSearchResultDTO>();
+
+        //    using (var conn = _context.Database.GetDbConnection())
+        //    {
+        //        using (var cmd = conn.CreateCommand())
+        //        {
+        //            cmd.CommandText = "GetRevTransDts_Checker_Maker";
+        //            cmd.CommandType = CommandType.StoredProcedure;
+        //            cmd.CommandTimeout = 0;
+
+        //            cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
+        //            {
+        //                Value = transType
+        //            });
+        //            cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
+        //            {
+        //                Value = (object?)pcCode ?? DBNull.Value
+        //            });
+        //            cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 10)
+        //            {
+        //                Value = (object?)kva ?? DBNull.Value
+        //            });
+        //            cmd.Parameters.Add(new SqlParameter("@Model", SqlDbType.VarChar, 100)
+        //            {
+        //                Value = (object?)model ?? DBNull.Value
+        //            });
+
+        //            if (conn.State == ConnectionState.Closed)
+        //                await conn.OpenAsync();
+
+        //            using (var reader = await cmd.ExecuteReaderAsync())
+        //            {
+        //                // Local helper — returns null when the column is DBNull,
+        //                // otherwise its string form. Keeps the projection terse.
+        //                string? S(string col)
+        //                {
+        //                    int ord = reader.GetOrdinal(col);
+        //                    return reader.IsDBNull(ord) ? null : reader[ord]?.ToString();
+        //                }
+
+        //                while (await reader.ReadAsync())
+        //                {
+        //                    int selectROrd = reader.GetOrdinal("SelectR");
+        //                    int dtOrd = reader.GetOrdinal("Dt");
+
+        //                    data.Add(new ReverseTransSearchResultDTO
+        //                    {
+        //                        Stage4Code = S("Stage4Code"),
+        //                        TRCode = S("TRCode"),
+        //                        SelectR = reader.IsDBNull(selectROrd) ? 0 : Convert.ToInt32(reader[selectROrd]),
+        //                        KVA = S("KVA"),
+        //                        Phase = S("Phase"),
+        //                        Model = S("Model"),
+        //                        Panel = S("Panel"),
+        //                        EngSrNo = S("EngSrNo"),
+        //                        AltSrno = S("AltSrno"),
+        //                        CpySrno = S("CpySrno"),
+        //                        BatSrNo = S("BatSrNo"),
+        //                        Bat2SrNo = S("Bat2SrNo"),
+        //                        Bat3SrNo = S("Bat3SrNo"),
+        //                        Bat4SrNo = S("Bat4SrNo"),
+        //                        CPSrNo = S("CPSrNo"),
+        //                        CP2SrNo = S("CP2SrNo"),
+        //                        KRMSrNo = S("KRMSrNo"),
+        //                        Partcode = S("Partcode"),
+        //                        JobCode = S("JobCode"),
+        //                        J2Priority = S("J2Priority"),
+        //                        Dt = reader.IsDBNull(dtOrd) ? (DateTime?)null : Convert.ToDateTime(reader[dtOrd]),
+        //                        JobCard1 = S("JobCard1"),
+        //                        PanelType = S("PanelType"),
+        //                    });
+        //                }
+        //            }
+        //        }
+        //    }
+
+        //    return data;
+        //}
+
         public async Task<List<ReverseTransSearchResultDTO>> GetRevTransDtsAsync(
-            int transType,
-            string pcCode,
-            string kva,
-            string model)
+    int transType,
+    string pcCode,
+    string kva,
+    string model)
         {
             var data = new List<ReverseTransSearchResultDTO>();
 
-            using (var conn = _context.Database.GetDbConnection())
+            try
             {
-                using (var cmd = conn.CreateCommand())
+                using (var conn = _context.Database.GetDbConnection())
                 {
-                    cmd.CommandText = "GetRevTransDts_Checker_Maker";
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.CommandTimeout = 0;
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = "GetRevTransDts_Checker_Maker";
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.CommandTimeout = 0;
 
-                    cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
-                    {
-                        Value = transType
-                    });
-                    cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
-                    {
-                        Value = (object?)pcCode ?? DBNull.Value
-                    });
-                    cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 10)
-                    {
-                        Value = (object?)kva ?? DBNull.Value
-                    });
-                    cmd.Parameters.Add(new SqlParameter("@Model", SqlDbType.VarChar, 100)
-                    {
-                        Value = (object?)model ?? DBNull.Value
-                    });
-
-                    if (conn.State == ConnectionState.Closed)
-                        await conn.OpenAsync();
-
-                    using (var reader = await cmd.ExecuteReaderAsync())
-                    {
-                        // Local helper — returns null when the column is DBNull,
-                        // otherwise its string form. Keeps the projection terse.
-                        string? S(string col)
+                        cmd.Parameters.Add(new SqlParameter("@TransType", SqlDbType.Int)
                         {
-                            int ord = reader.GetOrdinal(col);
-                            return reader.IsDBNull(ord) ? null : reader[ord]?.ToString();
-                        }
+                            Value = transType
+                        });
 
-                        while (await reader.ReadAsync())
+                        cmd.Parameters.Add(new SqlParameter("@PCCode", SqlDbType.VarChar, 10)
                         {
-                            int selectROrd = reader.GetOrdinal("SelectR");
-                            int dtOrd = reader.GetOrdinal("Dt");
+                            Value = (object?)pcCode ?? DBNull.Value
+                        });
 
-                            data.Add(new ReverseTransSearchResultDTO
+                        cmd.Parameters.Add(new SqlParameter("@KVA", SqlDbType.VarChar, 10)
+                        {
+                            Value = (object?)kva ?? DBNull.Value
+                        });
+
+                        cmd.Parameters.Add(new SqlParameter("@Model", SqlDbType.VarChar, 100)
+                        {
+                            Value = (object?)model ?? DBNull.Value
+                        });
+
+                        if (conn.State == ConnectionState.Closed)
+                            await conn.OpenAsync();
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            string? S(string col)
                             {
-                                Stage4Code = S("Stage4Code"),
-                                TRCode = S("TRCode"),
-                                SelectR = reader.IsDBNull(selectROrd) ? 0 : Convert.ToInt32(reader[selectROrd]),
-                                KVA = S("KVA"),
-                                Phase = S("Phase"),
-                                Model = S("Model"),
-                                Panel = S("Panel"),
-                                EngSrNo = S("EngSrNo"),
-                                AltSrno = S("AltSrno"),
-                                CpySrno = S("CpySrno"),
-                                BatSrNo = S("BatSrNo"),
-                                Bat2SrNo = S("Bat2SrNo"),
-                                Bat3SrNo = S("Bat3SrNo"),
-                                Bat4SrNo = S("Bat4SrNo"),
-                                CPSrNo = S("CPSrNo"),
-                                CP2SrNo = S("CP2SrNo"),
-                                KRMSrNo = S("KRMSrNo"),
-                                Partcode = S("Partcode"),
-                                JobCode = S("JobCode"),
-                                J2Priority = S("J2Priority"),
-                                Dt = reader.IsDBNull(dtOrd) ? (DateTime?)null : Convert.ToDateTime(reader[dtOrd]),
-                                JobCard1 = S("JobCard1"),
-                                PanelType = S("PanelType"),
-                            });
+                                int ord = reader.GetOrdinal(col);
+                                return reader.IsDBNull(ord)
+                                    ? null
+                                    : reader[ord]?.ToString();
+                            }
+
+                            while (await reader.ReadAsync())
+                            {
+                                int selectROrd = reader.GetOrdinal("SelectR");
+                                int dtOrd = reader.GetOrdinal("Dt");
+
+                                data.Add(new ReverseTransSearchResultDTO
+                                {
+                                    Stage4Code = S("Stage4Code"),
+                                    TRCode = S("TRCode"),
+
+                                    SelectR = reader.IsDBNull(selectROrd)
+                                        ? 0
+                                        : Convert.ToInt32(reader[selectROrd]),
+
+                                    KVA = S("KVA"),
+                                    Phase = S("Phase"),
+                                    Model = S("Model"),
+                                    Panel = S("Panel"),
+                                    EngSrNo = S("EngSrNo"),
+                                    AltSrno = S("AltSrno"),
+                                    CpySrno = S("CpySrno"),
+                                    BatSrNo = S("BatSrNo"),
+                                    Bat2SrNo = S("Bat2SrNo"),
+                                    Bat3SrNo = S("Bat3SrNo"),
+                                    Bat4SrNo = S("Bat4SrNo"),
+                                    CPSrNo = S("CPSrNo"),
+                                    CP2SrNo = S("CP2SrNo"),
+                                    KRMSrNo = S("KRMSrNo"),
+                                    Partcode = S("Partcode"),
+                                    JobCode = S("JobCode"),
+                                    J2Priority = S("J2Priority"),
+
+                                    Dt = reader.IsDBNull(dtOrd)
+                                        ? (DateTime?)null
+                                        : Convert.ToDateTime(reader[dtOrd]),
+
+                                    JobCard1 = S("JobCard1"),
+                                    PanelType = S("PanelType")
+                                });
+                            }
                         }
                     }
                 }
-            }
 
-            return data;
+                return data;
+            }
+            catch (SqlException ex)
+            {
+                // SQL Server / Stored Procedure related error
+                throw new Exception(
+                    $"SQL error in GetRevTransDts_Checker_Maker. " +
+                    $"TransType: {transType}, PCCode: {pcCode}, KVA: {kva}, Model: {model}. " +
+                    $"SQL Error: {ex.Message}",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                // Any other error such as conversion, missing column, null issue etc.
+                throw new Exception(
+                    $"Error in GetRevTransDtsAsync. " +
+                    $"TransType: {transType}, PCCode: {pcCode}, KVA: {kva}, Model: {model}. " +
+                    $"Error: {ex.Message}",
+                    ex);
+            }
         }
 
         public async Task<string> SubmitReverseTransAsync(ReverseTransRequest request)
