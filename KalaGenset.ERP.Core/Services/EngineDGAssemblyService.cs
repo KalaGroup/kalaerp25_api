@@ -2652,9 +2652,14 @@ WHERE  pfd.TrfCode  = @JobCode
 
                     foreach (var item in dgStageScanReq.DGKitDetails)
                     {
-                        if (double.Parse(item.StockQty) <= 0)
+                        //if (double.Parse(item.StockQty) <= 0)
+                        //{
+                        //    PrcNo = $"Insufficient Stock For Part= {item.PartCode.Trim()}";
+                        //    return;
+                        //}
+                        if (double.Parse(item.StockQty)<double.Parse(item.TotalQty))
                         {
-                            PrcNo = $"Insufficient Stock For Part= {item.PartCode.Trim()}";
+                            PrcNo = $"Insufficient Stock Qty For Part= {item.PartCode.Trim()}";
                             return;
                         }
                     }
@@ -3062,30 +3067,42 @@ WHERE  pfd.TrfCode  = @JobCode
                     (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                     @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
 
+                            // IMPORTANT — SqlParameter overload trap:
+                            //   new SqlParameter("@X", 0)
+                            // resolves to SqlParameter(string, SqlDbType) because
+                            // integer literal 0 has an implicit conversion to
+                            // ANY enum type, and SqlDbType.BigInt = 0. That
+                            // constructor creates a parameter with a TYPE but
+                            // no VALUE → SQL Server throws "parameter not
+                            // supplied". Boxing to (object) forces the correct
+                            // SqlParameter(string, object) overload. We box
+                            // every numeric literal here (0 and 1) so the
+                            // pattern is consistent and future edits won't
+                            // silently reintroduce the same bug.
                             var sqlParams_cp1 = new object[]
                             {
     new SqlParameter("@PFBCode", PrcNo.Trim()),
     new SqlParameter("@SrNo", SrNo),
     new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
-    new SqlParameter("@KITQty", 1),
-    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
-    new SqlParameter("@TotQty", 1),
-    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@KITQty", (object)1),
+    new SqlParameter("@PrvIssueQty", (object)0),
+    new SqlParameter("@TotQty", (object)1),
+    new SqlParameter("@StockQty", (object)1),
     new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
-    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PLength", 0),
-    new SqlParameter("@PWidth", 0),
-    new SqlParameter("@PThickness", 0),
-    new SqlParameter("@PLossWt", 0),
-    new SqlParameter("@PHeight", 0),
-    new SqlParameter("@PLength1", 0),
-    new SqlParameter("@PLength2", 0),
-    new SqlParameter("@PWidth1", 0),
-    new SqlParameter("@PWidth2", 0),
-    new SqlParameter("@PLossSqft", 0),
-    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PCatagoryCode", 0)
+    new SqlParameter("@SaleRate", (object)0),
+    new SqlParameter("@PLength", (object)0),
+    new SqlParameter("@PWidth", (object)0),
+    new SqlParameter("@PThickness", (object)0),
+    new SqlParameter("@PLossWt", (object)0),
+    new SqlParameter("@PHeight", (object)0),
+    new SqlParameter("@PLength1", (object)0),
+    new SqlParameter("@PLength2", (object)0),
+    new SqlParameter("@PWidth1", (object)0),
+    new SqlParameter("@PWidth2", (object)0),
+    new SqlParameter("@PLossSqft", (object)0),
+    new SqlParameter("@WtPerUt", (object)0),
+    new SqlParameter("@SqftPerUt", (object)0),
+    new SqlParameter("@PCatagoryCode", (object)0)
                             };
 
                             await _context.Database.ExecuteSqlRawAsync(sqlInsertQuery_cp1, sqlParams_cp1);
@@ -3096,14 +3113,20 @@ WHERE  pfd.TrfCode  = @JobCode
                                              VALUES 
                                              (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToProfitCenterCode, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
+                            // Same SqlParameter overload trap — @StockType, 0
+                            // hits SqlParameter(string, SqlDbType) because int
+                            // literal 0 implicitly converts to any enum, and
+                            // SqlDbType.BigInt = 0. @IssueQty, 1 is boxed too
+                            // for a consistent pattern (see comment on
+                            // sqlParams_cp1 near the top of this method).
                             var sqlParams1 = new object[]
                             {
                               new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                               new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
                               new SqlParameter("@IssueCode", PrcNo.Trim()),
-                              new SqlParameter("@IssueQty", 1),
+                              new SqlParameter("@IssueQty", (object)1),
                               new SqlParameter("@ToProfitCenterCode", dgStageScanReq.PCCode_Old.Trim()),
-                              new SqlParameter("@StockType", 0),
+                              new SqlParameter("@StockType", (object)0),
                               new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
                               new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                             };
@@ -3181,30 +3204,34 @@ WHERE  pfd.TrfCode  = @JobCode
                     (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                     @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
 
+                            // See "SqlParameter overload trap" note next to
+                            // sqlParams_cp1 above — every numeric literal must
+                            // be boxed to (object) or 0/1 literals silently
+                            // become SqlDbType values with no bound value.
                             var sqlParamscp1 = new object[]
                             {
     new SqlParameter("@PFBCode", PrcNo.Trim()),
     new SqlParameter("@SrNo", SrNo),
     new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
-    new SqlParameter("@KITQty", 1),
-    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
-    new SqlParameter("@TotQty", 1),
-    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@KITQty", (object)1),
+    new SqlParameter("@PrvIssueQty", (object)0),
+    new SqlParameter("@TotQty", (object)1),
+    new SqlParameter("@StockQty", (object)1),
     new SqlParameter("@PFBRate", double.Parse(StrCPRate.Trim())),
-    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PLength", 0),
-    new SqlParameter("@PWidth", 0),
-    new SqlParameter("@PThickness", 0),
-    new SqlParameter("@PLossWt", 0),
-    new SqlParameter("@PHeight", 0),
-    new SqlParameter("@PLength1", 0),
-    new SqlParameter("@PLength2", 0),
-    new SqlParameter("@PWidth1", 0),
-    new SqlParameter("@PWidth2", 0),
-    new SqlParameter("@PLossSqft", 0),
-    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PCatagoryCode", 0)
+    new SqlParameter("@SaleRate", (object)0),
+    new SqlParameter("@PLength", (object)0),
+    new SqlParameter("@PWidth", (object)0),
+    new SqlParameter("@PThickness", (object)0),
+    new SqlParameter("@PLossWt", (object)0),
+    new SqlParameter("@PHeight", (object)0),
+    new SqlParameter("@PLength1", (object)0),
+    new SqlParameter("@PLength2", (object)0),
+    new SqlParameter("@PWidth1", (object)0),
+    new SqlParameter("@PWidth2", (object)0),
+    new SqlParameter("@PLossSqft", (object)0),
+    new SqlParameter("@WtPerUt", (object)0),
+    new SqlParameter("@SqftPerUt", (object)0),
+    new SqlParameter("@PCatagoryCode", (object)0)
                             };
 
                             await _context.Database.ExecuteSqlRawAsync(sqlInsertQuerycp1, sqlParamscp1);
@@ -3220,7 +3247,7 @@ WHERE  pfd.TrfCode  = @JobCode
                                 new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CPPartcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
-                                new SqlParameter("@IssueQty", 1),
+                                new SqlParameter("@IssueQty", (object)1),
                                 new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@StockType",SqlDbType.Int) { Value = 0 },
                                 new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
@@ -3302,30 +3329,32 @@ WHERE  pfd.TrfCode  = @JobCode
                     (@PFBCode, @SrNo, @PartCode, @KITQty, @PrvIssueQty, @TotQty, @StockQty, @PFBRate, @SaleRate, @PLength, @PWidth, @PThickness, @PLossWt, @PHeight, 
                     @PLength1, @PLength2, @PWidth1, @PWidth2, @PLossSqft, @WtPerUt, @SqftPerUt, @PCatagoryCode)";
 
+                                // Same SqlParameter overload trap as sqlParams_cp1
+                                // — every numeric literal boxed to (object).
                                 var sqlParamscp2 = new object[]
                                 {
     new SqlParameter("@PFBCode", PrcNo.Trim()),
     new SqlParameter("@SrNo", SrNo),
     new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
-    new SqlParameter("@KITQty", 1),
-    new SqlParameter("@PrvIssueQty", 0), // Added missing column with hardcoded value
-    new SqlParameter("@TotQty", 1),
-    new SqlParameter("@StockQty", 1),
+    new SqlParameter("@KITQty", (object)1),
+    new SqlParameter("@PrvIssueQty", (object)0),
+    new SqlParameter("@TotQty", (object)1),
+    new SqlParameter("@StockQty", (object)1),
     new SqlParameter("@PFBRate", double.Parse(StrCP2Rate.Trim())),
-    new SqlParameter("@SaleRate", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PLength", 0),
-    new SqlParameter("@PWidth", 0),
-    new SqlParameter("@PThickness", 0),
-    new SqlParameter("@PLossWt", 0),
-    new SqlParameter("@PHeight", 0),
-    new SqlParameter("@PLength1", 0),
-    new SqlParameter("@PLength2", 0),
-    new SqlParameter("@PWidth1", 0),
-    new SqlParameter("@PWidth2", 0),
-    new SqlParameter("@PLossSqft", 0),
-    new SqlParameter("@WtPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@SqftPerUt", 0), // Added missing column with hardcoded value
-    new SqlParameter("@PCatagoryCode", 0)
+    new SqlParameter("@SaleRate", (object)0),
+    new SqlParameter("@PLength", (object)0),
+    new SqlParameter("@PWidth", (object)0),
+    new SqlParameter("@PThickness", (object)0),
+    new SqlParameter("@PLossWt", (object)0),
+    new SqlParameter("@PHeight", (object)0),
+    new SqlParameter("@PLength1", (object)0),
+    new SqlParameter("@PLength2", (object)0),
+    new SqlParameter("@PWidth1", (object)0),
+    new SqlParameter("@PWidth2", (object)0),
+    new SqlParameter("@PLossSqft", (object)0),
+    new SqlParameter("@WtPerUt", (object)0),
+    new SqlParameter("@SqftPerUt", (object)0),
+    new SqlParameter("@PCatagoryCode", (object)0)
                                 };
 
                                 await _context.Database.ExecuteSqlRawAsync(sqlInsertQuerycp2, sqlParamscp2);
@@ -3335,14 +3364,18 @@ WHERE  pfd.TrfCode  = @JobCode
                                                   VALUES 
                                                   (@FromPCCode_Old, @PartCode, @IssueCode, GETDATE(), @IssueQty, @ToPCCode_Old, @StockType, @FromProfitCenterCode_Act, @ToProfitCenterCode_Act)";
 
+                                // @StockType = 0 must be boxed — bare `0` hits
+                                // the SqlParameter(string, SqlDbType) overload
+                                // and creates a parameter with type but no
+                                // value, triggering "parameter not supplied".
                                 var _sqlParameter = new object[]
                                 {
                                 new SqlParameter("@FromPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
                                 new SqlParameter("@PartCode", dgStageScanReq.CP2Partcode.Trim()),
                                 new SqlParameter("@IssueCode", PrcNo.Trim()),
-                                new SqlParameter("@IssueQty", 1),
+                                new SqlParameter("@IssueQty", (object)1),
                                 new SqlParameter("@ToPCCode_Old", dgStageScanReq.PCCode_Old.Trim()),
-                                new SqlParameter("@StockType", 0),
+                                new SqlParameter("@StockType", (object)0),
                                 new SqlParameter("@FromProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value),
                                 new SqlParameter("@ToProfitCenterCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                                 };
