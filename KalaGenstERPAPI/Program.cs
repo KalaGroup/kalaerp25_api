@@ -152,6 +152,7 @@ builder.Services.AddScoped<IPowderCoating, PowderCoatingService>();
 builder.Services.AddScoped<IReverse, ReverseService>();
 
 builder.Services.AddScoped<IMachineDownTime, MachineDownTimeService>();
+builder.Services.AddScoped<IGanttFeedback, GanttFeedbackService>();
 builder.Services.AddScoped<IManpowerStatus, ManpowerStatusService>();
 builder.Services.AddScoped<IMaterial, MaterialService>();
 builder.Services.AddScoped<IControlPanelBox, ControlPanelBoxService>();
