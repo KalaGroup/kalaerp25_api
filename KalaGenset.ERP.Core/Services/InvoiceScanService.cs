@@ -101,7 +101,7 @@ namespace KalaGenset.ERP.Core.Services
 
         public async Task<string> SendEmailAsync(string invId)
         {
-            invId = invId.Trim();
+            string decodedInvoiceId = Uri.UnescapeDataString(invId).Trim();
 
             try
             {
@@ -116,7 +116,7 @@ namespace KalaGenset.ERP.Core.Services
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.CommandTimeout = 0;
-                    cmd.Parameters.AddWithValue("@Invcode", invId);
+                    cmd.Parameters.AddWithValue("@Invcode", decodedInvoiceId);
 
                     using var reader = await cmd.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
@@ -179,13 +179,27 @@ namespace KalaGenset.ERP.Core.Services
                 AddUniqueMailAddresses(mail.Bcc, "fs@kalabiz.com");
                 AddUniqueMailAddresses(mail.ReplyToList, details.ReplyToMailID);
 
+                // NOTE: Google displays 16-char app passwords as "xxxx xxxx xxxx xxxx"
+                // (4 groups of 4 with spaces). The .NET SMTP client is usually lenient
+                // about this, but some proxies aren't — strip whitespace so the
+                // credential Gmail receives is exactly the 16 chars it issued.
+                //
+                // If Gmail rejects with "5.7.0 Authentication Required", the app
+                // password is dead — regenerate at https://myaccount.google.com/apppasswords
+                // (owner: erp@kalabiz.com) and replace the string below. Google auto-
+                // revokes app passwords on account password change or 2SV toggle.
+                const string smtpUser = "erp@kalabiz.com";
+                const string smtpAppPwRaw = "wanv ftwc dobq blrr";
+                var smtpAppPw = new string(smtpAppPwRaw.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
                 using var smtp = new SmtpClient
                 {
                     Host = "smtp.gmail.com",
                     Port = 587,
                     EnableSsl = true,
                     UseDefaultCredentials = false,
-                    Credentials = new NetworkCredential("erp@kalabiz.com", "wanv ftwc dobq blrr"),
+                    Credentials = new NetworkCredential(smtpUser, smtpAppPw),
+                    DeliveryMethod = SmtpDeliveryMethod.Network,
                     Timeout = 60000
                 };
 
