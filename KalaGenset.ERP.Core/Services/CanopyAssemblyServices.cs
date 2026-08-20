@@ -2129,12 +2129,21 @@ WHERE pf.PFBCode = @PFBCode
         {
             ValidateCanopyProcessSubmit(req);
 
-            var pfb = req.PFBCode.Trim();
-            if (pfb.StartsWith("NEW", StringComparison.OrdinalIgnoreCase))
-                return await SubmitCanopyProcessNewAsync(req);
-            if (pfb.StartsWith("PSH", StringComparison.OrdinalIgnoreCase))
-                return await SubmitCanopyProcessPshAsync(req);
-            throw new ArgumentException($"Unexpected PFBCode prefix: '{pfb.Substring(0, Math.Min(3, pfb.Length))}'. Expected NEW or PSH.");
+            // Canopy assembly is now a single-step submission — everything
+            // (Start + End: PFB header, kit lines, WIP, serials, ProductWip,
+            // attachments, activity log) is handled inside SubmitCanopyProcessNewAsync.
+            // The legacy two-step flow (NEW = create, PSH = close) is retained in
+            // SubmitCanopyProcessPshAsync but no longer routed to. To re-enable
+            // the split flow, uncomment the PSH branch below.
+            return await SubmitCanopyProcessNewAsync(req);
+
+            // ── Legacy two-step dispatch — kept for reference / rollback ──
+            // var pfb = req.PFBCode.Trim();
+            // if (pfb.StartsWith("NEW", StringComparison.OrdinalIgnoreCase))
+            //     return await SubmitCanopyProcessNewAsync(req);
+            // if (pfb.StartsWith("PSH", StringComparison.OrdinalIgnoreCase))
+            //     return await SubmitCanopyProcessPshAsync(req);
+            // throw new ArgumentException($"Unexpected PFBCode prefix: '{pfb.Substring(0, Math.Min(3, pfb.Length))}'. Expected NEW or PSH.");
         }
 
         // ── 9a) NEW path — creates a fresh PSH record ────────────────────
@@ -2243,16 +2252,23 @@ VALUES (@PFBCode, @PFBCode, @MaxSrNo, @Dt, @EDt, @Yr, @Machine, @Serial,
                 for (int m = 0; m < (int)req.PrcQty; m++)
                 {
                     var srl = serials[m];
+                    // NOTE: EdtD is set to DateTime.Now HERE (not left NULL as
+                    // in the legacy two-step Start/End flow) because this
+                    // combined path fires Start+End as a single submission.
+                    // Migrated from SubmitCanopyProcessPshAsync's Step 1
+                    // (which used to backfill EdtD on the End click). Reports
+                    // filtering on `EdtD IS NOT NULL` (finished canopies) now
+                    // see rows from the NEW path too.
                     using (var cmd = new SqlCommand(@"
 INSERT INTO ProcessFeedbackDetailsSub
     (PFBCode, EdtD, SrNo, PartCode, SerialNo, PFBBOTSerialNo, BFMSrNo, FLKSrNo,
      Status, QPCStatus, RWStatus)
-VALUES (@PFBCode, @EDt, @SrNo, @ProductCode, @SerialNo, @SerialNo, @BFMSrNo, @FLKSrNo,
+VALUES (@PFBCode, @EdtD, @SrNo, @ProductCode, @SerialNo, @SerialNo, @BFMSrNo, @FLKSrNo,
         'P', 'OK', 'OK');",
                         (SqlConnection)conn, sqlTx))
                     {
                         cmd.Parameters.AddWithValue("@PFBCode",     prcNo);
-                        cmd.Parameters.AddWithValue("@EDt", DateTime.Now);
+                        cmd.Parameters.AddWithValue("@EdtD",        DateTime.Now);
                         cmd.Parameters.AddWithValue("@SrNo",        m + 1);
                         cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
                         cmd.Parameters.AddWithValue("@SerialNo",    srl.SerialNo);
@@ -2289,6 +2305,28 @@ UPDATE CanopyPlanSerialNo
                         cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
                         await cmd.ExecuteNonQueryAsync();
                     }
+                }
+
+                // 5b) ProductWip receive row (product-level WIP).
+                // Migrated from SubmitCanopyProcessPshAsync's Step 3 — this
+                // is what registers the finished canopies as available WIP
+                // stock so downstream Stage 3/4 DG Assembly can consume them.
+                // Without this insert, ProcessFeedback says "canopy done"
+                // but ProductWip has no row → the whole DG chain stalls
+                // because the next stage can't find the canopy. Uses `pc`
+                // (LineWisePC) for both From and To — same as PSH.
+                using (var cmd = new SqlCommand(@"
+INSERT INTO ProductWip
+    (ProductCode, FromPCCode, ToPCCode, IssueCode, IssueDate, IssueQty, StockType)
+VALUES (@ProductCode, @PCCode, @PCCode, @PFBCode, @Now, @PrcQty, 0);",
+                    (SqlConnection)conn, sqlTx))
+                {
+                    cmd.Parameters.AddWithValue("@ProductCode", req.ProductCode.Trim());
+                    cmd.Parameters.AddWithValue("@PCCode",      pc);
+                    cmd.Parameters.AddWithValue("@PFBCode",     prcNo);
+                    cmd.Parameters.AddWithValue("@Now",         DateTime.Now);
+                    cmd.Parameters.AddWithValue("@PrcQty",      req.PrcQty);
+                    await cmd.ExecuteNonQueryAsync();
                 }
 
                 // 6) Assembly-kit stock check + insertion.
@@ -2462,14 +2500,66 @@ VALUES (@REQCode, @MaxSrNo, @Dt, @Yr,
                 */
                 // ─────────────────────────────────────────────────────────
 
-                // 9) Activity log for the whole Process submission.
+                // 8b) Attachments — copy each from temp → permanent + link row.
+                // Migrated from SubmitCanopyProcessPshAsync's Step 4. If the
+                // operator uploaded photos/PDFs while doing the assembly the
+                // files live under {tempEmpPath}; we copy them to the permanent
+                // location under a deterministic PFB-scoped name and insert
+                // the ProcessFeedbackFiles link row. Guarded so it's a no-op
+                // when no attachments are present. File-copy failure is
+                // swallowed (matches PSH behaviour — a broken photo copy
+                // shouldn't roll back the whole canopy production).
+                if (req.Attachments != null && req.Attachments.Count > 0)
+                {
+                    var tempEmpPath  = System.IO.Path.Combine(CanopyProcessTempBase, emp);
+                    var permBasePath = CanopyProcessPermanentBase;
+                    System.IO.Directory.CreateDirectory(permBasePath);
+
+                    int srA = 0;
+                    foreach (var att in req.Attachments)
+                    {
+                        srA++;
+                        if (string.IsNullOrWhiteSpace(att.FileName)) continue;
+
+                        var ext = System.IO.Path.GetExtension(att.FileName);
+                        var pfbKey = prcNo.Length >= 18
+                            ? prcNo.Substring(4, 5) + prcNo.Substring(10, 8)
+                            : prcNo;
+                        var savedName = $"{pfbKey}-{srA}{ext}";
+
+                        var srcPath = System.IO.Path.Combine(tempEmpPath, att.FileName);
+                        var dstPath = System.IO.Path.Combine(permBasePath, savedName);
+                        if (System.IO.File.Exists(srcPath))
+                        {
+                            try
+                            {
+                                System.IO.File.Copy(srcPath, dstPath, overwrite: true);
+                            }
+                            catch { /* file-copy failure shouldn't block the DB write */ }
+                        }
+
+                        using var cmd = new SqlCommand(@"
+INSERT INTO ProcessFeedbackFiles (GroupPFBCode, SrNo, FileName)
+VALUES (@PFBCode, @SrNo, @FileName);",
+                            (SqlConnection)conn, sqlTx);
+                        cmd.Parameters.AddWithValue("@PFBCode",  prcNo);
+                        cmd.Parameters.AddWithValue("@SrNo",     srA);
+                        cmd.Parameters.AddWithValue("@FileName", savedName);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                // 9) Activity log for the whole Process submission. Message
+                // reflects that this combined path fires both start AND end
+                // in one shot (legacy split the two into separate NEW/PSH log
+                // rows). Return string mirrors the wording.
                 await InsertLoginTxnAsync((SqlConnection)conn, sqlTx,
-                    emp, "S", "Canopy Assembly Process", prcNo, company);
+                    emp, "S", "Canopy Assembly Process (Start+End)", prcNo, company);
 
                 await tx.CommitAsync();
                 return new SubmitCanopyProcessResponse
                 {
-                    Message = $"ProcessCode={prcNo} — Canopy Assembly Started Successfully",
+                    Message = $"ProcessCode={prcNo} — Canopy Assembly Completed Successfully",
                     PFBCode = prcNo,
                 };
             }

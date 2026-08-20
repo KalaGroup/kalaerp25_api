@@ -1132,7 +1132,7 @@ WHERE  pfd.TrfCode  = @JobCode
             {
                 var parameters = new[]
                       {
-                           new SqlParameter("@strPCCode",PCCode_Act),
+                           new SqlParameter("@strPCCode",strPCCode_Old),
                            new SqlParameter("@RatePCCode",formattedRatePCCode),
                            new SqlParameter("@ProdDts",prodDts[0]),
                            new SqlParameter("@strPrdPartCode",strPrdPartCode),
@@ -2820,17 +2820,22 @@ WHERE  pfd.TrfCode  = @JobCode
                         }
                         PrcNo = await GetMaxPrcAsync(yearEnd, dgStageScanReq.PCCode_Act.Trim().Substring(0, 2));
 
+                        // VersionCode + PFBType are both stamped with empty string ""
+                        // (the historical "not-applicable" sentinel used elsewhere
+                        // in this table). Previously @CPType1 = CPType[1].Trim()
+                        // pushed the panel-type-id into VersionCode which was
+                        // semantically wrong — the column now stays blank.
                         var SqlQuery = @"
                                     INSERT INTO processfeedback (
                                     GroupPFBCode, PFBCode, MaxSrNo, Dt, Yr, MachineCode, SerialNo, ProfitCenterCode, TurretKitCode,
-                                    PartCode, PPWCode, MOFCode, VersionCode, ProcessQty, PKitQty, PLength, PWidth, PThickness, 
+                                    PartCode, PPWCode, MOFCode, VersionCode, ProcessQty, PKitQty, PLength, PWidth, PThickness,
                                     NstWtPerUt, NstSqftPerUt, WtPerUt, SqftPerUt, CRWt, HRWt, CRRate, HRRate, CompanyCode,
                                     PPDIRStatus, TRStatus, PFBType, PFBRate, SilCladdingRate, Remark, PrcBOMCode, QPCStatus,PCCode_Act
-                                    ) 
+                                    )
                                     VALUES (
-                                    @PrcNo, @PrcNo, @MaxSrNo, @Date, @Year, @MachineCode, @SerialNo, @PCCode, '0', @ProductCode, '0', 
-                                    'MOF', @CPType1, '1', '0', '0', '0', '0', @NstWtPerUt, @NstSqftPerUt, @WtPerUt, @SqftPerUt, 
-                                    @CRWt, @HRWt, @CRRate, @HRRate, @CompanyCode, 'P', 'P', @PFBType, @PFBRate, @SilCladdingRate, 
+                                    @PrcNo, @PrcNo, @MaxSrNo, @Date, @Year, @MachineCode, @SerialNo, @PCCode, '0', @ProductCode, '0',
+                                    'MOF', @CPType1, '1', '0', '0', '0', '0', @NstWtPerUt, @NstSqftPerUt, @WtPerUt, @SqftPerUt,
+                                    @CRWt, @HRWt, @CRRate, @HRRate, @CompanyCode, 'P', 'P', @PFBType, @PFBRate, @SilCladdingRate,
                                      @Remark, @PrcBOMCode, 'P', @PCCode_Act)";
 
                         var Parameters = new[]
@@ -2843,7 +2848,7 @@ WHERE  pfd.TrfCode  = @JobCode
                           new SqlParameter("@SerialNo", DGNo.Substring(8, 4).Trim()),
                           new SqlParameter("@PCCode", dgStageScanReq.PCCode_Old.Trim()),
                           new SqlParameter("@ProductCode", dgStageScanReq.ProductCode.Trim()),
-                          new SqlParameter("@CPType1", CPType[1].Trim()),
+                          new SqlParameter("@CPType1", (object)0),
                           new SqlParameter("@NstWtPerUt", Convert.ToDouble(ProdDts[1].Trim())),
                           new SqlParameter("@NstSqftPerUt", Convert.ToDouble(ProdDts[2].Trim())),
                           new SqlParameter("@WtPerUt", Convert.ToDouble(ProdDts[1].Trim())),
@@ -2859,17 +2864,18 @@ WHERE  pfd.TrfCode  = @JobCode
                           new SqlParameter("@PrcBOMCode", ProdDts[0].Trim()),
                           new SqlParameter("@PCCode_Act", dgStageScanReq.PCCode_Act ?? (object)DBNull.Value)
                         };
-
-                        // Conditional parameter for PFBType
-                        if (double.Parse(CPType[1].Trim()) == 0)
-                        {
-                            //Parameters = Parameters.Append(new SqlParameter("@PFBType", DBNull.Value)).ToArray();
-                            Parameters = Parameters.Append(new SqlParameter("@PFBType", "")).ToArray();
-                        }
-                        else
-                        {
-                            Parameters = Parameters.Append(new SqlParameter("@PFBType", CPType[0].Trim())).ToArray();
-                        }
+                                                
+                        Parameters = Parameters.Append(new SqlParameter("@PFBType", "")).ToArray();
+                        //// Conditional parameter for PFBType
+                        //if (double.Parse(CPType[1].Trim()) == 0)
+                        //{
+                        //    //Parameters = Parameters.Append(new SqlParameter("@PFBType", DBNull.Value)).ToArray();
+                        //    Parameters = Parameters.Append(new SqlParameter("@PFBType", "")).ToArray();
+                        //}
+                        //else
+                        //{
+                        //    Parameters = Parameters.Append(new SqlParameter("@PFBType", CPType[0].Trim())).ToArray();
+                        //}
 
                         await _context.Database.ExecuteSqlRawAsync(SqlQuery, Parameters);
 
@@ -4212,16 +4218,16 @@ WHERE  pfd.TrfCode  = @JobCode
                                new SqlParameter("@SrNo",              packingSlipSubmitDetailsReq.DGSrNo.Trim()),
                                new SqlParameter("@Remark",            packingSlipSubmitDetailsReq.Remark.Trim()),
                                new SqlParameter("@PCCodeStkIssue",    StrPCCodeStkIssue.Trim()),                          
-                               new SqlParameter("@BatteryTerminals",  0),
-                               new SqlParameter("@BatteryLead",       0),
-                               new SqlParameter("@ExhaustPipe",       0),
-                               new SqlParameter("@DCBulb",            0),
-                               new SqlParameter("@CanopyKey",         0),
-                               new SqlParameter("@FuelCapKey",        0),
-                               new SqlParameter("@Rate",              1),                              // literal value 1
-                               new SqlParameter("@RubberPad",         0),
-                               new SqlParameter("@FunnelPad",         0),
-                               new SqlParameter("@PrdManual",         0),
+                               new SqlParameter("@BatteryTerminals",  (object)0),
+                               new SqlParameter("@BatteryLead",       (object)0),
+                               new SqlParameter("@ExhaustPipe",       (object)0),
+                               new SqlParameter("@DCBulb",            (object)0),
+                               new SqlParameter("@CanopyKey",         (object)0),
+                               new SqlParameter("@FuelCapKey",        (object)0),
+                               new SqlParameter("@Rate",              (object)1),                              // literal value 1
+                               new SqlParameter("@RubberPad",         (object)0),
+                               new SqlParameter("@FunnelPad",         (object)0),
+                               new SqlParameter("@PrdManual",         (object)0),
                                new SqlParameter("@CompanyCode",       PC_CompanyCode.Trim()),
                                new SqlParameter("@PCCodeStkIssue_Act", packingSlipSubmitDetailsReq.pccode_act.Trim())                             
                         };
@@ -4648,6 +4654,8 @@ WHERE  pfd.TrfCode  = @JobCode
             #endregion
 
             var strategy = _context.Database.CreateExecutionStrategy();
+            try
+            {
             await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -5110,11 +5118,24 @@ WHERE  pfd.TrfCode  = @JobCode
                                             }
                                             else
                                             {
+                                                // No CP serial available for this sub-part.
+                                                // Previously this branch just set JobCardNo to a
+                                                // friendly message and let the loop CONTINUE, so
+                                                // the outer transaction committed a HALF-WRITTEN
+                                                // JobCard2 — header + Eng/Alt/Cpy/Bat sub-rows in
+                                                // place, but zero rows for the failing CP. The
+                                                // caller only saw the message, not the partial
+                                                // persistence. Throwing here forces the strategy's
+                                                // catch to RollbackAsync; the friendly message is
+                                                // re-surfaced to the caller by the try/catch
+                                                // around strategy.ExecuteAsync at the bottom of
+                                                // this method.
                                                 var partDesc = await _context.Parts
                                                                .Where(p => p.PartCode == item.PartCode)
                                                                .Select(p => p.PartDesc)
                                                                .FirstOrDefaultAsync();
-                                                JobCardNo = $"CP SrNo Not available For DG {partDesc} and CP Type {item.PanelType}";
+                                                throw new InvalidOperationException(
+                                                    $"CP SrNo Not available For DG {partDesc} and CP Type {item.PanelType}");
                                             }
                                         }
                                     }
@@ -5156,6 +5177,15 @@ WHERE  pfd.TrfCode  = @JobCode
                     throw;
                 }
             });
+            }
+            catch (InvalidOperationException guardEx)
+            {
+                // Guarded rollback path — a downstream check (e.g. "CP SrNo Not
+                // available") threw to force RollbackAsync above. Preserve the
+                // legacy return-string contract instead of bubbling a 500 to
+                // the client. The friendly message is what the UI banners.
+                JobCardNo = guardEx.Message;
+            }
 
             return JobCardNo;
         }
