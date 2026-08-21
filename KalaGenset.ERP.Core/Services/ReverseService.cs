@@ -797,7 +797,7 @@ namespace KalaGenset.ERP.Core.Services
                         #region Inactive Process
                         // Partial Prc For Individual Prc
                         sb.Remove(0, sb.Length);
-                        sb.Append("UPDATE ProcessFeedback SET Active='0' ");
+                        sb.Append("UPDATE ProcessFeedback SET Active='0',Checker1='0' ");
                         sb.Append("WHERE CanopyPlanCode=@CPCode AND ProductCode=@ProductCode ");
                         sb.Append("AND PCCode_Act=@PCCode AND CatID=@CatId");
                         cmd = new SqlCommand(sb.ToString(), con) { Transaction = tran };
@@ -811,7 +811,7 @@ namespace KalaGenset.ERP.Core.Services
                         // Partial Prc For Nxt Prc
                         sb.Remove(0, sb.Length);
                         cmd = new SqlCommand() { Connection = con, Transaction = tran };
-                        sb.Append("UPDATE ProcessFeedback SET Active='0' ");
+                        sb.Append("UPDATE ProcessFeedback SET Active='0',Checker1='0' ");
                         sb.Append("WHERE CanopyPlanCode=@CPCode AND ProductCode=@ProductCode ");
                         sb.Append("AND PCCode_Act IN (" + BuildInClause(cmd, nextPCCodes) + ") AND CatID=@CatId");
                         cmd.CommandText = sb.ToString();

@@ -594,8 +594,8 @@ namespace KalaGenset.ERP.Core.Services
                             }
                         }
 
-                        await tran.CommitAsync();
-                        //await tran.RollbackAsync();
+                      await tran.CommitAsync();
+                       // await tran.RollbackAsync();
                         PrcNo = "ProcessCode:" + PrcNo + "    For Bending  Saved SuccessFully ";
                     }
                     else if (CpyPrcBendReq.PFBCode.Substring(0, 3) == "PSH")
@@ -620,8 +620,8 @@ namespace KalaGenset.ERP.Core.Services
                             await cmd.ExecuteNonQueryAsync();
                         }
 
-                        await tran.CommitAsync();
-                        //await tran.RollbackAsync();
+                      await tran.CommitAsync();
+                       // await tran.RollbackAsync();
                         PrcNo = "ProcessCode=" + CpyPrcBendReq.PFBCode.Trim() + " For Bending  End SuccessFully ";
                     }
                     return PrcNo;
@@ -802,7 +802,7 @@ namespace KalaGenset.ERP.Core.Services
                                 ("@ClassCode", req.ProductCode),
                                 ("@CompanyCode", req.PCCode_Act.Substring(0, 2)),
                                 ("@ActNo", req.BatchQty.Trim()),
-                                ("@Remark", "Auto Req For Plan No: " + req.ProductCode + " and Prc No: " + PrcNo));
+                                ("@Remark", "Auto Req For Plan No: " + req.ProductCode + " and Prc No: " + req.PFBCode));
 
                             int SrNoReq = 0;
                             foreach (DataRow row in kanTable.Rows)

@@ -114,6 +114,8 @@ namespace KalaGenset.ERP.Core.Services
             DataSet dsTurretKitForPrc;
             DataSet dsTurretKitGKForPrc;
             string StrDisplayMsg = "";
+            string StrDisplayMsgBOM = "";
+            string StrDisplayPartMsg = "";
             string StrDispCode_CPYPlan = "";
             string[] strPlanDts;
             string[] Dts;
@@ -137,8 +139,8 @@ namespace KalaGenset.ERP.Core.Services
                 tran = (SqlTransaction)await con.BeginTransactionAsync();
 
                 // Save Cpy Plan
-                StrDispCode_CPYPlan = _com.GetMaxNo("CanopyPlan", "CPY", job_Cpyreq.CompCode.Trim(), con, tran);
-
+                //StrDispCode_CPYPlan = _com.GetMaxNo("CanopyPlan", "CPY", job_Cpyreq.CompCode.Trim(), con, tran);
+                StrDispCode_CPYPlan = _com.GetMaxNo("CanopyPlan", "CPY", job_Cpyreq.PCCode_Act.Trim().Substring(0, 2), con, tran);
                 string CurrentMnth = _com.getName("select Mon=case MONTH(GETDATE()) " +
                                                         "when 1 then '01' when 2 then '02' when 3 then '03' " +
                                                         "when 4 then '04' when 5 then '05' when 6 then '06' " +
@@ -156,7 +158,7 @@ namespace KalaGenset.ERP.Core.Services
                 cmd.Parameters.AddWithValue("@ToDt", DateTime.Now.ToString("yyyy-MM-dd 00:00:00"));
                 cmd.Parameters.AddWithValue("@PlanPCCode", job_Cpyreq.PCCode.Trim());
                 cmd.Parameters.AddWithValue("@PCCode_Act", job_Cpyreq.PCCode_Act.Trim());
-                cmd.Parameters.AddWithValue("@CompanyCode", job_Cpyreq.CompCode.Trim());
+                cmd.Parameters.AddWithValue("@CompanyCode", job_Cpyreq.PCCode_Act.Trim().Substring(0, 2));
                 cmd.Parameters.AddWithValue("@PlanType", "G");
                 cmd.Parameters.AddWithValue("@AutoFlg", "Yes");
                 cmd.Transaction = tran;
@@ -351,7 +353,76 @@ namespace KalaGenset.ERP.Core.Services
                         }
                     }
 
-                    // ----- For DtsSub Save -----
+
+
+                    //if (kva < 750)
+                    //{
+
+
+                    //    dsDetailsSub = _com.procTranDS(" select s.Partcode, s.PartDesc, s.Rate, s.KVA, s.Strokes,s1.CompCode,S1.CatID from " +
+                    //        "(select DISTINCT  bd.Partcode,p.PartDesc," +
+                    //        "(select Rate from ProfitcenterPLDetails where Partcode=bd.Partcode and ProfitcenterCode = '01.007') as Rate,  P1.KVA ," +
+                    //           "isNull((select isNull(Max(MarAMT),0) as Strokes from ProfitcenterPLDetails where Partcode=bd.Partcode and ProfitcenterCode = '01.002'),0) as Strokes" +
+                    //           " ,BM.BID as BracketId " +
+                    //           " , CASE WHEN SUBSTRING(bd.Partcode, 12, 1) = '1' THEN '029' " +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '2' THEN '084'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '3' THEN '038'" +
+                    //           " ELSE 'other'END AS CatCode" +
+                    //           ",CASE WHEN SUBSTRING(bd.Partcode, 12, 1) = '1' THEN 'cpy'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '2' THEN 'BF'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '3' THEN 'FT' " +
+                    //           " ELSE 'other'END AS CatName " +
+                    //           " from BOM B Inner Join BOMDetails Bd on B.BOMCode = Bd.BOMCode " +
+                    //           " inner Join Part P on bd.Partcode = P.Partcode " +
+                    //           " inner Join Part P1 on b.Partcode = P1.Partcode	 " +
+                    //           " inner Join BracketMst BM   ON p1.kva BETWEEN BM.fromkva AND BM.tokva " +
+                    //           " where B.BOMCode = '" + Dts[10].ToString().Trim() + "' and " +
+                    //           " B.Active = '1' and B.Auth = '1' and p.Kit = '1' and Bd.MOB = 'M' and  Bd.KitCode like '004%' and substring(Bd.KitCode,11,1) in ('4','5') and Bd.Partcode like '004%' ) as S  " +
+                    //           " inner join ( select  count(PPM.BracketID) as B ,PPM.BracketID,PPM.CatID ,PPM.Location as CompCode from ProductionPlanMaster PPM" +
+                    //           " where PPM.Active = '1' group by PPM.Location, PPM.BracketID, PPM.CatID) as S1 on S.CatCode = S1.CatID and S.BracketId = S1.BracketID" +
+                    //             " Union all " +
+                    //              " select s.Partcode, s.PartDesc, s.Rate, s.KVA, s.Strokes, '01' as CompCode, '029' as CatID from " +
+                    //              " (select DISTINCT  bd.Partcode, p.PartDesc, " +
+                    //              " (select Rate from ProfitcenterPLDetails where Partcode = bd.Partcode " +
+                    //              " and ProfitcenterCode = '01.007') as Rate, P1.KVA, " +
+                    //              " isNull((select isNull(Max(MarAMT), 0) as Strokes " +
+                    //              " from ProfitcenterPLDetails where Partcode = bd.Partcode and ProfitcenterCode = '01.002'), 0) as Strokes " +
+                    //              " from BOM B Inner Join BOMDetails Bd on B.BOMCode = Bd.BOMCode " +
+                    //              " inner Join Part P on bd.Partcode = P.Partcode " +
+                    //              " inner Join Part P1 on b.Partcode = P1.Partcode " +
+                    //              " where B.BOMCode = '" + Dts[10].ToString().Trim() + "'  and  " +
+                    //              " B.Active = '1' and B.Auth = '1' and p.Kit = '1' and Bd.MOB = 'M'  " +
+                    //              " and substring(Bd.KitCode,1,3) in ('003') and Bd.Partcode like '004%' ) as S  ", "tbl_RaiseReqDtsSub", con, tran);
+
+                    //}
+                    //else
+                    //{
+                    //    dsDetailsSub = _com.procTranDS(" select s.Partcode, s.PartDesc, s.Rate, s.KVA, s.Strokes,s1.CompCode,S1.CatID from " +
+                    //        "(select DISTINCT  bd.Partcode,p.PartDesc," +
+                    //        "(select Rate from ProfitcenterPLDetails where Partcode=bd.Partcode and ProfitcenterCode = '01.007') as Rate,  P1.KVA ," +
+                    //           "isNull((select isNull(Max(MarAMT),0) as Strokes from ProfitcenterPLDetails where Partcode=bd.Partcode and ProfitcenterCode = '01.002'),0) as Strokes" +
+                    //           " ,BM.BID as BracketId " +
+                    //           " , CASE WHEN SUBSTRING(bd.Partcode, 12, 1) = '1' THEN '029' " +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '2' THEN '084'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '3' THEN '038'" +
+                    //           " ELSE 'other'END AS CatCode" +
+                    //           ",CASE WHEN SUBSTRING(bd.Partcode, 12, 1) = '1' THEN 'cpy'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '2' THEN 'BF'" +
+                    //           " WHEN SUBSTRING(bd.Partcode, 12, 1) = '3' THEN 'FT' " +
+                    //           " ELSE 'other'END AS CatName " +
+                    //           " from BOM B Inner Join BOMDetails Bd on B.BOMCode = Bd.BOMCode " +
+                    //           " inner Join Part P on bd.Partcode = P.Partcode " +
+                    //           " inner Join Part P1 on b.Partcode = P1.Partcode	 " +
+                    //           " inner Join BracketMst BM   ON p1.kva BETWEEN BM.fromkva AND BM.tokva " +
+                    //           " where B.BOMCode = '" + Dts[10].ToString().Trim() + "' and " +
+                    //           " B.Active = '1' and B.Auth = '1' and p.Kit = '1' and Bd.MOB = 'M' and  Bd.KitCode like '004%' and substring(Bd.KitCode,11,1) in ('4','5') and Bd.Partcode like '004%' ) as S  " +
+                    //           " inner join ( select  count(PPM.BracketID) as B ,PPM.BracketID,PPM.CatID ,PPM.Location as CompCode from ProductionPlanMaster PPM" +
+                    //           " where PPM.Active = '1' group by PPM.Location, PPM.BracketID, PPM.CatID) as S1 on S.CatCode = S1.CatID and S.BracketId = S1.BracketID", "tbl_RaiseReqDtsSub", con, tran);
+
+
+                    //}
+
+                    // -----For DtsSub Save -----
                     if (kva < 750)
                     {
                         dsDetailsSub = _com.procTranDS(" select s.Partcode, s.PartDesc, s.Rate, s.KVA, s.Strokes,s1.CompCode,S1.CatID from " +
@@ -514,7 +585,137 @@ namespace KalaGenset.ERP.Core.Services
                             }
                         }
                     }
+                    else  // ✅ NEW: Return message when no BOM data found
+                    {
+                        StrDisplayMsgBOM = "BOM is not authorized, and  the combined price list is also not authorized. Please contact the CIA Team";
+                        return StrDisplayMsgBOM;
+                    }
+
                 } // foreach end
+
+
+                //if (dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows.Count > 0)
+                //    {
+                //        for (int m = 0; m < dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows.Count; m++)
+                //        {
+                //            if (double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Strokes"].ToString().Trim()) > 0)
+                //            {
+                //                if (double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Rate"].ToString().Trim()) >= 1000) //25
+                //                {
+                //                    sb.Remove(0, sb.Length);
+                //                    sb.Append("insert Into CanopyPlanDtsSub(CPCode,CpyPartCode,SrNo,PartCode,CPQty,Rate,Strokes,CompCode,CatID)");
+                //                    sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                    sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','" + int.Parse(Dts[8].ToString().Trim()) + "',");
+                //                    sb.Append("'" + double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Rate"].ToString().Trim()) + "','" + double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Strokes"].ToString().Trim()) + "' ,'" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["CompCode"].ToString().Trim() + "' ,'" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["CatID"].ToString().Trim() + "')");
+                //                    cmd = new SqlCommand(sb.ToString(), con);
+                //                    cmd.CommandTimeout = 0;
+                //                    cmd.Transaction = tran;
+                //                    await cmd.ExecuteNonQueryAsync();
+                //                    await cmd.DisposeAsync();
+                //                    //OS Fab Plan
+                //                    #region
+                //                    if (int.Parse(Dts[8].ToString().Trim()) >= 1) //Plan Qty
+                //                    {
+                //                        if (dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim().Substring(11, 1) == "1" ||
+                //                                dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim().Substring(11, 1) == "0" ||
+                //                               dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim().Substring(11, 1) == "6")//CPY
+                //                        {
+                //                            #region
+                //                            ParentPart = "";
+                //                            ParentPart = _com.getTranName("select PartCode  as ParentPart from BOMDetails where KitCode='" + PartCodeWOP.Trim() + "' " +
+                //                             " and BOMCode = '" + Dts[10].ToString().Trim() + "'  " +
+                //                             " and Partcode like '004%' and substring(Partcode, 11, 1) = '4' ", "tblParentPart", "ParentPart", con, tran);
+                //                            sb.Remove(0, sb.Length);
+                //                            sb.Append("insert Into CanopyPlanOSDetails(CPCode,CpyPartCode,SrNo,PartCode,Scode,Qty,OSFqty,OSFStatus,ParentPart)");
+                //                            sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                            sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','02.13.01.01.23.0001','" + (double.Parse(Dts[8].ToString().Trim()) / 2) + "',");
+                //                            sb.Append("'0','P','" + ParentPart.Trim() + "' )");
+                //                            cmd = new SqlCommand(sb.ToString(), con);
+                //                            cmd.CommandTimeout = 0;
+                //                            cmd.Transaction = tran;
+                //                            await cmd.ExecuteNonQueryAsync();
+                //                            await cmd.DisposeAsync();
+                //                            // Added GSEC Against Human
+                //                            sb.Remove(0, sb.Length);
+                //                            sb.Append("insert Into CanopyPlanOSDetails(CPCode,CpyPartCode,SrNo,PartCode,Scode,Qty,OSFqty,OSFStatus,ParentPart)");
+                //                            sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                            sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','02.04.01.01.01.0573','" + (double.Parse(Dts[8].ToString().Trim()) / 2) + "',");
+                //                            sb.Append("'0','P','" + ParentPart.Trim() + "' )");
+                //                            cmd = new SqlCommand(sb.ToString(), con);
+                //                            cmd.CommandTimeout = 0;
+                //                            cmd.Transaction = tran;
+                //                            await cmd.ExecuteNonQueryAsync();
+                //                            await cmd.DisposeAsync();
+                //                            #endregion
+                //                        }
+                //                        else if (dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim().Substring(11, 1) == "2") //BF
+                //                        {
+                //                            #region
+                //                            sb.Remove(0, sb.Length);
+                //                            sb.Append("insert Into CanopyPlanOSDetails(CPCode,CpyPartCode,SrNo,PartCode,Scode,Qty,OSFqty,OSFStatus,ParentPart)");
+                //                            sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                            sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','02.01.01.01.01.0305','" + (double.Parse(Dts[8].ToString().Trim()) / 2) + "',");
+                //                            sb.Append("'0','P','" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "' )");
+                //                            cmd = new SqlCommand(sb.ToString(), con);
+                //                            cmd.CommandTimeout = 0;
+                //                            cmd.Transaction = tran;
+                //                            await cmd.ExecuteNonQueryAsync();
+                //                            await cmd.DisposeAsync();
+                //                            sb.Remove(0, sb.Length);
+                //                            sb.Append("insert Into CanopyPlanOSDetails(CPCode,CpyPartCode,SrNo,PartCode,Scode,Qty,OSFqty,OSFStatus,ParentPart)");
+                //                            sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                            sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','02.01.01.01.23.0009','" + (double.Parse(Dts[8].ToString().Trim()) / 2) + "',");
+                //                            sb.Append("'0','P','" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "' )");
+                //                            cmd = new SqlCommand(sb.ToString(), con);
+                //                            cmd.CommandTimeout = 0;
+                //                            cmd.Transaction = tran;
+                //                            await cmd.ExecuteNonQueryAsync();
+                //                            await cmd.DisposeAsync();
+                //                            #endregion
+                //                        }
+                //                        else if (dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim().Substring(11, 1) == "3")//FT
+                //                        {
+                //                            #region
+                //                            sb.Remove(0, sb.Length);
+                //                            sb.Append("insert Into CanopyPlanOSDetails(CPCode,CpyPartCode,SrNo,PartCode,Scode,Qty,OSFqty,OSFStatus,ParentPart)");
+                //                            sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                            sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','02.01.01.01.01.0305','" + (double.Parse(Dts[8].ToString().Trim())) + "',");
+                //                            sb.Append("'0','P','" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "' )");
+                //                            cmd = new SqlCommand(sb.ToString(), con);
+                //                            cmd.CommandTimeout = 0;
+                //                            cmd.Transaction = tran;
+                //                            await cmd.ExecuteNonQueryAsync();
+                //                            await cmd.DisposeAsync();
+                //                            #endregion
+                //                        }
+                //                    }
+                //                    #endregion
+                //                    //OS Fab Plan
+                //                }
+                //                else if (double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Rate"].ToString().Trim()) < 1000)
+                //                {
+                //                    sb.Remove(0, sb.Length);
+                //                    sb.Append("insert Into CanopyPlanDtsSubBelowStdRate(CPCode,CpyPartCode,SrNo,PartCode,CPQty,Rate,Strokes,CompCode,CatID)");
+                //                    sb.Append(" values ('" + StrDispCode_CPYPlan.Trim() + "','" + Dts[2].ToString().Trim() + "'," + (m + 1) + " ,");
+                //                    sb.Append(" '" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Partcode"].ToString().Trim() + "','" + int.Parse(Dts[8].ToString().Trim()) + "',");
+                //                    sb.Append("'" + double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Rate"].ToString().Trim()) + "','" + double.Parse(dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["Strokes"].ToString().Trim()) + "','" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["CompCode"].ToString().Trim() + "','" + dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["CatID"].ToString().Trim() + "' )");
+                //                    cmd = new SqlCommand(sb.ToString(), con);
+                //                    cmd.CommandTimeout = 0;
+                //                    cmd.Transaction = tran;
+                //                    await cmd.ExecuteNonQueryAsync();
+                //                    await cmd.DisposeAsync();
+                //                }
+                //            }
+                //            else
+                //            {
+                //                StrDisplayPartMsg =
+                //                                 dsDetailsSub.Tables["tbl_RaiseReqDtsSub"].Rows[m]["PartDesc"].ToString().Trim()
+                //                                + "  This Part Strokes is 0.";
+                //                return StrDisplayPartMsg;
+                //            }
+                //        }
+                //    }
+
 
                 // ----- User Activity -----
                 cmd = new SqlCommand("InsertLoginTransactionDetails", con);
@@ -537,6 +738,7 @@ namespace KalaGenset.ERP.Core.Services
 
                 return StrDisplayMsg;
             }
+
             catch (Exception ex)
             {
                 if (tran != null)
@@ -545,6 +747,8 @@ namespace KalaGenset.ERP.Core.Services
             }
             // No finally needed: 'await using var con' closes/disposes automatically.
         }
+
+
         public async Task<List<Dictionary<string, object>>> GetCheckerCPPlanLoadAsync()
         {
             var data = new List<Dictionary<string, object>>();
